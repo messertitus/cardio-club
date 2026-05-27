@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Messers Cardio Club",
+    "slug": "messers-cardio-club",
+    "scheme": "cardioclub",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
