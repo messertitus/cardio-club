@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -11,7 +11,7 @@ export default function MenuScreen() {
     <SafeAreaView style={styles.safeArea}>
       <BrandBackground />
       <View style={styles.shell}>
-        <View style={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <Image source={logo} style={styles.logo} resizeMode="contain" />
             <Text style={styles.title}>Menü</Text>
@@ -23,7 +23,7 @@ export default function MenuScreen() {
             <MenuItem title="Push" body="Benachrichtigungen" onPress={() => router.push("/push")} />
             <MenuItem title="Profil" body="Account" onPress={() => router.push("/profile")} />
           </View>
-        </View>
+        </ScrollView>
         <BottomNav active="menu" />
       </View>
     </SafeAreaView>
@@ -46,10 +46,10 @@ function MenuItem({ title, body, onPress, featured = false }: { title: string; b
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
   shell: { flex: 1 },
-  content: { flex: 1, gap: 24, padding: 18 },
+  content: { gap: 22, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   header: { alignItems: "center", flexDirection: "row", gap: 14, paddingTop: 8 },
   logo: { width: 54, height: 54 },
-  title: { color: "#ffffff", fontSize: 38, fontWeight: "900", letterSpacing: 0 },
+  title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0 },
   grid: { gap: 10 },
   item: {
     alignItems: "center",

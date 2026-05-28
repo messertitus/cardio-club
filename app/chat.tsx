@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -18,6 +18,7 @@ export default function ChatScreen() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const scale = useRef(new Animated.Value(1)).current;
+  const scrollRef = useRef<ScrollView | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -43,6 +44,10 @@ export default function ChatScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }, [messages.length]);
 
   async function send() {
     if (!draft.trim() || !user || !clubId) return;
@@ -85,10 +90,10 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.safeArea}>
       <BrandBackground />
       <View style={styles.shell}>
-        <View style={styles.content}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.content}>
           <Text style={styles.title}>Chat</Text>
           {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-          <ScrollView contentContainerStyle={styles.messages}>
+          <ScrollView ref={scrollRef} contentContainerStyle={styles.messages} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {busy && messages.length === 0 ? <LoadingState /> : null}
             {messages.length === 0 && !busy ? <Text style={styles.empty}>Noch keine Nachrichten.</Text> : null}
             {messages.map((message) => {
@@ -118,7 +123,7 @@ export default function ChatScreen() {
               <Text style={styles.sendText}>Senden</Text>
             </Pressable>
           </Animated.View>
-        </View>
+        </KeyboardAvoidingView>
         <BottomNav active="chat" />
       </View>
     </SafeAreaView>
@@ -132,8 +137,8 @@ function formatTime(value: string): string {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
   shell: { flex: 1 },
-  content: { flex: 1, gap: 12, padding: 18 },
-  title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0 },
+  content: { flex: 1, gap: 12, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
+  title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0 },
   notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "800" },
   messages: { flexGrow: 1, gap: 10, paddingVertical: 8 },
   empty: { color: "#9aa7b8", fontSize: 15, lineHeight: 22, textAlign: "center", paddingTop: 40 },
@@ -151,7 +156,7 @@ const styles = StyleSheet.create({
   meta: { color: "#728197", fontSize: 12, fontWeight: "900" },
   body: { color: "#ffffff", fontSize: 15, lineHeight: 21 },
   myBody: { color: "#ffffff" },
-  inputRow: { flexDirection: "row", gap: 8 },
+  inputRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },
   input: {
     flex: 1,
     minHeight: 50,
@@ -164,7 +169,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     outlineStyle: "none",
   } as object,
-  sendButton: { justifyContent: "center", borderRadius: 18, backgroundColor: "#ffffff", paddingHorizontal: 14 },
+  sendButton: { justifyContent: "center", borderRadius: 18, backgroundColor: "#ffffff", paddingHorizontal: 14, minHeight: 50 },
   sendButtonDisabled: { opacity: 0.4 },
   sendText: { color: "#05070b", fontWeight: "900" },
 });

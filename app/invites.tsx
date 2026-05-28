@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
+import { BottomNav } from "../src/components/BottomNav";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
 import { createInvitationCode, listInvitationCodes, type InvitationCodeWithUsage } from "../src/services";
@@ -58,7 +59,8 @@ export default function InvitesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <BrandBackground />
-      <View style={styles.content}>
+      <View style={styles.shell}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.kicker}>Exklusiver Zugang</Text>
         <Text style={styles.title}>Codes für Menschen, die wirklich dazugehören.</Text>
 
@@ -95,6 +97,8 @@ export default function InvitesScreen() {
             </View>
           ))}
         </View>
+      </ScrollView>
+      <BottomNav active="menu" />
       </View>
     </SafeAreaView>
   );
@@ -102,9 +106,10 @@ export default function InvitesScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
-  content: { gap: 18, padding: 20 },
+  shell: { flex: 1 },
+  content: { gap: 18, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   kicker: { color: "#4da3ff", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0, lineHeight: 38 },
+  title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
   slotRow: { flexDirection: "row", gap: 10 },
   slot: {
     alignItems: "center",

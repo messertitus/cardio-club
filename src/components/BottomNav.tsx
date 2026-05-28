@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.1)",
     backgroundColor: "#05070b",
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingTop: 10,
     paddingBottom: 12,
   },
@@ -41,6 +41,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     borderRadius: 16,
+    minHeight: 42,
+    justifyContent: "center",
     paddingVertical: 10,
   },
   itemActive: {
@@ -52,7 +54,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: "#728197",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
   },
   labelActive: {

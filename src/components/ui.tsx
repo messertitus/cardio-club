@@ -101,12 +101,13 @@ const styles = StyleSheet.create({
   },
   screen: {
     gap: 16,
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   title: {
     color: "#ffffff",
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "900",
     letterSpacing: 0,
   },
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.07)",
-    padding: 16,
+    padding: 14,
     shadowColor: "#0b1510",
     shadowOpacity: 0.04,
     shadowRadius: 14,
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   input: {
-    minHeight: 52,
+    minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -190,7 +191,8 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     paddingHorizontal: 12,
-  },
+    outlineStyle: "none",
+  } as object,
   pill: {
     alignSelf: "flex-start",
     borderRadius: 999,

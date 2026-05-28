@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -49,7 +49,7 @@ export default function MembersScreen() {
     <SafeAreaView style={styles.safeArea}>
       <BrandBackground />
       <View style={styles.shell}>
-        <View style={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Mitglieder</Text>
           {message ? <Text style={styles.notice}>{message}</Text> : null}
           {members.map((member) => (
@@ -65,7 +65,7 @@ export default function MembersScreen() {
               </View>
             </View>
           ))}
-        </View>
+        </ScrollView>
         <BottomNav active="members" />
       </View>
     </SafeAreaView>
@@ -75,8 +75,8 @@ export default function MembersScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
   shell: { flex: 1 },
-  content: { flex: 1, gap: 12, padding: 18 },
-  title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0 },
+  content: { gap: 12, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0 },
   notice: { color: "#ffb4a8", fontSize: 14, fontWeight: "800" },
   card: {
     gap: 10,

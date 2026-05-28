@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -58,7 +58,8 @@ export default function IdeasScreen() {
     <SafeAreaView style={styles.safeArea}>
       <BrandBackground />
       <View style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.kicker}>Sportideen</Text>
           <Text style={styles.title}>Neue Aktivität vorschlagen</Text>
           {message ? <Text style={styles.notice}>{message}</Text> : null}
@@ -100,6 +101,7 @@ export default function IdeasScreen() {
             ))}
           </View>
         </ScrollView>
+        </KeyboardAvoidingView>
         <BottomNav active="menu" />
       </View>
     </SafeAreaView>
@@ -113,9 +115,9 @@ function SoftInput(props: React.ComponentProps<typeof TextInput>) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
   shell: { flex: 1 },
-  content: { gap: 16, padding: 18, paddingBottom: 34 },
+  content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   kicker: { color: "#4da3ff", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0, lineHeight: 38 },
+  title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
   notice: { color: "#5eead4", fontSize: 14, fontWeight: "900" },
   card: {
     gap: 12,
@@ -123,7 +125,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.07)",
-    padding: 16,
+    padding: 14,
   },
   cardTitle: { color: "#ffffff", fontSize: 20, fontWeight: "900" },
   body: { color: "#9aa7b8", fontSize: 15, lineHeight: 22 },

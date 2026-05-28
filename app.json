@@ -5,7 +5,18 @@
     "scheme": "cardioclub",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "bundler": "metro",
+      "lang": "de",
+      "themeColor": "#05070b"
+    },
     "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": true

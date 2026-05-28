@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, ErrorText } from "../src/components/ui";
 import { isSupabaseConfigured, supabase } from "../src/lib/supabase";
@@ -21,6 +21,7 @@ type FlagPattern =
   | { kind: "nordic"; background: string; outer: string; inner: string };
 
 export default function AuthScreen() {
+  const { width } = useWindowDimensions();
   const [step, setStep] = useState<AuthStep>("login");
   const [inviteCode, setInviteCode] = useState("");
   const [verifiedInviteCode, setVerifiedInviteCode] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export default function AuthScreen() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const normalizedPhone = composePhone(dialCode, phone);
+  const compactPhoneField = width < 390;
   const inviteValue = inviteCode.replace(/\D/g, "");
   const title = useMemo(() => {
     if (step === "signup") return "Fast drin.";
@@ -272,6 +274,7 @@ export default function AuthScreen() {
     <SafeAreaView style={styles.safeArea}>
       <Image source={logo} style={styles.backgroundLogo} resizeMode="contain" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboard}>
+        <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.shell}>
           <AnimatedPanel step={step}>
             <Image source={wordmarkLogo} style={styles.heroLogo} resizeMode="contain" />
@@ -288,6 +291,7 @@ export default function AuthScreen() {
             {step === "login" ? (
               <View style={styles.form}>
                 <PhoneField
+                  compact={compactPhoneField}
                   countryIso={countryIso}
                   dialCode={dialCode}
                   onCountryChange={setCountryIso}
@@ -328,6 +332,7 @@ export default function AuthScreen() {
                 {verifiedInviteCode ? <Text style={styles.success}>Einladung bestätigt</Text> : null}
                 <SoftField value={displayName} onChangeText={setDisplayName} autoCapitalize="words" placeholder="Name" />
                 <PhoneField
+                  compact={compactPhoneField}
                   countryIso={countryIso}
                   dialCode={dialCode}
                   onCountryChange={setCountryIso}
@@ -373,6 +378,7 @@ export default function AuthScreen() {
             ) : null}
           </AnimatedPanel>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -395,6 +401,7 @@ function AnimatedPanel({ children, step }: { children: React.ReactNode; step: Au
 }
 
 function PhoneField({
+  compact,
   countryIso,
   dialCode,
   onCountryChange,
@@ -402,6 +409,7 @@ function PhoneField({
   phone,
   onPhoneChange,
 }: {
+  compact: boolean;
   countryIso: string;
   dialCode: string;
   onCountryChange: (value: string) => void;
@@ -420,8 +428,8 @@ function PhoneField({
 
   return (
     <View style={styles.phoneGroup}>
-      <View style={styles.phoneRow}>
-        <Pressable onPress={() => setExpanded((value) => !value)} style={styles.dialField}>
+      <View style={[styles.phoneRow, compact && styles.phoneRowCompact]}>
+        <Pressable onPress={() => setExpanded((value) => !value)} style={[styles.dialField, compact && styles.dialFieldCompact]}>
           <FlagBadge iso={selectedCountry.iso} />
           <Text style={styles.dialText}>{dialCode}</Text>
           <Text style={styles.chevron}>{expanded ? "▲" : "▼"}</Text>
@@ -434,7 +442,7 @@ function PhoneField({
           autoComplete="tel"
           placeholder="170 1234567"
           placeholderTextColor="#728197"
-          style={[styles.input, styles.phoneInput]}
+          style={[styles.input, styles.phoneInput, compact && styles.phoneInputCompact]}
         />
       </View>
       {expanded ? (
@@ -849,7 +857,13 @@ const styles = StyleSheet.create({
     opacity: 0.075,
   },
   keyboard: { flex: 1 },
-  shell: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  authScroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+  },
+  shell: { width: "100%", alignItems: "center", justifyContent: "center" },
   panel: {
     width: "100%",
     maxWidth: 520,
@@ -858,19 +872,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(12,17,27,0.94)",
-    padding: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
     shadowColor: "#4da3ff",
     shadowOpacity: 0.12,
     shadowRadius: 32,
     shadowOffset: { width: 0, height: 18 },
   },
-  heroLogo: { alignSelf: "center", width: 260, height: 150, marginBottom: -18 },
-  title: { color: "#ffffff", fontSize: 36, fontWeight: "900", letterSpacing: 0, lineHeight: 40 },
+  heroLogo: { alignSelf: "center", width: "78%", maxWidth: 260, height: 138, marginBottom: -18 },
+  title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0, lineHeight: 38 },
   subtitle: { color: "#9aa7b8", fontSize: 16, lineHeight: 24 },
   form: { gap: 14 },
   field: { gap: 7 },
   phoneGroup: { gap: 8 },
   phoneRow: { flexDirection: "row", gap: 10 },
+  phoneRowCompact: { flexDirection: "column" },
   dialField: {
     minHeight: 58,
     width: 128,
@@ -884,6 +900,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 12,
   },
+  dialFieldCompact: { width: "100%" },
   flag: { fontSize: 21, lineHeight: 24 },
   dialText: { color: "#ffffff", fontSize: 18, fontWeight: "800", lineHeight: 22 },
   chevron: { color: "#8fc7ff", fontSize: 10, fontWeight: "900", lineHeight: 12 },
@@ -899,7 +916,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     outlineStyle: "none",
   } as object,
-  phoneInput: { flex: 1 },
+  phoneInput: { flex: 1, minWidth: 0 },
+  phoneInputCompact: { width: "100%", flex: 0 },
   countryMenu: {
     maxHeight: 240,
     borderRadius: 20,
