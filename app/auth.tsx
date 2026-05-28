@@ -1,37 +1,53 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, ErrorText } from "../src/components/ui";
 import { isSupabaseConfigured, supabase } from "../src/lib/supabase";
 import { consumeInvitationCode, ensureProfile, validateInvitationCode } from "../src/services";
 
+const logo = require("../assets/mcc-logo-white-symbol-transparent.png");
+const wordmarkLogo = require("../assets/mcc-logo-white-wordmark-transparent.png");
 const PENDING_INVITE_KEY = "mcc.pendingInviteCode";
 const PENDING_DISPLAY_NAME_KEY = "mcc.pendingDisplayName";
 const PENDING_PHONE_KEY = "mcc.pendingPhone";
 
 type AuthStep = "login" | "invite" | "signup" | "sms";
+type CountryDialCode = { iso: string; dialCode: string };
+type FlagPattern =
+  | { kind: "stripes"; direction: "horizontal" | "vertical"; colors: string[] }
+  | { kind: "cross"; background: string; cross: string }
+  | { kind: "nordic"; background: string; outer: string; inner: string };
 
 export default function AuthScreen() {
   const [step, setStep] = useState<AuthStep>("login");
   const [inviteCode, setInviteCode] = useState("");
   const [verifiedInviteCode, setVerifiedInviteCode] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [countryIso, setCountryIso] = useState(() => getDefaultCountryIso());
+  const [dialCode, setDialCode] = useState(() => getDialCodeForCountry(getDefaultCountryIso()));
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
   const [smsCode, setSmsCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const normalizedPhone = normalizePhone(phone);
+  const normalizedPhone = composePhone(dialCode, phone);
   const inviteValue = inviteCode.replace(/\D/g, "");
   const title = useMemo(() => {
     if (step === "signup") return "Fast drin.";
     if (step === "sms") return "Code bestätigen.";
     if (step === "invite") return "Dein Zugang.";
     return "Willkommen zurück.";
+  }, [step]);
+  const subtitle = useMemo(() => {
+    if (step === "invite") return "Gib deine lange Einladungs-PIN ein. Jeder Code funktioniert nur einmal.";
+    if (step === "signup") return "Name, Nummer und eigener Code. Die Nummer ist dein eindeutiger Zugang.";
+    if (step === "sms") return "Bestätige deine Telefonnummer mit dem Code aus der SMS.";
+    return null;
   }, [step]);
 
   async function verifyInvite() {
@@ -106,7 +122,7 @@ export default function AuthScreen() {
     });
 
     if (authResult.error) {
-      setMessage(authResult.error.message);
+      setMessage(mapAuthError(authResult.error.message));
       setLoading(false);
       return;
     }
@@ -119,6 +135,34 @@ export default function AuthScreen() {
     }
 
     await finishAuthenticatedFlow(authResult.data.user?.id, normalizedPhone);
+  }
+
+  async function resendSmsCode() {
+    setResending(true);
+    setMessage(null);
+    setSuccessMessage(null);
+
+    const pendingPhone = (await AsyncStorage.getItem(PENDING_PHONE_KEY)) ?? normalizedPhone;
+
+    if (!isValidPhone(pendingPhone)) {
+      setMessage("Bitte gehe kurz zurück und prüfe deine Telefonnummer.");
+      setResending(false);
+      return;
+    }
+
+    const result = await supabase.auth.resend({
+      type: "sms",
+      phone: pendingPhone,
+    });
+
+    if (result.error) {
+      setMessage(mapAuthError(result.error.message));
+      setResending(false);
+      return;
+    }
+
+    setSuccessMessage("Neuer SMS-Code ist unterwegs.");
+    setResending(false);
   }
 
   async function submitSmsCode() {
@@ -168,7 +212,7 @@ export default function AuthScreen() {
     const authResult = await supabase.auth.signInWithPassword({ phone: normalizedPhone, password: pin });
 
     if (authResult.error) {
-      setMessage(authResult.error.message);
+      setMessage(mapAuthError(authResult.error.message));
       setLoading(false);
       return;
     }
@@ -226,22 +270,13 @@ export default function AuthScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Image source={logo} style={styles.backgroundLogo} resizeMode="contain" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboard}>
         <View style={styles.shell}>
           <AnimatedPanel step={step}>
-            <View style={styles.logoMark}>
-              <Text style={styles.logoText}>MCC</Text>
-            </View>
+            <Image source={wordmarkLogo} style={styles.heroLogo} resizeMode="contain" />
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>
-              {step === "invite"
-                ? "Gib deine lange Einladungs-PIN ein. Jeder Code funktioniert nur einmal."
-                : step === "signup"
-                  ? "Name, Telefonnummer und eigene PIN. Die Nummer ist dein eindeutiger Zugang."
-                  : step === "sms"
-                    ? "Bestätige deine Telefonnummer mit dem Code aus der SMS."
-                    : "Telefonnummer und PIN reichen."}
-            </Text>
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
             {!isSupabaseConfigured ? (
               <View style={styles.notice}>
@@ -252,11 +287,18 @@ export default function AuthScreen() {
 
             {step === "login" ? (
               <View style={styles.form}>
-                <SoftField label="Telefonnummer" value={phone} onChangeText={setPhone} keyboardType="phone-pad" inputMode="tel" placeholder="+49 170 1234567" />
-                <SoftField label="PIN" value={pin} onChangeText={setPin} secureTextEntry keyboardType="number-pad" inputMode="numeric" placeholder="Deine PIN" />
+                <PhoneField
+                  countryIso={countryIso}
+                  dialCode={dialCode}
+                  onCountryChange={setCountryIso}
+                  onDialCodeChange={setDialCode}
+                  phone={phone}
+                  onPhoneChange={setPhone}
+                />
+                <SoftField value={pin} onChangeText={setPin} secureTextEntry keyboardType="number-pad" inputMode="numeric" placeholder="6 bis 12 Ziffern" />
                 <ErrorText>{message}</ErrorText>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
-                <Button label={loading ? "Logge ein..." : "Einloggen"} onPress={submitLogin} disabled={loading || !normalizedPhone || !pin} />
+                <Button label={loading ? "Logge ein..." : "Einloggen"} onPress={submitLogin} disabled={loading || !isValidPhone(normalizedPhone) || !pin} />
                 <Pressable onPress={() => switchStep("invite")} style={styles.textButton}>
                   <Text style={styles.textButtonLabel}>Ich habe einen Einladungscode</Text>
                 </Pressable>
@@ -266,7 +308,6 @@ export default function AuthScreen() {
             {step === "invite" ? (
               <View style={styles.form}>
                 <SoftField
-                  label="Einladungs-PIN"
                   value={inviteCode}
                   onChangeText={(value) => setInviteCode(value.replace(/\D/g, "").slice(0, 12))}
                   keyboardType="number-pad"
@@ -285,9 +326,16 @@ export default function AuthScreen() {
             {step === "signup" ? (
               <View style={styles.form}>
                 {verifiedInviteCode ? <Text style={styles.success}>Einladung bestätigt</Text> : null}
-                <SoftField label="Name" value={displayName} onChangeText={setDisplayName} autoCapitalize="words" placeholder="Dein Name" />
-                <SoftField label="Telefonnummer" value={phone} onChangeText={setPhone} keyboardType="phone-pad" inputMode="tel" placeholder="+49 170 1234567" />
-                <SoftField label="PIN" value={pin} onChangeText={setPin} secureTextEntry keyboardType="number-pad" inputMode="numeric" placeholder="6 bis 12 Ziffern" />
+                <SoftField value={displayName} onChangeText={setDisplayName} autoCapitalize="words" placeholder="Name" />
+                <PhoneField
+                  countryIso={countryIso}
+                  dialCode={dialCode}
+                  onCountryChange={setCountryIso}
+                  onDialCodeChange={setDialCode}
+                  phone={phone}
+                  onPhoneChange={setPhone}
+                />
+                <SoftField value={pin} onChangeText={setPin} secureTextEntry keyboardType="number-pad" inputMode="numeric" placeholder="6 bis 12 Ziffern" />
                 <Text style={styles.helper}>Die Telefonnummer wird per SMS bestätigt und ist dein eindeutiger Login.</Text>
                 <ErrorText>{message}</ErrorText>
                 <Button
@@ -304,7 +352,6 @@ export default function AuthScreen() {
             {step === "sms" ? (
               <View style={styles.form}>
                 <SoftField
-                  label="SMS-Code"
                   value={smsCode}
                   onChangeText={(value) => setSmsCode(value.replace(/\D/g, "").slice(0, 8))}
                   keyboardType="number-pad"
@@ -314,6 +361,14 @@ export default function AuthScreen() {
                 <ErrorText>{message}</ErrorText>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Bestätige..." : "Telefon bestätigen"} onPress={submitSmsCode} disabled={loading || smsCode.length < 4} />
+                <View style={styles.smsActions}>
+                  <Pressable onPress={resendSmsCode} disabled={resending || loading} style={styles.textButton}>
+                    <Text style={styles.textButtonLabel}>{resending ? "Sende..." : "SMS erneut senden"}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => switchStep("signup")} disabled={loading} style={styles.textButton}>
+                    <Text style={styles.textButtonLabel}>Zurück</Text>
+                  </Pressable>
+                </View>
               </View>
             ) : null}
           </AnimatedPanel>
@@ -339,21 +394,440 @@ function AnimatedPanel({ children, step }: { children: React.ReactNode; step: Au
   return <Animated.View style={[styles.panel, { opacity, transform: [{ translateY }] }]}>{children}</Animated.View>;
 }
 
-function SoftField({ label, ...props }: React.ComponentProps<typeof TextInput> & { label: string }) {
+function PhoneField({
+  countryIso,
+  dialCode,
+  onCountryChange,
+  onDialCodeChange,
+  phone,
+  onPhoneChange,
+}: {
+  countryIso: string;
+  dialCode: string;
+  onCountryChange: (value: string) => void;
+  onDialCodeChange: (value: string) => void;
+  phone: string;
+  onPhoneChange: (value: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const selectedCountry = COUNTRY_DIAL_CODES.find((entry) => entry.iso === countryIso) ?? COUNTRY_DIAL_CODES[0];
+
+  function selectCountry(country: CountryDialCode) {
+    onCountryChange(country.iso);
+    onDialCodeChange(country.dialCode);
+    setExpanded(false);
+  }
+
+  return (
+    <View style={styles.phoneGroup}>
+      <View style={styles.phoneRow}>
+        <Pressable onPress={() => setExpanded((value) => !value)} style={styles.dialField}>
+          <FlagBadge iso={selectedCountry.iso} />
+          <Text style={styles.dialText}>{dialCode}</Text>
+          <Text style={styles.chevron}>{expanded ? "▲" : "▼"}</Text>
+        </Pressable>
+        <TextInput
+          value={phone}
+          onChangeText={(value) => onPhoneChange(value.replace(/[^\d\s()+-]/g, ""))}
+          keyboardType="phone-pad"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="170 1234567"
+          placeholderTextColor="#728197"
+          style={[styles.input, styles.phoneInput]}
+        />
+      </View>
+      {expanded ? (
+        <View style={styles.countryMenu}>
+          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.countryScroll}>
+            {COUNTRY_DIAL_CODES.map((country) => {
+              const isActive = country.iso === selectedCountry.iso;
+
+              return (
+                <Pressable key={`${country.iso}-${country.dialCode}`} onPress={() => selectCountry(country)} style={[styles.countryOption, isActive && styles.countryOptionActive]}>
+                  <FlagBadge iso={country.iso} />
+                  <Text style={styles.countryIso}>{country.iso}</Text>
+                  <Text style={styles.countryDialCode}>{country.dialCode}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function SoftField({ label, ...props }: React.ComponentProps<typeof TextInput> & { label?: string }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput placeholderTextColor="#728197" style={styles.input} {...props} />
     </View>
   );
+}
+
+function FlagBadge({ iso }: { iso: string }) {
+  const pattern = getFlagPattern(iso);
+
+  if (pattern.kind === "cross") {
+    return (
+      <View style={[styles.flagBadge, { backgroundColor: pattern.background }]}>
+        <View style={[styles.flagCrossHorizontal, { backgroundColor: pattern.cross }]} />
+        <View style={[styles.flagCrossVertical, { backgroundColor: pattern.cross }]} />
+      </View>
+    );
+  }
+
+  if (pattern.kind === "nordic") {
+    return (
+      <View style={[styles.flagBadge, { backgroundColor: pattern.background }]}>
+        <View style={[styles.flagNordicHorizontalOuter, { backgroundColor: pattern.outer }]} />
+        <View style={[styles.flagNordicVerticalOuter, { backgroundColor: pattern.outer }]} />
+        <View style={[styles.flagNordicHorizontalInner, { backgroundColor: pattern.inner }]} />
+        <View style={[styles.flagNordicVerticalInner, { backgroundColor: pattern.inner }]} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.flagBadge, pattern.direction === "vertical" && styles.flagBadgeVertical]}>
+      {pattern.colors.map((color, index) => (
+        <View key={`${iso}-${color}-${index}`} style={[styles.flagStripe, { backgroundColor: color }]} />
+      ))}
+    </View>
+  );
+}
+
+function getFlagPattern(iso: string): FlagPattern {
+  const patterns: Record<string, FlagPattern> = {
+    AD: { kind: "stripes", direction: "vertical", colors: ["#0032a0", "#ffd100", "#c8102e"] },
+    AE: { kind: "stripes", direction: "horizontal", colors: ["#009a44", "#ffffff", "#000000", "#ef3340"] },
+    AL: { kind: "stripes", direction: "horizontal", colors: ["#e41e20"] },
+    AR: { kind: "stripes", direction: "horizontal", colors: ["#74acdf", "#ffffff", "#74acdf"] },
+    AT: { kind: "stripes", direction: "horizontal", colors: ["#ed2939", "#ffffff", "#ed2939"] },
+    AU: { kind: "stripes", direction: "horizontal", colors: ["#012169", "#012169", "#ffffff"] },
+    BA: { kind: "stripes", direction: "vertical", colors: ["#002395", "#fecb00", "#002395"] },
+    BE: { kind: "stripes", direction: "vertical", colors: ["#000000", "#ffd90c", "#ef3340"] },
+    BG: { kind: "stripes", direction: "horizontal", colors: ["#ffffff", "#00966e", "#d62612"] },
+    BR: { kind: "stripes", direction: "horizontal", colors: ["#009b3a", "#ffdf00", "#002776"] },
+    CA: { kind: "stripes", direction: "vertical", colors: ["#ff0000", "#ffffff", "#ff0000"] },
+    CH: { kind: "cross", background: "#d52b1e", cross: "#ffffff" },
+    CL: { kind: "stripes", direction: "horizontal", colors: ["#0039a6", "#ffffff", "#d52b1e"] },
+    CN: { kind: "stripes", direction: "horizontal", colors: ["#de2910", "#ffde00", "#de2910"] },
+    CO: { kind: "stripes", direction: "horizontal", colors: ["#fcd116", "#003893", "#ce1126"] },
+    CZ: { kind: "stripes", direction: "horizontal", colors: ["#ffffff", "#d7141a", "#11457e"] },
+    DE: { kind: "stripes", direction: "horizontal", colors: ["#000000", "#dd0000", "#ffce00"] },
+    DK: { kind: "nordic", background: "#c60c30", outer: "#ffffff", inner: "#ffffff" },
+    EE: { kind: "stripes", direction: "horizontal", colors: ["#4891d9", "#000000", "#ffffff"] },
+    ES: { kind: "stripes", direction: "horizontal", colors: ["#aa151b", "#f1bf00", "#aa151b"] },
+    FI: { kind: "nordic", background: "#ffffff", outer: "#002f6c", inner: "#002f6c" },
+    FR: { kind: "stripes", direction: "vertical", colors: ["#0055a4", "#ffffff", "#ef4135"] },
+    GB: { kind: "cross", background: "#012169", cross: "#ffffff" },
+    GR: { kind: "stripes", direction: "horizontal", colors: ["#0d5eaf", "#ffffff", "#0d5eaf", "#ffffff", "#0d5eaf"] },
+    HR: { kind: "stripes", direction: "horizontal", colors: ["#ff0000", "#ffffff", "#171796"] },
+    HU: { kind: "stripes", direction: "horizontal", colors: ["#ce2939", "#ffffff", "#477050"] },
+    IE: { kind: "stripes", direction: "vertical", colors: ["#169b62", "#ffffff", "#ff883e"] },
+    IL: { kind: "stripes", direction: "horizontal", colors: ["#0038b8", "#ffffff", "#0038b8"] },
+    IN: { kind: "stripes", direction: "horizontal", colors: ["#ff9933", "#ffffff", "#138808"] },
+    IT: { kind: "stripes", direction: "vertical", colors: ["#008c45", "#f4f5f0", "#cd212a"] },
+    JP: { kind: "stripes", direction: "horizontal", colors: ["#ffffff", "#bc002d", "#ffffff"] },
+    KR: { kind: "stripes", direction: "horizontal", colors: ["#ffffff", "#c60c30", "#003478"] },
+    LT: { kind: "stripes", direction: "horizontal", colors: ["#fdb913", "#006a44", "#c1272d"] },
+    LU: { kind: "stripes", direction: "horizontal", colors: ["#ef3340", "#ffffff", "#00a3e0"] },
+    LV: { kind: "stripes", direction: "horizontal", colors: ["#9e3039", "#ffffff", "#9e3039"] },
+    MA: { kind: "stripes", direction: "horizontal", colors: ["#c1272d", "#006233", "#c1272d"] },
+    MX: { kind: "stripes", direction: "vertical", colors: ["#006847", "#ffffff", "#ce1126"] },
+    NL: { kind: "stripes", direction: "horizontal", colors: ["#ae1c28", "#ffffff", "#21468b"] },
+    NO: { kind: "nordic", background: "#ba0c2f", outer: "#ffffff", inner: "#00205b" },
+    NZ: { kind: "stripes", direction: "horizontal", colors: ["#012169", "#ffffff", "#cc142b"] },
+    PL: { kind: "stripes", direction: "horizontal", colors: ["#ffffff", "#dc143c"] },
+    PT: { kind: "stripes", direction: "vertical", colors: ["#006600", "#ff0000"] },
+    RO: { kind: "stripes", direction: "vertical", colors: ["#002b7f", "#fcd116", "#ce1126"] },
+    SE: { kind: "nordic", background: "#006aa7", outer: "#fecc00", inner: "#fecc00" },
+    SI: { kind: "stripes", direction: "horizontal", colors: ["#ffffff", "#005da4", "#ed1c24"] },
+    SK: { kind: "stripes", direction: "horizontal", colors: ["#ffffff", "#0b4ea2", "#ee1c25"] },
+    TR: { kind: "stripes", direction: "horizontal", colors: ["#e30a17", "#ffffff", "#e30a17"] },
+    UA: { kind: "stripes", direction: "horizontal", colors: ["#0057b7", "#ffd700"] },
+    US: { kind: "stripes", direction: "horizontal", colors: ["#b22234", "#ffffff", "#b22234", "#ffffff", "#3c3b6e"] },
+    ZA: { kind: "stripes", direction: "horizontal", colors: ["#e03c31", "#ffffff", "#007a4d", "#ffb81c", "#001489"] },
+  };
+
+  return patterns[iso] ?? getFallbackFlagPattern(iso);
+}
+
+function getFallbackFlagPattern(iso: string): { kind: "stripes"; direction: "horizontal"; colors: string[] } {
+  const colors = ["#4da3ff", "#5eead4", "#f8fafc", "#f59e0b", "#ef4444", "#a78bfa"];
+  const seed = iso.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return {
+    kind: "stripes",
+    direction: "horizontal",
+    colors: [colors[seed % colors.length], colors[(seed + 2) % colors.length], colors[(seed + 4) % colors.length]],
+  };
+}
+
+function composePhone(dialCode: string, phoneNumber: string): string {
+  let compactPhone = phoneNumber.trim().replace(/[^\d+]/g, "");
+
+  if (compactPhone.startsWith("+") || compactPhone.startsWith("00")) {
+    return normalizePhone(compactPhone);
+  }
+
+  if (compactPhone.startsWith("0")) {
+    compactPhone = compactPhone.slice(1);
+  }
+
+  return normalizePhone(`${normalizeDialCode(dialCode)}${compactPhone}`);
+}
+
+function normalizeDialCode(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  return digits ? `+${digits}` : "+";
 }
 
 function normalizePhone(value: string): string {
   const compact = value.trim().replace(/[^\d+]/g, "");
   if (compact.startsWith("+")) return compact;
   if (compact.startsWith("00")) return `+${compact.slice(2)}`;
+  if (compact.startsWith("49")) return `+${compact}`;
   if (compact.startsWith("0")) return `+49${compact.slice(1)}`;
+  if (/^[1-9]\d{5,11}$/.test(compact)) return `+49${compact}`;
   return compact ? `+${compact}` : "";
+}
+
+function getDefaultCountryIso(): string {
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
+  const region = locale.split("-").pop() ?? "de";
+  const country = COUNTRY_DIAL_CODES.find((entry) => entry.iso.toLowerCase() === region);
+  return country?.iso ?? "DE";
+}
+
+function getDialCodeForCountry(countryIso: string): string {
+  return COUNTRY_DIAL_CODES.find((entry) => entry.iso === countryIso)?.dialCode ?? "+49";
+}
+
+function countryCodeToFlag(countryCode: string): string {
+  return countryCode
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+}
+
+const COUNTRY_DIAL_CODES = [
+  { iso: "US", dialCode: "+1" },
+  { iso: "CA", dialCode: "+1" },
+  { iso: "KZ", dialCode: "+7" },
+  { iso: "RU", dialCode: "+7" },
+  { iso: "EG", dialCode: "+20" },
+  { iso: "ZA", dialCode: "+27" },
+  { iso: "GR", dialCode: "+30" },
+  { iso: "NL", dialCode: "+31" },
+  { iso: "BE", dialCode: "+32" },
+  { iso: "FR", dialCode: "+33" },
+  { iso: "ES", dialCode: "+34" },
+  { iso: "HU", dialCode: "+36" },
+  { iso: "IT", dialCode: "+39" },
+  { iso: "RO", dialCode: "+40" },
+  { iso: "CH", dialCode: "+41" },
+  { iso: "AT", dialCode: "+43" },
+  { iso: "GB", dialCode: "+44" },
+  { iso: "DK", dialCode: "+45" },
+  { iso: "SE", dialCode: "+46" },
+  { iso: "NO", dialCode: "+47" },
+  { iso: "PL", dialCode: "+48" },
+  { iso: "DE", dialCode: "+49" },
+  { iso: "PE", dialCode: "+51" },
+  { iso: "MX", dialCode: "+52" },
+  { iso: "CU", dialCode: "+53" },
+  { iso: "AR", dialCode: "+54" },
+  { iso: "BR", dialCode: "+55" },
+  { iso: "CL", dialCode: "+56" },
+  { iso: "CO", dialCode: "+57" },
+  { iso: "VE", dialCode: "+58" },
+  { iso: "MY", dialCode: "+60" },
+  { iso: "AU", dialCode: "+61" },
+  { iso: "ID", dialCode: "+62" },
+  { iso: "PH", dialCode: "+63" },
+  { iso: "NZ", dialCode: "+64" },
+  { iso: "SG", dialCode: "+65" },
+  { iso: "TH", dialCode: "+66" },
+  { iso: "JP", dialCode: "+81" },
+  { iso: "KR", dialCode: "+82" },
+  { iso: "VN", dialCode: "+84" },
+  { iso: "CN", dialCode: "+86" },
+  { iso: "TR", dialCode: "+90" },
+  { iso: "IN", dialCode: "+91" },
+  { iso: "PK", dialCode: "+92" },
+  { iso: "AF", dialCode: "+93" },
+  { iso: "LK", dialCode: "+94" },
+  { iso: "MM", dialCode: "+95" },
+  { iso: "IR", dialCode: "+98" },
+  { iso: "SS", dialCode: "+211" },
+  { iso: "MA", dialCode: "+212" },
+  { iso: "DZ", dialCode: "+213" },
+  { iso: "TN", dialCode: "+216" },
+  { iso: "LY", dialCode: "+218" },
+  { iso: "GM", dialCode: "+220" },
+  { iso: "SN", dialCode: "+221" },
+  { iso: "MR", dialCode: "+222" },
+  { iso: "ML", dialCode: "+223" },
+  { iso: "GN", dialCode: "+224" },
+  { iso: "CI", dialCode: "+225" },
+  { iso: "BF", dialCode: "+226" },
+  { iso: "NE", dialCode: "+227" },
+  { iso: "TG", dialCode: "+228" },
+  { iso: "BJ", dialCode: "+229" },
+  { iso: "MU", dialCode: "+230" },
+  { iso: "LR", dialCode: "+231" },
+  { iso: "SL", dialCode: "+232" },
+  { iso: "GH", dialCode: "+233" },
+  { iso: "NG", dialCode: "+234" },
+  { iso: "TD", dialCode: "+235" },
+  { iso: "CF", dialCode: "+236" },
+  { iso: "CM", dialCode: "+237" },
+  { iso: "CV", dialCode: "+238" },
+  { iso: "ST", dialCode: "+239" },
+  { iso: "GQ", dialCode: "+240" },
+  { iso: "GA", dialCode: "+241" },
+  { iso: "CG", dialCode: "+242" },
+  { iso: "CD", dialCode: "+243" },
+  { iso: "AO", dialCode: "+244" },
+  { iso: "GW", dialCode: "+245" },
+  { iso: "IO", dialCode: "+246" },
+  { iso: "SC", dialCode: "+248" },
+  { iso: "SD", dialCode: "+249" },
+  { iso: "RW", dialCode: "+250" },
+  { iso: "ET", dialCode: "+251" },
+  { iso: "SO", dialCode: "+252" },
+  { iso: "DJ", dialCode: "+253" },
+  { iso: "KE", dialCode: "+254" },
+  { iso: "TZ", dialCode: "+255" },
+  { iso: "UG", dialCode: "+256" },
+  { iso: "BI", dialCode: "+257" },
+  { iso: "MZ", dialCode: "+258" },
+  { iso: "ZM", dialCode: "+260" },
+  { iso: "MG", dialCode: "+261" },
+  { iso: "RE", dialCode: "+262" },
+  { iso: "ZW", dialCode: "+263" },
+  { iso: "NA", dialCode: "+264" },
+  { iso: "MW", dialCode: "+265" },
+  { iso: "LS", dialCode: "+266" },
+  { iso: "BW", dialCode: "+267" },
+  { iso: "SZ", dialCode: "+268" },
+  { iso: "KM", dialCode: "+269" },
+  { iso: "SH", dialCode: "+290" },
+  { iso: "ER", dialCode: "+291" },
+  { iso: "AW", dialCode: "+297" },
+  { iso: "FO", dialCode: "+298" },
+  { iso: "GL", dialCode: "+299" },
+  { iso: "GI", dialCode: "+350" },
+  { iso: "PT", dialCode: "+351" },
+  { iso: "LU", dialCode: "+352" },
+  { iso: "IE", dialCode: "+353" },
+  { iso: "IS", dialCode: "+354" },
+  { iso: "AL", dialCode: "+355" },
+  { iso: "MT", dialCode: "+356" },
+  { iso: "CY", dialCode: "+357" },
+  { iso: "FI", dialCode: "+358" },
+  { iso: "BG", dialCode: "+359" },
+  { iso: "LT", dialCode: "+370" },
+  { iso: "LV", dialCode: "+371" },
+  { iso: "EE", dialCode: "+372" },
+  { iso: "MD", dialCode: "+373" },
+  { iso: "AM", dialCode: "+374" },
+  { iso: "BY", dialCode: "+375" },
+  { iso: "AD", dialCode: "+376" },
+  { iso: "MC", dialCode: "+377" },
+  { iso: "SM", dialCode: "+378" },
+  { iso: "UA", dialCode: "+380" },
+  { iso: "RS", dialCode: "+381" },
+  { iso: "ME", dialCode: "+382" },
+  { iso: "XK", dialCode: "+383" },
+  { iso: "HR", dialCode: "+385" },
+  { iso: "SI", dialCode: "+386" },
+  { iso: "BA", dialCode: "+387" },
+  { iso: "MK", dialCode: "+389" },
+  { iso: "CZ", dialCode: "+420" },
+  { iso: "SK", dialCode: "+421" },
+  { iso: "LI", dialCode: "+423" },
+  { iso: "FK", dialCode: "+500" },
+  { iso: "BZ", dialCode: "+501" },
+  { iso: "GT", dialCode: "+502" },
+  { iso: "SV", dialCode: "+503" },
+  { iso: "HN", dialCode: "+504" },
+  { iso: "NI", dialCode: "+505" },
+  { iso: "CR", dialCode: "+506" },
+  { iso: "PA", dialCode: "+507" },
+  { iso: "PM", dialCode: "+508" },
+  { iso: "HT", dialCode: "+509" },
+  { iso: "GP", dialCode: "+590" },
+  { iso: "BO", dialCode: "+591" },
+  { iso: "GY", dialCode: "+592" },
+  { iso: "EC", dialCode: "+593" },
+  { iso: "GF", dialCode: "+594" },
+  { iso: "PY", dialCode: "+595" },
+  { iso: "MQ", dialCode: "+596" },
+  { iso: "SR", dialCode: "+597" },
+  { iso: "UY", dialCode: "+598" },
+  { iso: "CW", dialCode: "+599" },
+  { iso: "TL", dialCode: "+670" },
+  { iso: "NF", dialCode: "+672" },
+  { iso: "BN", dialCode: "+673" },
+  { iso: "NR", dialCode: "+674" },
+  { iso: "PG", dialCode: "+675" },
+  { iso: "TO", dialCode: "+676" },
+  { iso: "SB", dialCode: "+677" },
+  { iso: "VU", dialCode: "+678" },
+  { iso: "FJ", dialCode: "+679" },
+  { iso: "PW", dialCode: "+680" },
+  { iso: "WF", dialCode: "+681" },
+  { iso: "CK", dialCode: "+682" },
+  { iso: "NU", dialCode: "+683" },
+  { iso: "WS", dialCode: "+685" },
+  { iso: "KI", dialCode: "+686" },
+  { iso: "NC", dialCode: "+687" },
+  { iso: "TV", dialCode: "+688" },
+  { iso: "PF", dialCode: "+689" },
+  { iso: "TK", dialCode: "+690" },
+  { iso: "FM", dialCode: "+691" },
+  { iso: "MH", dialCode: "+692" },
+  { iso: "KP", dialCode: "+850" },
+  { iso: "HK", dialCode: "+852" },
+  { iso: "MO", dialCode: "+853" },
+  { iso: "KH", dialCode: "+855" },
+  { iso: "LA", dialCode: "+856" },
+  { iso: "BD", dialCode: "+880" },
+  { iso: "TW", dialCode: "+886" },
+  { iso: "MV", dialCode: "+960" },
+  { iso: "LB", dialCode: "+961" },
+  { iso: "JO", dialCode: "+962" },
+  { iso: "SY", dialCode: "+963" },
+  { iso: "IQ", dialCode: "+964" },
+  { iso: "KW", dialCode: "+965" },
+  { iso: "SA", dialCode: "+966" },
+  { iso: "YE", dialCode: "+967" },
+  { iso: "OM", dialCode: "+968" },
+  { iso: "PS", dialCode: "+970" },
+  { iso: "AE", dialCode: "+971" },
+  { iso: "IL", dialCode: "+972" },
+  { iso: "BH", dialCode: "+973" },
+  { iso: "QA", dialCode: "+974" },
+  { iso: "BT", dialCode: "+975" },
+  { iso: "MN", dialCode: "+976" },
+  { iso: "NP", dialCode: "+977" },
+  { iso: "TJ", dialCode: "+992" },
+  { iso: "TM", dialCode: "+993" },
+  { iso: "AZ", dialCode: "+994" },
+  { iso: "GE", dialCode: "+995" },
+  { iso: "KG", dialCode: "+996" },
+  { iso: "UZ", dialCode: "+998" },
+];
+
+function mapAuthError(message: string): string {
+  if (message.toLowerCase().includes("invalid login credentials")) {
+    return "Telefonnummer oder PIN stimmt nicht. Falls du dich noch mit E-Mail registriert hattest, brauchst du nach der Telefon-Umstellung eine neue Registrierung.";
+  }
+
+  return message;
 }
 
 function isValidPhone(value: string): boolean {
@@ -366,6 +840,14 @@ function isValidPin(pin: string): boolean {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
+  backgroundLogo: {
+    position: "absolute",
+    right: -170,
+    top: 42,
+    width: 520,
+    height: 520,
+    opacity: 0.075,
+  },
   keyboard: { flex: 1 },
   shell: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
   panel: {
@@ -382,12 +864,29 @@ const styles = StyleSheet.create({
     shadowRadius: 32,
     shadowOffset: { width: 0, height: 18 },
   },
-  logoMark: { alignItems: "center", justifyContent: "center", width: 58, height: 58, borderRadius: 20, backgroundColor: "#ffffff" },
-  logoText: { color: "#05070b", fontSize: 17, fontWeight: "900", letterSpacing: 0 },
+  heroLogo: { alignSelf: "center", width: 260, height: 150, marginBottom: -18 },
   title: { color: "#ffffff", fontSize: 36, fontWeight: "900", letterSpacing: 0, lineHeight: 40 },
   subtitle: { color: "#9aa7b8", fontSize: 16, lineHeight: 24 },
   form: { gap: 14 },
   field: { gap: 7 },
+  phoneGroup: { gap: 8 },
+  phoneRow: { flexDirection: "row", gap: 10 },
+  dialField: {
+    minHeight: 58,
+    width: 128,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 12,
+  },
+  flag: { fontSize: 21, lineHeight: 24 },
+  dialText: { color: "#ffffff", fontSize: 18, fontWeight: "800", lineHeight: 22 },
+  chevron: { color: "#8fc7ff", fontSize: 10, fontWeight: "900", lineHeight: 12 },
   label: { color: "#edf4ff", fontSize: 13, fontWeight: "900" },
   input: {
     minHeight: 58,
@@ -400,11 +899,88 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     outlineStyle: "none",
   } as object,
+  phoneInput: { flex: 1 },
+  countryMenu: {
+    maxHeight: 240,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(7,12,20,0.98)",
+    overflow: "hidden",
+  },
+  countryScroll: { maxHeight: 240 },
+  countryOption: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  countryOptionActive: { backgroundColor: "rgba(77,163,255,0.16)" },
+  flagBadge: {
+    width: 28,
+    height: 20,
+    flexDirection: "column",
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+    overflow: "hidden",
+    backgroundColor: "#ffffff",
+  },
+  flagBadgeVertical: { flexDirection: "row" },
+  flagStripe: { flex: 1 },
+  flagCrossHorizontal: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 7,
+    height: 6,
+  },
+  flagCrossVertical: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 11,
+    width: 6,
+  },
+  flagNordicHorizontalOuter: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 7,
+    height: 6,
+  },
+  flagNordicVerticalOuter: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 9,
+    width: 7,
+  },
+  flagNordicHorizontalInner: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 8,
+    height: 4,
+  },
+  flagNordicVerticalInner: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 10,
+    width: 5,
+  },
+  countryIso: { flex: 1, color: "#ffffff", fontSize: 15, fontWeight: "900" },
+  countryDialCode: { color: "#9aa7b8", fontSize: 15, fontWeight: "800" },
   helper: { color: "#9aa7b8", fontSize: 13, lineHeight: 19 },
   success: { color: "#5eead4", fontSize: 14, fontWeight: "800", lineHeight: 20 },
   notice: { gap: 5, borderRadius: 18, backgroundColor: "rgba(77,163,255,0.14)", padding: 12 },
   noticeTitle: { color: "#d9ecff", fontSize: 14, fontWeight: "900" },
   noticeBody: { color: "#b8d8ff", fontSize: 13, lineHeight: 19 },
+  smsActions: { flexDirection: "row", justifyContent: "center", gap: 12, flexWrap: "wrap" },
   textButton: { alignSelf: "center", padding: 8 },
   textButtonLabel: { color: "#8fc7ff", fontSize: 14, fontWeight: "900" },
 });

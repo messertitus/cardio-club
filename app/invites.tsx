@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BrandBackground } from "../src/components/BrandBackground";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
 import { createInvitationCode, listInvitationCodes, type InvitationCodeWithUsage } from "../src/services";
@@ -56,6 +57,7 @@ export default function InvitesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <BrandBackground />
       <View style={styles.content}>
         <Text style={styles.kicker}>Exklusiver Zugang</Text>
         <Text style={styles.title}>Codes für Menschen, die wirklich dazugehören.</Text>

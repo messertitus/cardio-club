@@ -2,6 +2,7 @@ import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { Button, LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -55,6 +56,7 @@ export default function IdeasScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <BrandBackground />
       <View style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.kicker}>Sportideen</Text>

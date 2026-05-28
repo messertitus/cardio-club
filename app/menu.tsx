@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 
 const logo = require("../assets/mcc-logo-white-symbol-transparent.png");
@@ -8,6 +9,7 @@ const logo = require("../assets/mcc-logo-white-symbol-transparent.png");
 export default function MenuScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
+      <BrandBackground />
       <View style={styles.shell}>
         <View style={styles.content}>
           <View style={styles.header}>

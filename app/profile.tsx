@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BrandBackground } from "../src/components/BrandBackground";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
 
@@ -14,6 +15,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <BrandBackground />
       <View style={styles.content}>
         <Text style={styles.kicker}>Account</Text>
         <Text style={styles.title}>Profil</Text>

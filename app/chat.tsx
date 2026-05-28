@@ -2,6 +2,7 @@ import { Redirect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -82,6 +83,7 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <BrandBackground />
       <View style={styles.shell}>
         <View style={styles.content}>
           <Text style={styles.title}>Chat</Text>

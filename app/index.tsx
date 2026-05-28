@@ -197,6 +197,7 @@ export default function HomeScreen() {
   if (!state) {
     return (
       <SafeAreaView style={styles.safeArea}>
+        <Image source={logo} style={styles.backgroundLogo} resizeMode="contain" />
         <View style={styles.appShell}>
           <View style={styles.screen}>
             <Header />
@@ -214,6 +215,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Image source={logo} style={styles.backgroundLogo} resizeMode="contain" />
       <View style={styles.appShell}>
         <Animated.ScrollView
           refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor="#ffffff" />}
@@ -415,12 +417,12 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
   appShell: { flex: 1 },
   screen: { gap: 18, padding: 18, paddingBottom: 34 },
-  watermark: {
+  backgroundLogo: {
     position: "absolute",
-    top: 90,
-    right: -74,
-    width: 330,
-    height: 330,
+    top: 82,
+    right: -120,
+    width: 380,
+    height: 380,
     opacity: 0.055,
   },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },

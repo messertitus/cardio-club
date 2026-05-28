@@ -119,3 +119,5 @@ sudo cp -r dist/* /var/www/cardioclub/
 ```
 
 Serve `/var/www/cardioclub` with nginx.
+
+For the production-style test deployment with nginx, HTTPS, domain settings, and security headers, see `docs/deployment-ubuntu.md`.

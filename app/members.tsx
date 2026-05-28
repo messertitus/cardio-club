@@ -2,6 +2,7 @@ import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -46,6 +47,7 @@ export default function MembersScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <BrandBackground />
       <View style={styles.shell}>
         <View style={styles.content}>
           <Text style={styles.title}>Mitglieder</Text>
