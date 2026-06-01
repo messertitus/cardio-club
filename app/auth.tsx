@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
   panel: {
     width: "100%",
     maxWidth: 520,
-    gap: 10,
+    gap: 6,
     borderRadius: 28,
     paddingHorizontal: 18,
     paddingVertical: 20,
