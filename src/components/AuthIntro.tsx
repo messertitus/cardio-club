@@ -47,9 +47,9 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
   const stageHeight = symbolHeight + wordmarkHeight - 76;
   const endWidth = compact ? 188 : 218;
   const startTop = height * 0.2;
-  const endTop = compact ? Math.max(52, height * 0.08) : Math.max(150, height * 0.18);
+  const endTop = compact ? Math.max(92, height * 0.13) : Math.max(110, height * 0.12);
   const logoScale = settle.interpolate({ inputRange: [0, 1], outputRange: [1.04, endWidth / stageWidth] });
-  const logoTranslateY = settle.interpolate({ inputRange: [0, 1], outputRange: [0, endTop - startTop] });
+  const logoTop = settle.interpolate({ inputRange: [0, 1], outputRange: [startTop, endTop] });
   const backdropOpacity = settle.interpolate({ inputRange: [0, 0.72, 1], outputRange: [1, 1, 0] });
   const lineHalfWidth = mark.interpolate({ inputRange: [0, 1], outputRange: ["0%", "50%"] });
 
@@ -62,9 +62,9 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
           {
             width: stageWidth,
             height: stageHeight,
-            top: startTop,
+            top: logoTop,
             marginLeft: -stageWidth / 2,
-            transform: [{ translateY: logoTranslateY }, { scale: logoScale }],
+            transform: [{ scale: logoScale }],
           },
         ]}
       >
