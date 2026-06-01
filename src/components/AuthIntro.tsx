@@ -44,17 +44,18 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
   const symbolSourceSize = stageWidth;
   const symbolHeight = stageWidth;
   const wordmarkHeight = stageWidth * 0.22;
-  const stageHeight = symbolHeight + wordmarkHeight + 12;
-  const endWidth = compact ? 220 : 258;
+  const stageHeight = symbolHeight + wordmarkHeight - 76;
+  const endWidth = compact ? 188 : 218;
   const startTop = height * 0.2;
-  const endTop = compact ? 40 : Math.max(34, height * 0.055);
+  const endTop = compact ? Math.max(52, height * 0.08) : Math.max(150, height * 0.18);
   const logoScale = settle.interpolate({ inputRange: [0, 1], outputRange: [1.04, endWidth / stageWidth] });
   const logoTranslateY = settle.interpolate({ inputRange: [0, 1], outputRange: [0, endTop - startTop] });
-  const overlayOpacity = settle.interpolate({ inputRange: [0, 0.82, 1], outputRange: [1, 1, 0] });
-  const lineWidth = mark.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  const backdropOpacity = settle.interpolate({ inputRange: [0, 0.72, 1], outputRange: [1, 1, 0] });
+  const lineHalfWidth = mark.interpolate({ inputRange: [0, 1], outputRange: ["0%", "50%"] });
 
   return (
-    <Animated.View pointerEvents="none" style={[styles.overlay, { opacity: overlayOpacity }]}>
+    <View pointerEvents="none" style={styles.overlay}>
+      <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} />
       <Animated.View
         style={[
           styles.logoStage,
@@ -159,11 +160,12 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
           <Text style={styles.wordmarkTop}>MESSERS</Text>
           <Text style={styles.wordmarkBottom}>CARDIO CLUB</Text>
         </Animated.View>
-        <View style={[styles.logoLineTrack, { width: stageWidth * 0.15 }]}>
-          <Animated.View style={[styles.logoLineFill, { width: lineWidth }]} />
+        <View style={[styles.logoLineTrack, { width: stageWidth * 0.34 }]}>
+          <Animated.View style={[styles.logoLineFillLeft, { width: lineHalfWidth }]} />
+          <Animated.View style={[styles.logoLineFillRight, { width: lineHalfWidth }]} />
         </View>
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -214,9 +216,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     alignItems: "center",
-    backgroundColor: "#05070b",
     zIndex: 30,
     overflow: "hidden",
+  },
+  backdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "#05070b",
   },
   logoStage: {
     position: "absolute",
@@ -241,32 +250,41 @@ const styles = StyleSheet.create({
   wordmark: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -6,
+    marginTop: -112,
   },
   wordmarkTop: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: 22,
     fontWeight: "800",
-    letterSpacing: 11,
-    lineHeight: 20,
+    letterSpacing: 14,
+    lineHeight: 27,
     textAlign: "center",
   },
   wordmarkBottom: {
     color: "#ffffff",
-    fontSize: 34,
+    fontSize: 50,
     fontWeight: "900",
-    letterSpacing: 4,
-    lineHeight: 39,
+    letterSpacing: 5,
+    lineHeight: 55,
     textAlign: "center",
   },
   logoLineTrack: {
-    height: 3,
+    height: 4,
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.14)",
     overflow: "hidden",
-    marginTop: -13,
+    marginTop: -2,
   },
-  logoLineFill: {
+  logoLineFillLeft: {
+    position: "absolute",
+    right: "50%",
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "#ffffff",
+  },
+  logoLineFillRight: {
+    position: "absolute",
+    left: "50%",
     height: "100%",
     borderRadius: 999,
     backgroundColor: "#ffffff",

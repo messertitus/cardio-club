@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Animated, Easing, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthIntro } from "../src/components/AuthIntro";
 import { ThemeToggle } from "../src/components/ThemeToggle";
@@ -13,8 +13,6 @@ import { consumeInvitationCode, ensureProfile, validateInvitationCode } from "..
 const PENDING_INVITE_KEY = "mcc.pendingInviteCode";
 const PENDING_DISPLAY_NAME_KEY = "mcc.pendingDisplayName";
 const PENDING_PHONE_KEY = "mcc.pendingPhone";
-const darkSymbolLogo = require("../assets/mcc-logo-white-symbol-transparent.png");
-const lightSymbolLogo = require("../assets/mcc-logo-color-symbol.png");
 
 type AuthStep = "login" | "invite" | "signup" | "sms";
 type CountryDialCode = { iso: string; dialCode: string };
@@ -39,7 +37,7 @@ export default function AuthScreen() {
   const [resending, setResending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [showIntro, setShowIntro] = useState(true);
+  const [introDone, setIntroDone] = useState(false);
 
   const normalizedPhone = composePhone(dialCode, phone);
   const compactPhoneField = width < 390;
@@ -279,18 +277,28 @@ export default function AuthScreen() {
     setSuccessMessage(null);
   }
 
+  function finishIntro() {
+    setIntroDone(true);
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView behavior={undefined} style={styles.keyboard}>
         <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.shell}>
-          <AnimatedPanel step={step}>
-            <View style={styles.panelTop}>
-              <View style={styles.themeSlot}>
-                <ThemeToggle />
+          <AnimatedPanel
+            step={step}
+            reveal={introDone}
+            header={
+              <View style={styles.panelTop}>
+                {introDone ? (
+                  <View style={styles.themeSlot}>
+                    <ThemeToggle />
+                  </View>
+                ) : null}
               </View>
-              <AuthWordmark hidden={showIntro} />
-            </View>
+            }
+          >
             <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
             {subtitle ? <Text style={[styles.subtitle, { color: theme.muted }]}>{subtitle}</Text> : null}
 
@@ -393,38 +401,61 @@ export default function AuthScreen() {
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      {showIntro ? <AuthIntro onDone={() => setShowIntro(false)} /> : null}
+      <AuthIntro onDone={finishIntro} />
     </SafeAreaView>
   );
 }
 
-function AnimatedPanel({ children, step }: { children: React.ReactNode; step: AuthStep }) {
+function AnimatedPanel({ children, header, reveal, step }: { children: React.ReactNode; header: React.ReactNode; reveal: boolean; step: AuthStep }) {
   const { theme } = useTheme();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(18)).current;
+  const frameOpacity = useRef(new Animated.Value(0)).current;
+  const frameScale = useRef(new Animated.Value(0.985)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentTranslateY = useRef(new Animated.Value(12)).current;
 
   useEffect(() => {
-    opacity.setValue(0);
-    translateY.setValue(18);
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    if (!reveal) {
+      frameOpacity.setValue(0);
+      frameScale.setValue(0.985);
+      contentOpacity.setValue(0);
+      contentTranslateY.setValue(12);
+      return;
+    }
+
+    frameOpacity.setValue(0);
+    frameScale.setValue(0.985);
+    contentOpacity.setValue(0);
+    contentTranslateY.setValue(12);
+
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(frameOpacity, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(frameScale, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(contentOpacity, { toValue: 1, duration: 360, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(contentTranslateY, { toValue: 0, duration: 360, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]),
     ]).start();
-  }, [opacity, step, translateY]);
-
-  return <Animated.View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface, opacity, transform: [{ translateY }] }]}>{children}</Animated.View>;
-}
-
-function AuthWordmark({ hidden }: { hidden?: boolean }) {
-  const { mode, theme } = useTheme();
+  }, [contentOpacity, contentTranslateY, frameOpacity, frameScale, reveal, step]);
 
   return (
-    <View style={[styles.authBrand, hidden && styles.heroLogoHidden]}>
-      <Image source={mode === "dark" ? darkSymbolLogo : lightSymbolLogo} resizeMode="contain" style={styles.authBrandSymbol} />
-      <Text style={[styles.authBrandTop, { color: theme.text }]}>MESSERS</Text>
-      <Text style={[styles.authBrandBottom, { color: theme.text }]}>CARDIO CLUB</Text>
-      <View style={[styles.authBrandLine, { backgroundColor: theme.text }]} />
-    </View>
+    <Animated.View style={styles.panel}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.panelFrame,
+          {
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+            opacity: frameOpacity,
+            transform: [{ scale: frameScale }],
+          },
+        ]}
+      />
+      {header}
+      <Animated.View style={[styles.panelContent, { opacity: contentOpacity, transform: [{ translateY: contentTranslateY }] }]}>{children}</Animated.View>
+    </Animated.View>
   );
 }
 
@@ -969,25 +1000,26 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     gap: 18,
     borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(12,17,27,0.94)",
     paddingHorizontal: 18,
     paddingVertical: 20,
+  },
+  panelFrame: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 28,
+    borderWidth: 1,
     shadowColor: "#4da3ff",
     shadowOpacity: 0.12,
     shadowRadius: 32,
     shadowOffset: { width: 0, height: 18 },
   },
-  panelTop: { alignItems: "center", minHeight: 132, justifyContent: "center" },
+  panelContent: { gap: 18 },
+  panelTop: { alignItems: "center", minHeight: 216, justifyContent: "center" },
   themeSlot: { position: "absolute", top: 0, right: 0, zIndex: 2 },
-  authBrand: { alignItems: "center", width: 232, maxWidth: "76%" },
-  authBrandSymbol: { width: 112, height: 82, marginBottom: -2 },
-  authBrandTop: { fontSize: 9, fontWeight: "800", letterSpacing: 7, lineHeight: 14 },
-  authBrandBottom: { fontSize: 22, fontWeight: "900", letterSpacing: 2, lineHeight: 27 },
-  authBrandLine: { width: 42, height: 2, borderRadius: 999, marginTop: 3 },
-  heroLogoHidden: { opacity: 0 },
-  title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0, lineHeight: 38 },
+  title: { color: "#ffffff", fontSize: 29, fontWeight: "900", letterSpacing: 0, lineHeight: 34 },
   subtitle: { color: "#9aa7b8", fontSize: 16, lineHeight: 24 },
   form: { gap: 14 },
   field: { gap: 7 },

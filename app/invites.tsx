@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -55,6 +55,26 @@ export default function InvitesScreen() {
     await load();
   }
 
+  async function shareCode(code: string) {
+    await Share.share({ message: buildInviteMessage(code) });
+  }
+
+  async function shareWhatsApp(code: string) {
+    const text = encodeURIComponent(buildInviteMessage(code));
+    const appUrl = `whatsapp://send?text=${text}`;
+    const webUrl = `https://wa.me/?text=${text}`;
+    const canOpenApp = await Linking.canOpenURL(appUrl);
+    await Linking.openURL(canOpenApp ? appUrl : webUrl);
+  }
+
+  async function shareSms(code: string) {
+    await Linking.openURL(`sms:?&body=${encodeURIComponent(buildInviteMessage(code))}`);
+  }
+
+  async function shareInstagram(code: string) {
+    await Share.share({ message: buildInviteMessage(code) });
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <BrandBackground />
@@ -94,6 +114,22 @@ export default function InvitesScreen() {
               <Text style={[styles.code, { color: theme.text }]}>{code.code}</Text>
               <Text style={[styles.codeMeta, { color: theme.muted }]}>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Bereit zum Teilen"}</Text>
               {code.usedByPhone ? <Text style={[styles.codePhone, { color: theme.accent }]}>{code.usedByPhone}</Text> : null}
+              {!code.used_at ? (
+                <View style={styles.shareRow}>
+                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareWhatsApp(code.code)}>
+                    <Text style={[styles.shareText, { color: theme.text }]}>WhatsApp</Text>
+                  </Pressable>
+                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareSms(code.code)}>
+                    <Text style={[styles.shareText, { color: theme.text }]}>SMS</Text>
+                  </Pressable>
+                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareInstagram(code.code)}>
+                    <Text style={[styles.shareText, { color: theme.text }]}>Instagram</Text>
+                  </Pressable>
+                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareCode(code.code)}>
+                    <Text style={[styles.shareText, { color: theme.text }]}>Teilen</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           ))}
         </View>
@@ -102,6 +138,10 @@ export default function InvitesScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+function buildInviteMessage(code: string): string {
+  return `Dein Einladungscode für Messers Cardio Club: ${code}`;
 }
 
 const styles = StyleSheet.create({
@@ -143,4 +183,7 @@ const styles = StyleSheet.create({
   code: { color: "#ffffff", fontSize: 28, fontWeight: "900", letterSpacing: 1, textAlign: "center" },
   codeMeta: { color: "#c6d7ea", fontSize: 12, fontWeight: "900", marginTop: 8, textAlign: "center", textTransform: "uppercase" },
   codePhone: { color: "#8fc7ff", fontSize: 13, fontWeight: "800", marginTop: 4, textAlign: "center" },
+  shareRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 14 },
+  shareButton: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
+  shareText: { fontSize: 12, fontWeight: "900" },
 });
