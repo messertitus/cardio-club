@@ -68,12 +68,15 @@ export async function finalizeEventDecision(
     return fail("Cannot finalize event decision because no eligible sport won.");
   }
 
+  const activityContactId = await selectActivityContact(supabase, input.eventId, preview.data.selectedSportId);
+
   const { data: event, error } = await supabase
     .from("weekly_events")
     .update({
       selected_sport_id: preview.data.selectedSportId,
       secondary_sport_id: preview.data.secondarySportId ?? null,
       decision_reason: preview.data.reason,
+      activity_contact_id: activityContactId,
       status: "decided",
     })
     .eq("id", input.eventId)
@@ -91,7 +94,32 @@ export async function finalizeEventDecision(
     return { data: null, error: historyResult.error };
   }
 
+  if (preview.data.mode === "subgroups") {
+    const subgroupResult = await createSubgroupsFromDecision(supabase, { eventId: event.id, decision: preview.data });
+    if (subgroupResult.error) {
+      return { data: null, error: subgroupResult.error };
+    }
+  }
+
   return ok({ event, decision: preview.data });
+}
+
+async function selectActivityContact(
+  supabase: AppSupabaseClient,
+  eventId: string,
+  selectedSportId: string,
+): Promise<string | null> {
+  const [votes, attendance] = await Promise.all([fetchVotes(supabase, eventId), fetchAttendance(supabase, eventId)]);
+  if (votes.error || attendance.error) return null;
+
+  const attendingUsers = new Set(
+    attendance.data.filter((row) => row.status === "going" || row.status === "maybe").map((row) => row.user_id),
+  );
+  const selectedVoters = votes.data
+    .filter((vote) => vote.sport_id === selectedSportId && attendingUsers.has(vote.user_id))
+    .sort((a, b) => a.vote_rank - b.vote_rank || a.created_at.localeCompare(b.created_at));
+
+  return selectedVoters[0]?.user_id ?? attendance.data.find((row) => row.status === "going")?.user_id ?? null;
 }
 
 export async function createSubgroupsFromDecision(
@@ -122,6 +150,7 @@ export async function createSubgroupsFromDecision(
         event_id: input.eventId,
         sport_id: subgroup.sportId,
         title: `Group ${index + 1}`,
+        activity_contact_id: subgroup.userIds[0] ?? null,
       })),
     )
     .select();
@@ -129,6 +158,18 @@ export async function createSubgroupsFromDecision(
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Could not create subgroups.") };
   }
+
+  await Promise.all(
+    subgroups.map((subgroup, index) => {
+      const created = data[index];
+      if (!created || subgroup.userIds.length === 0) return Promise.resolve();
+      return supabase
+        .from("attendance")
+        .update({ subgroup_id: created.id })
+        .eq("event_id", input.eventId)
+        .in("user_id", subgroup.userIds);
+    }),
+  );
 
   return ok({ subgroups: data });
 }

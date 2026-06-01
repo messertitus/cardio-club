@@ -1,17 +1,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Animated, Easing, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthIntro } from "../src/components/AuthIntro";
+import { ThemeToggle } from "../src/components/ThemeToggle";
 import { Button, ErrorText } from "../src/components/ui";
+import { useTheme } from "../src/context/ThemeContext";
 import { isSupabaseConfigured, supabase } from "../src/lib/supabase";
 import { consumeInvitationCode, ensureProfile, validateInvitationCode } from "../src/services";
 
-const logo = require("../assets/mcc-logo-white-symbol-transparent.png");
-const wordmarkLogo = require("../assets/mcc-logo-white-wordmark-transparent.png");
 const PENDING_INVITE_KEY = "mcc.pendingInviteCode";
 const PENDING_DISPLAY_NAME_KEY = "mcc.pendingDisplayName";
 const PENDING_PHONE_KEY = "mcc.pendingPhone";
+const darkSymbolLogo = require("../assets/mcc-logo-white-symbol-transparent.png");
+const lightSymbolLogo = require("../assets/mcc-logo-color-symbol.png");
 
 type AuthStep = "login" | "invite" | "signup" | "sms";
 type CountryDialCode = { iso: string; dialCode: string };
@@ -22,6 +25,7 @@ type FlagPattern =
 
 export default function AuthScreen() {
   const { width } = useWindowDimensions();
+  const { theme } = useTheme();
   const [step, setStep] = useState<AuthStep>("login");
   const [inviteCode, setInviteCode] = useState("");
   const [verifiedInviteCode, setVerifiedInviteCode] = useState<string | null>(null);
@@ -35,6 +39,7 @@ export default function AuthScreen() {
   const [resending, setResending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
 
   const normalizedPhone = composePhone(dialCode, phone);
   const compactPhoneField = width < 390;
@@ -46,9 +51,9 @@ export default function AuthScreen() {
     return "Willkommen zurück.";
   }, [step]);
   const subtitle = useMemo(() => {
-    if (step === "invite") return "Gib deine lange Einladungs-PIN ein. Jeder Code funktioniert nur einmal.";
-    if (step === "signup") return "Name, Nummer und eigener Code. Die Nummer ist dein eindeutiger Zugang.";
-    if (step === "sms") return "Bestätige deine Telefonnummer mit dem Code aus der SMS.";
+    if (step === "invite") return "Einladungscode eingeben.";
+    if (step === "signup") return "Profil und App-PIN erstellen.";
+    if (step === "sms") return "SMS-Code bestätigen.";
     return null;
   }, [step]);
 
@@ -108,7 +113,7 @@ export default function AuthScreen() {
     }
 
     if (!isValidPin(pin)) {
-      setMessage("Bitte nutze eine PIN mit 6 bis 12 Ziffern.");
+      setMessage("Bitte nutze eine App-PIN mit mindestens 4 Ziffern.");
       setLoading(false);
       return;
     }
@@ -119,7 +124,7 @@ export default function AuthScreen() {
 
     const authResult = await supabase.auth.signUp({
       phone: normalizedPhone,
-      password: pin,
+      password: appPinToAuthPassword(normalizedPhone, pin),
       options: { data: { display_name: displayName.trim() } },
     });
 
@@ -206,12 +211,16 @@ export default function AuthScreen() {
     }
 
     if (!isValidPin(pin)) {
-      setMessage("Bitte nutze eine PIN mit 6 bis 12 Ziffern.");
+      setMessage("Bitte nutze deine App-PIN mit mindestens 4 Ziffern.");
       setLoading(false);
       return;
     }
 
-    const authResult = await supabase.auth.signInWithPassword({ phone: normalizedPhone, password: pin });
+    let authResult = await supabase.auth.signInWithPassword({ phone: normalizedPhone, password: appPinToAuthPassword(normalizedPhone, pin) });
+
+    if (authResult.error && isInvalidLoginError(authResult.error.message)) {
+      authResult = await supabase.auth.signInWithPassword({ phone: normalizedPhone, password: pin });
+    }
 
     if (authResult.error) {
       setMessage(mapAuthError(authResult.error.message));
@@ -271,15 +280,19 @@ export default function AuthScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Image source={logo} style={styles.backgroundLogo} resizeMode="contain" />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboard}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView behavior={undefined} style={styles.keyboard}>
         <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.shell}>
           <AnimatedPanel step={step}>
-            <Image source={wordmarkLogo} style={styles.heroLogo} resizeMode="contain" />
-            <Text style={styles.title}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            <View style={styles.panelTop}>
+              <View style={styles.themeSlot}>
+                <ThemeToggle />
+              </View>
+              <AuthWordmark hidden={showIntro} />
+            </View>
+            <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+            {subtitle ? <Text style={[styles.subtitle, { color: theme.muted }]}>{subtitle}</Text> : null}
 
             {!isSupabaseConfigured ? (
               <View style={styles.notice}>
@@ -299,10 +312,10 @@ export default function AuthScreen() {
                   phone={phone}
                   onPhoneChange={setPhone}
                 />
-                <SoftField value={pin} onChangeText={setPin} secureTextEntry keyboardType="number-pad" inputMode="numeric" placeholder="6 bis 12 Ziffern" />
+                <PinField value={pin} onChangeText={setPin} placeholder="App-PIN" />
                 <ErrorText>{message}</ErrorText>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
-                <Button label={loading ? "Logge ein..." : "Einloggen"} onPress={submitLogin} disabled={loading || !isValidPhone(normalizedPhone) || !pin} />
+                <Button label={loading ? "Logge ein..." : "Einloggen"} onPress={submitLogin} disabled={loading || !isValidPhone(normalizedPhone) || !isValidPin(pin)} />
                 <Pressable onPress={() => switchStep("invite")} style={styles.textButton}>
                   <Text style={styles.textButtonLabel}>Ich habe einen Einladungscode</Text>
                 </Pressable>
@@ -340,13 +353,12 @@ export default function AuthScreen() {
                   phone={phone}
                   onPhoneChange={setPhone}
                 />
-                <SoftField value={pin} onChangeText={setPin} secureTextEntry keyboardType="number-pad" inputMode="numeric" placeholder="6 bis 12 Ziffern" />
-                <Text style={styles.helper}>Die Telefonnummer wird per SMS bestätigt und ist dein eindeutiger Login.</Text>
+                <PinField value={pin} onChangeText={setPin} placeholder="App-PIN ab 4 Ziffern" showFeedback />
                 <ErrorText>{message}</ErrorText>
                 <Button
                   label={loading ? "Erstelle..." : "SMS-Code senden"}
                   onPress={submitSignup}
-                  disabled={loading || !isValidPhone(normalizedPhone) || !pin || !displayName.trim()}
+                  disabled={loading || !isValidPhone(normalizedPhone) || !isValidPin(pin) || !displayName.trim()}
                 />
                 <Pressable onPress={() => switchStep("invite")} style={styles.textButton}>
                   <Text style={styles.textButtonLabel}>Anderen Code eingeben</Text>
@@ -361,6 +373,7 @@ export default function AuthScreen() {
                   onChangeText={(value) => setSmsCode(value.replace(/\D/g, "").slice(0, 8))}
                   keyboardType="number-pad"
                   inputMode="numeric"
+                  textContentType="oneTimeCode"
                   placeholder="Code"
                 />
                 <ErrorText>{message}</ErrorText>
@@ -380,11 +393,13 @@ export default function AuthScreen() {
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {showIntro ? <AuthIntro onDone={() => setShowIntro(false)} /> : null}
     </SafeAreaView>
   );
 }
 
 function AnimatedPanel({ children, step }: { children: React.ReactNode; step: AuthStep }) {
+  const { theme } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(18)).current;
 
@@ -397,7 +412,20 @@ function AnimatedPanel({ children, step }: { children: React.ReactNode; step: Au
     ]).start();
   }, [opacity, step, translateY]);
 
-  return <Animated.View style={[styles.panel, { opacity, transform: [{ translateY }] }]}>{children}</Animated.View>;
+  return <Animated.View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface, opacity, transform: [{ translateY }] }]}>{children}</Animated.View>;
+}
+
+function AuthWordmark({ hidden }: { hidden?: boolean }) {
+  const { mode, theme } = useTheme();
+
+  return (
+    <View style={[styles.authBrand, hidden && styles.heroLogoHidden]}>
+      <Image source={mode === "dark" ? darkSymbolLogo : lightSymbolLogo} resizeMode="contain" style={styles.authBrandSymbol} />
+      <Text style={[styles.authBrandTop, { color: theme.text }]}>MESSERS</Text>
+      <Text style={[styles.authBrandBottom, { color: theme.text }]}>CARDIO CLUB</Text>
+      <View style={[styles.authBrandLine, { backgroundColor: theme.text }]} />
+    </View>
+  );
 }
 
 function PhoneField({
@@ -417,6 +445,7 @@ function PhoneField({
   phone: string;
   onPhoneChange: (value: string) => void;
 }) {
+  const { theme } = useTheme();
   const [expanded, setExpanded] = useState(false);
   const selectedCountry = COUNTRY_DIAL_CODES.find((entry) => entry.iso === countryIso) ?? COUNTRY_DIAL_CODES[0];
 
@@ -429,9 +458,12 @@ function PhoneField({
   return (
     <View style={styles.phoneGroup}>
       <View style={[styles.phoneRow, compact && styles.phoneRowCompact]}>
-        <Pressable onPress={() => setExpanded((value) => !value)} style={[styles.dialField, compact && styles.dialFieldCompact]}>
+        <Pressable
+          onPress={() => setExpanded((value) => !value)}
+          style={[styles.dialField, { borderColor: theme.border, backgroundColor: theme.softSurface }, compact && styles.dialFieldCompact]}
+        >
           <FlagBadge iso={selectedCountry.iso} />
-          <Text style={styles.dialText}>{dialCode}</Text>
+          <Text style={[styles.dialText, { color: theme.text }]}>{dialCode}</Text>
           <Text style={styles.chevron}>{expanded ? "▲" : "▼"}</Text>
         </Pressable>
         <TextInput
@@ -441,21 +473,30 @@ function PhoneField({
           inputMode="tel"
           autoComplete="tel"
           placeholder="170 1234567"
-          placeholderTextColor="#728197"
-          style={[styles.input, styles.phoneInput, compact && styles.phoneInputCompact]}
+          placeholderTextColor={theme.muted}
+          style={[
+            styles.input,
+            { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text },
+            styles.phoneInput,
+            compact && styles.phoneInputCompact,
+          ]}
         />
       </View>
       {expanded ? (
-        <View style={styles.countryMenu}>
+        <View style={[styles.countryMenu, { borderColor: theme.border, backgroundColor: theme.surface }]}>
           <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.countryScroll}>
             {COUNTRY_DIAL_CODES.map((country) => {
               const isActive = country.iso === selectedCountry.iso;
 
               return (
-                <Pressable key={`${country.iso}-${country.dialCode}`} onPress={() => selectCountry(country)} style={[styles.countryOption, isActive && styles.countryOptionActive]}>
+                <Pressable
+                  key={`${country.iso}-${country.dialCode}`}
+                  onPress={() => selectCountry(country)}
+                  style={[styles.countryOption, { borderBottomColor: theme.border }, isActive && { backgroundColor: theme.softSurface }]}
+                >
                   <FlagBadge iso={country.iso} />
-                  <Text style={styles.countryIso}>{country.iso}</Text>
-                  <Text style={styles.countryDialCode}>{country.dialCode}</Text>
+                  <Text style={[styles.countryIso, { color: theme.text }]}>{country.iso}</Text>
+                  <Text style={[styles.countryDialCode, { color: theme.muted }]}>{country.dialCode}</Text>
                 </Pressable>
               );
             })}
@@ -466,11 +507,39 @@ function PhoneField({
   );
 }
 
-function SoftField({ label, ...props }: React.ComponentProps<typeof TextInput> & { label?: string }) {
+function SoftField({ label, style, placeholderTextColor, ...props }: React.ComponentProps<typeof TextInput> & { label?: string }) {
+  const { theme } = useTheme();
+
   return (
     <View style={styles.field}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput placeholderTextColor="#728197" style={styles.input} {...props} />
+      {label ? <Text style={[styles.label, { color: theme.text }]}>{label}</Text> : null}
+      <TextInput
+        placeholderTextColor={placeholderTextColor ?? theme.muted}
+        style={[styles.input, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }, style]}
+        {...props}
+      />
+    </View>
+  );
+}
+
+function PinField(props: Omit<React.ComponentProps<typeof TextInput>, "onChangeText"> & { value: string; onChangeText: (value: string) => void; showFeedback?: boolean }) {
+  const hasValue = props.value.length > 0;
+  const valid = isValidPin(props.value);
+  const showFeedback = props.showFeedback;
+
+  return (
+    <View style={styles.pinWrap}>
+      <SoftField
+        {...props}
+        onChangeText={(value) => props.onChangeText(value.replace(/\D/g, "").slice(0, 16))}
+        secureTextEntry
+        keyboardType="number-pad"
+        inputMode="numeric"
+        textContentType="password"
+        maxLength={16}
+        style={[showFeedback && hasValue && (valid ? styles.pinValid : styles.pinInvalid)]}
+      />
+      {showFeedback && hasValue ? <View style={[styles.pinSignal, valid ? styles.pinSignalValid : styles.pinSignalInvalid]} /> : null}
     </View>
   );
 }
@@ -831,11 +900,15 @@ const COUNTRY_DIAL_CODES = [
 ];
 
 function mapAuthError(message: string): string {
-  if (message.toLowerCase().includes("invalid login credentials")) {
-    return "Telefonnummer oder PIN stimmt nicht. Falls du dich noch mit E-Mail registriert hattest, brauchst du nach der Telefon-Umstellung eine neue Registrierung.";
+  if (isInvalidLoginError(message)) {
+    return "Telefonnummer oder App-PIN stimmt nicht.";
   }
 
   return message;
+}
+
+function isInvalidLoginError(message: string): boolean {
+  return message.toLowerCase().includes("invalid login credentials");
 }
 
 function isValidPhone(value: string): boolean {
@@ -843,11 +916,38 @@ function isValidPhone(value: string): boolean {
 }
 
 function isValidPin(pin: string): boolean {
-  return /^\d{6,12}$/.test(pin);
+  return /^\d{4,16}$/.test(pin);
+}
+
+function appPinToAuthPassword(phoneValue: string, pinValue: string): string {
+  const phoneTail = phoneValue.replace(/\D/g, "").slice(-6).padStart(6, "0");
+  return `mcc-${phoneTail}-${pinValue}`;
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
+  introOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#05070b",
+    zIndex: 10,
+  },
+  introLogoWrap: { alignItems: "center", justifyContent: "center", width: "86%", maxWidth: 420 },
+  introLogo: { width: "100%", height: 240 },
+  introTrack: {
+    width: "44%",
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    marginTop: -28,
+  },
+  introProgress: { height: "100%", borderRadius: 999, backgroundColor: "#ffffff" },
   backgroundLogo: {
     position: "absolute",
     right: -170,
@@ -879,11 +979,24 @@ const styles = StyleSheet.create({
     shadowRadius: 32,
     shadowOffset: { width: 0, height: 18 },
   },
-  heroLogo: { alignSelf: "center", width: "78%", maxWidth: 260, height: 138, marginBottom: -18 },
+  panelTop: { alignItems: "center", minHeight: 132, justifyContent: "center" },
+  themeSlot: { position: "absolute", top: 0, right: 0, zIndex: 2 },
+  authBrand: { alignItems: "center", width: 232, maxWidth: "76%" },
+  authBrandSymbol: { width: 112, height: 82, marginBottom: -2 },
+  authBrandTop: { fontSize: 9, fontWeight: "800", letterSpacing: 7, lineHeight: 14 },
+  authBrandBottom: { fontSize: 22, fontWeight: "900", letterSpacing: 2, lineHeight: 27 },
+  authBrandLine: { width: 42, height: 2, borderRadius: 999, marginTop: 3 },
+  heroLogoHidden: { opacity: 0 },
   title: { color: "#ffffff", fontSize: 34, fontWeight: "900", letterSpacing: 0, lineHeight: 38 },
   subtitle: { color: "#9aa7b8", fontSize: 16, lineHeight: 24 },
   form: { gap: 14 },
   field: { gap: 7 },
+  pinWrap: { gap: 7 },
+  pinValid: { borderColor: "rgba(94,234,212,0.78)", backgroundColor: "rgba(94,234,212,0.1)" },
+  pinInvalid: { borderColor: "rgba(255,126,106,0.76)", backgroundColor: "rgba(255,126,106,0.09)" },
+  pinSignal: { alignSelf: "flex-end", width: 52, height: 3, borderRadius: 999 },
+  pinSignalValid: { backgroundColor: "#5eead4" },
+  pinSignalInvalid: { backgroundColor: "#ff7e6a" },
   phoneGroup: { gap: 8 },
   phoneRow: { flexDirection: "row", gap: 10 },
   phoneRowCompact: { flexDirection: "column" },

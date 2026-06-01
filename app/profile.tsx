@@ -1,33 +1,25 @@
-import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { useAuth } from "../src/context/AuthContext";
-import { supabase } from "../src/lib/supabase";
+import { useTheme } from "../src/context/ThemeContext";
 
 export default function ProfileScreen() {
   const { user } = useAuth();
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.replace("/auth");
-  }
+  const { theme } = useTheme();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <BrandBackground />
       <View style={styles.shell}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.kicker}>Account</Text>
-        <Text style={styles.title}>Profil</Text>
-        <View style={styles.card}>
-          <Text style={styles.label}>Telefon</Text>
-          <Text style={styles.value}>{user?.phone ?? "Angemeldet"}</Text>
+        <Text style={[styles.kicker, { color: theme.accent }]}>Account</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Profil</Text>
+        <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+          <Text style={[styles.label, { color: theme.muted }]}>Telefon</Text>
+          <Text style={[styles.value, { color: theme.text }]}>{user?.phone ?? "Angemeldet"}</Text>
         </View>
-        <Pressable style={({ pressed }) => [styles.button, pressed && styles.pressed]} onPress={signOut}>
-          <Text style={styles.buttonText}>Abmelden</Text>
-        </Pressable>
       </ScrollView>
       <BottomNav active="menu" />
       </View>
@@ -46,5 +38,4 @@ const styles = StyleSheet.create({
   value: { color: "#ffffff", fontSize: 17, fontWeight: "900" },
   button: { alignItems: "center", borderRadius: 18, backgroundColor: "#ffffff", paddingVertical: 15 },
   buttonText: { color: "#05070b", fontSize: 15, fontWeight: "900" },
-  pressed: { transform: [{ scale: 0.99 }], opacity: 0.86 },
 });

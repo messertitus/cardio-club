@@ -35,3 +35,31 @@ export async function suggestSportIdea(
 
   return ok(data);
 }
+
+export async function reviewSportIdea(
+  supabase: AppSupabaseClient,
+  input: { ideaId: string; status: "approved" | "rejected" },
+): Promise<ServiceResult<Row<"sport_ideas">>> {
+  const { data, error } = await supabase
+    .from("sport_ideas")
+    .update({ status: input.status })
+    .eq("id", input.ideaId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Sportidee konnte nicht geprüft werden.") };
+  }
+
+  return ok(data);
+}
+
+export async function isCurrentUserAdmin(supabase: AppSupabaseClient, userId: string): Promise<ServiceResult<boolean>> {
+  const { data, error } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
+
+  if (error) {
+    return { data: null, error: fromPostgrestError(error, "Rolle konnte nicht geladen werden.") };
+  }
+
+  return ok(data?.role === "admin");
+}

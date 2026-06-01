@@ -1,13 +1,13 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { Button, LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
-import { listSportIdeas, listSports, suggestSportIdea, type Row } from "../src/services";
+import { isCurrentUserAdmin, listSportIdeas, listSports, reviewSportIdea, suggestSportIdea, type Row } from "../src/services";
 
 export default function IdeasScreen() {
   const { loading, user } = useAuth();
@@ -19,13 +19,17 @@ export default function IdeasScreen() {
   const [sports, setSports] = useState<Row<"sports">[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   async function load() {
+    if (!user) return;
+    const currentUser = user;
     setBusy(true);
-    const [sportsResult, ideasResult] = await Promise.all([listSports(supabase), listSportIdeas(supabase)]);
+    const [sportsResult, ideasResult, adminResult] = await Promise.all([listSports(supabase), listSportIdeas(supabase), isCurrentUserAdmin(supabase, currentUser.id)]);
     setBusy(false);
     if (sportsResult.data) setSports(sportsResult.data);
     if (ideasResult.data) setIdeas(ideasResult.data);
+    if (adminResult.data !== null) setIsAdmin(adminResult.data);
     if (sportsResult.error || ideasResult.error) setMessage(sportsResult.error?.message ?? ideasResult.error?.message ?? null);
   }
 
@@ -51,6 +55,16 @@ export default function IdeasScreen() {
     await load();
   }
 
+  async function reviewIdea(ideaId: string, status: "approved" | "rejected") {
+    setMessage(null);
+    const result = await reviewSportIdea(supabase, { ideaId, status });
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    await load();
+  }
+
   if (loading) return <LoadingState />;
   if (!user) return <Redirect href="/auth" />;
 
@@ -58,7 +72,7 @@ export default function IdeasScreen() {
     <SafeAreaView style={styles.safeArea}>
       <BrandBackground />
       <View style={styles.shell}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.shell}>
+        <KeyboardAvoidingView behavior={undefined} style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.kicker}>Sportideen</Text>
           <Text style={styles.title}>Neue Aktivität vorschlagen</Text>
@@ -95,8 +109,21 @@ export default function IdeasScreen() {
                     <Text style={styles.ideaMeta}>{[idea.location, idea.preferred_time].filter(Boolean).join(" · ")}</Text>
                   ) : null}
                   {idea.note ? <Text style={styles.ideaNote}>{idea.note}</Text> : null}
+                  {idea.status === "pending" ? <Text style={styles.ideaHint}>Wird vom Admin geprüft. Bei Rückfragen bist du erreichbar.</Text> : null}
                 </View>
-                <Text style={styles.ideaStatus}>{idea.status === "pending" ? "wartet" : idea.status}</Text>
+                <View style={styles.ideaActions}>
+                  <Text style={styles.ideaStatus}>{idea.status === "pending" ? "in Prüfung" : idea.status === "approved" ? "freigegeben" : "abgelehnt"}</Text>
+                  {isAdmin && idea.status === "pending" ? (
+                    <View style={styles.reviewRow}>
+                      <Pressable style={styles.reviewButton} onPress={() => reviewIdea(idea.id, "approved")}>
+                        <Text style={styles.reviewText}>OK</Text>
+                      </Pressable>
+                      <Pressable style={styles.reviewButtonMuted} onPress={() => reviewIdea(idea.id, "rejected")}>
+                        <Text style={styles.reviewTextMuted}>Nein</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
               </Pressable>
             ))}
           </View>
@@ -156,5 +183,12 @@ const styles = StyleSheet.create({
   ideaName: { color: "#ffffff", fontSize: 15, fontWeight: "900" },
   ideaMeta: { color: "#8fc7ff", fontSize: 13, fontWeight: "800" },
   ideaNote: { color: "#9aa7b8", fontSize: 13, lineHeight: 18 },
+  ideaHint: { color: "#5eead4", fontSize: 12, lineHeight: 17, fontWeight: "800" },
+  ideaActions: { alignItems: "flex-end", gap: 8 },
   ideaStatus: { color: "#5eead4", fontSize: 13, fontWeight: "900" },
+  reviewRow: { flexDirection: "row", gap: 6 },
+  reviewButton: { borderRadius: 999, backgroundColor: "#ffffff", paddingHorizontal: 10, paddingVertical: 6 },
+  reviewButtonMuted: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 10, paddingVertical: 6 },
+  reviewText: { color: "#05070b", fontSize: 12, fontWeight: "900" },
+  reviewTextMuted: { color: "#ffffff", fontSize: 12, fontWeight: "900" },
 });

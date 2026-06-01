@@ -1,6 +1,6 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type ClubMemberRole = "owner" | "admin" | "member";
+export type ClubMemberRole = "admin" | "mod" | "member";
 export type SportIntensityLevel = "low" | "medium" | "high";
 export type SportLocationType = "indoor" | "outdoor" | "water" | "field" | "flexible";
 export type WeeklyEventStatus = "proposing" | "voting" | "decided" | "completed" | "cancelled";
@@ -16,6 +16,8 @@ export type Database = {
           display_name: string;
           email: string | null;
           phone: string | null;
+          postal_code: string | null;
+          city: string | null;
           role: AppRole;
           avatar_url: string | null;
           created_at: string;
@@ -25,6 +27,8 @@ export type Database = {
           display_name: string;
           email?: string | null;
           phone?: string | null;
+          postal_code?: string | null;
+          city?: string | null;
           role?: AppRole;
           avatar_url?: string | null;
           created_at?: string;
@@ -33,6 +37,8 @@ export type Database = {
           display_name?: string;
           email?: string | null;
           phone?: string | null;
+          postal_code?: string | null;
+          city?: string | null;
           role?: AppRole;
           avatar_url?: string | null;
         };
@@ -255,6 +261,7 @@ export type Database = {
           title: string;
           location: string | null;
           starts_at: string | null;
+          activity_contact_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -264,12 +271,14 @@ export type Database = {
           title: string;
           location?: string | null;
           starts_at?: string | null;
+          activity_contact_id?: string | null;
           created_at?: string;
         };
         Update: {
           title?: string;
           location?: string | null;
           starts_at?: string | null;
+          activity_contact_id?: string | null;
         };
         Relationships: [];
       };
@@ -335,6 +344,7 @@ export type Database = {
           id: string;
           club_id: string;
           event_id: string | null;
+          sport_id: string | null;
           user_id: string;
           body: string;
           created_at: string;
@@ -343,12 +353,14 @@ export type Database = {
           id?: string;
           club_id: string;
           event_id?: string | null;
+          sport_id?: string | null;
           user_id: string;
           body: string;
           created_at?: string;
         };
         Update: {
           body?: string;
+          sport_id?: string | null;
         };
         Relationships: [];
       };

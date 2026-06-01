@@ -97,7 +97,7 @@ export async function createClub(
   const membership = await joinClub(supabase, {
     clubId: club.id,
     userId: input.createdBy,
-    role: "owner",
+    role: "admin",
   });
 
   if (membership.error) {

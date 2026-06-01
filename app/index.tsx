@@ -1,22 +1,31 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect, router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Animated, Image, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, KeyboardAvoidingView, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
+import { MotionPressable, Reveal } from "../src/components/Motion";
+import { ThemeToggle } from "../src/components/ThemeToggle";
 import { LoadingState, Screen } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
+import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import type { VoteRank } from "../src/lib/votingRules";
 import {
   clearMccVote,
   getMccEventState,
+  getMyProfile,
   saveMccAttendance,
   saveMccVoteRank,
+  updateProfileCity,
   type AttendanceStatus,
   type MccEventState,
 } from "../src/services";
 
-const logo = require("../assets/mcc-logo-white-symbol-transparent.png");
+const darkLogo = require("../assets/mcc-logo-white-symbol-transparent.png");
+const lightLogo = require("../assets/mcc-logo-color-symbol.png");
+const EVENT_CACHE_PREFIX = "mcc.eventState.";
+const seenCityPromptUserIds = new Set<string>();
 
 const voteRanks: VoteRank[] = [1, 2, 3];
 
@@ -30,13 +39,28 @@ type FlowStep = "attendance" | "sports" | "overview";
 
 export default function HomeScreen() {
   const { loading, user } = useAuth();
+  const { mode, theme } = useTheme();
   const [state, setState] = useState<MccEventState | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [manualStep, setManualStep] = useState<FlowStep | null>(null);
+  const [needsCity, setNeedsCity] = useState(false);
+  const [postalCode, setPostalCode] = useState("");
+  const [city, setCity] = useState("");
+  const [cityBusy, setCityBusy] = useState(false);
+  const [citySkipped, setCitySkipped] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
+    const cacheKey = `${EVENT_CACHE_PREFIX}${user.id}`;
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached && !state) {
+      try {
+        setState(JSON.parse(cached) as MccEventState);
+      } catch {
+        await AsyncStorage.removeItem(cacheKey);
+      }
+    }
     setBusy(true);
     const result = await getMccEventState(supabase, user.id);
     setBusy(false);
@@ -48,11 +72,26 @@ export default function HomeScreen() {
 
     setNotice(null);
     setState(result.data);
-  }, [user]);
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(result.data));
+  }, [state, user]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    async function loadProfileCity() {
+      if (!user) return;
+      const result = await getMyProfile(supabase, user.id);
+      if (result.data && !result.data.city && !citySkipped && !seenCityPromptUserIds.has(user.id)) {
+        setNeedsCity(true);
+        setPostalCode(result.data.postal_code ?? "");
+        setCity(result.data.city ?? "");
+      }
+    }
+
+    void loadProfileCity();
+  }, [citySkipped, user]);
 
   const proposedSports = useMemo(() => {
     if (!state) return [];
@@ -60,17 +99,22 @@ export default function HomeScreen() {
     return state.sports.filter((sport) => proposedIds.has(sport.id));
   }, [state]);
 
-  const naturalStep: FlowStep = !state?.myAttendance
-    ? "attendance"
-    : state.myAttendance.status === "not_going"
-      ? "overview"
-      : state.myVotes.length === 0
-        ? "sports"
-        : "overview";
+  const isDecided = state?.event.status === "decided" || state?.event.status === "completed";
+  const naturalStep: FlowStep = isDecided
+    ? "overview"
+    : !state?.myAttendance
+      ? "attendance"
+      : state.myAttendance.status === "not_going"
+        ? "overview"
+        : state.myVotes.length === 0
+          ? "sports"
+          : "overview";
   const activeStep = manualStep ?? naturalStep;
   const selectedSport = state?.sports.find((sport) => sport.id === state.event.selected_sport_id);
-  const decisionSportName = selectedSport?.name ?? state?.decisionText.selectedSportName ?? "Noch offen";
+  const secondarySport = state?.sports.find((sport) => sport.id === state.event.secondary_sport_id);
+  const decisionSportName = isDecided ? (selectedSport?.name ?? "Entscheidung steht") : "???";
   const eventDate = state?.event.starts_at ? new Date(state.event.starts_at) : null;
+  const brandLogo = mode === "dark" ? darkLogo : lightLogo;
 
   async function chooseAttendance(status: AttendanceStatus) {
     if (!user || !state) return;
@@ -111,7 +155,7 @@ export default function HomeScreen() {
   }
 
   async function chooseSport(sportId: string) {
-    if (!user || !state || state.myAttendance?.status === "not_going") return;
+    if (!user || !state || state.myAttendance?.status === "not_going" || isDecided) return;
 
     const existing = state.myVotes.find((vote) => vote.sport_id === sportId);
     if (existing) {
@@ -164,7 +208,7 @@ export default function HomeScreen() {
   }
 
   async function setRank(sportId: string, rank: VoteRank) {
-    if (!user || !state || state.myAttendance?.status === "not_going") return;
+    if (!user || !state || state.myAttendance?.status === "not_going" || isDecided) return;
     const replaced = state.myVotes.find((vote) => vote.vote_rank === rank && vote.sport_id !== sportId);
 
     if (replaced) {
@@ -174,6 +218,40 @@ export default function HomeScreen() {
     const result = await saveMccVoteRank(supabase, { eventId: state.event.id, userId: user.id, sportId, rank });
     if (result.error) setNotice(result.error.message);
     void load();
+  }
+
+  async function updatePostalCode(value: string) {
+    const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
+    setPostalCode(nextPostalCode);
+    if (nextPostalCode.length !== 5) return;
+
+    const onlineCity = await fetchGermanCityByPostalCode(nextPostalCode);
+    if (onlineCity) {
+      setCity(onlineCity);
+      return;
+    }
+
+    const fallbackCity = inferCityFromPostalCode(nextPostalCode);
+    if (fallbackCity) setCity(fallbackCity);
+  }
+
+  async function saveCity() {
+    if (!user || postalCode.length < 5 || !city.trim()) return;
+    setCityBusy(true);
+    const result = await updateProfileCity(supabase, { userId: user.id, postalCode, city: city.trim() });
+    setCityBusy(false);
+    if (result.error) {
+      setNotice(result.error.message);
+      return;
+    }
+    seenCityPromptUserIds.add(user.id);
+    setNeedsCity(false);
+  }
+
+  function skipCityPrompt() {
+    if (user) seenCityPromptUserIds.add(user.id);
+    setCitySkipped(true);
+    setNeedsCity(false);
   }
 
   if (loading) {
@@ -196,14 +274,14 @@ export default function HomeScreen() {
 
   if (!state) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <Image source={logo} style={styles.backgroundLogo} resizeMode="contain" />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+        <Image source={brandLogo} style={[styles.backgroundLogo, { opacity: mode === "dark" ? 0.055 : 0.075 }]} resizeMode="contain" />
         <View style={styles.appShell}>
           <View style={styles.screen}>
             <Header />
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Event konnte nicht geladen werden</Text>
-              <Text style={styles.body}>{notice ?? "Bitte prüfe Supabase und lade danach neu."}</Text>
+            <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+              <Text style={[styles.panelTitle, { color: theme.text }]}>Event konnte nicht geladen werden</Text>
+              <Text style={[styles.body, { color: theme.muted }]}>{notice ?? "Bitte prüfe Supabase und lade danach neu."}</Text>
               <PrimaryButton label="Neu laden" onPress={load} />
             </View>
           </View>
@@ -214,38 +292,45 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Image source={logo} style={styles.backgroundLogo} resizeMode="contain" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <Image source={brandLogo} style={[styles.backgroundLogo, { opacity: mode === "dark" ? 0.055 : 0.075 }]} resizeMode="contain" />
       <View style={styles.appShell}>
         <Animated.ScrollView
-          refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor="#ffffff" />}
+          refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={theme.text} />}
           contentContainerStyle={styles.screen}
         >
           <Header />
           <View style={styles.hero}>
-            <Text style={styles.kicker}>Diese Woche</Text>
-            <Text style={styles.title}>Gemeinsamer Cardiotag</Text>
+            <Text style={[styles.kicker, { color: theme.accent }]}>Diese Woche</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Gemeinsamer Cardiotag</Text>
           </View>
           <Progress activeStep={activeStep} />
           {notice ? <View style={styles.notice}><Text style={styles.noticeText}>{notice}</Text></View> : null}
 
           <Stage stepKey={activeStep}>
             {activeStep === "attendance" ? (
-              <View style={styles.panel}>
-                <Text style={styles.panelKicker}>Schritt 1</Text>
-                <Text style={styles.panelTitle}>Bist du dabei?</Text>
+              <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                <Text style={[styles.panelKicker, { color: theme.accent }]}>Schritt 1</Text>
+                <Text style={[styles.panelTitle, { color: theme.text }]}>Bist du dabei?</Text>
                 <View style={styles.optionStack}>
                   {attendanceOptions.map((option) => {
                     const active = state.myAttendance?.status === option.status;
                     return (
-                      <Pressable
+                      <Reveal key={option.status} index={attendanceOptions.indexOf(option)}>
+                      <MotionPressable
                         key={option.status}
-                        style={({ pressed }) => [styles.option, active && styles.optionActive, pressed && styles.pressed]}
+                        style={[
+                          styles.option,
+                          { borderColor: theme.border, backgroundColor: theme.softSurface },
+                          active && { borderColor: theme.accent, backgroundColor: theme.button },
+                        ]}
+                        pressedStyle={styles.pressed}
                         onPress={() => chooseAttendance(option.status)}
                       >
-                        <Text style={[styles.optionTitle, active && styles.optionTitleActive]}>{option.title}</Text>
-                        <Text style={[styles.optionBody, active && styles.optionBodyActive]}>{option.body}</Text>
-                      </Pressable>
+                        <Text style={[styles.optionTitle, { color: active ? theme.inverse : theme.text }]}>{option.title}</Text>
+                        <Text style={[styles.optionBody, { color: active ? theme.inverse : theme.muted }]}>{option.body}</Text>
+                      </MotionPressable>
+                      </Reveal>
                     );
                   })}
                 </View>
@@ -253,21 +338,27 @@ export default function HomeScreen() {
             ) : null}
 
             {activeStep === "sports" ? (
-              <View style={styles.panel}>
-                <Text style={styles.panelKicker}>Schritt 2</Text>
-                <Text style={styles.panelTitle}>Wähle deinen Mix</Text>
+              <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                <Text style={[styles.panelKicker, { color: theme.accent }]}>Schritt 2</Text>
+                <Text style={[styles.panelTitle, { color: theme.text }]}>Wähle deinen Mix</Text>
                 <View style={styles.voteStack}>
                   {proposedSports.map((sport) => {
                     const vote = state.myVotes.find((row) => row.sport_id === sport.id);
                     return (
-                      <Pressable
+                      <Reveal key={sport.id} index={proposedSports.indexOf(sport)}>
+                      <MotionPressable
                         key={sport.id}
-                        style={({ pressed }) => [styles.sportCard, vote && styles.sportCardActive, pressed && styles.pressed]}
+                        style={[
+                          styles.sportCard,
+                          { borderColor: theme.border, backgroundColor: theme.softSurface },
+                          vote && { borderColor: theme.accent, backgroundColor: theme.button },
+                        ]}
+                        pressedStyle={styles.pressed}
                         onPress={() => chooseSport(sport.id)}
                       >
                         <View style={styles.sportTextWrap}>
-                          <Text style={[styles.sportName, vote && styles.sportNameActive]}>{sport.name}</Text>
-                          <Text style={[styles.sportMeta, vote && styles.sportMetaActive]}>
+                          <Text style={[styles.sportName, { color: vote ? theme.inverse : theme.text }]}>{sport.name}</Text>
+                          <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>
                             {sport.location_type} · {sport.intensity_level}
                           </Text>
                         </View>
@@ -284,9 +375,10 @@ export default function HomeScreen() {
                             ))}
                           </View>
                         ) : (
-                          <Text style={styles.addMark}>+</Text>
+                          <Text style={[styles.addMark, { color: theme.accent }]}>+</Text>
                         )}
-                      </Pressable>
+                      </MotionPressable>
+                      </Reveal>
                     );
                   })}
                 </View>
@@ -295,17 +387,27 @@ export default function HomeScreen() {
             ) : null}
 
             {activeStep === "overview" ? (
-              <View style={styles.panel}>
-                <Text style={styles.panelKicker}>Überblick</Text>
-                <Text style={styles.panelTitle}>{decisionSportName}</Text>
-                <View style={styles.pillRow}>
-                  {state.decisionText.resultLabels.map((label) => (
-                    <View key={label} style={styles.pill}>
-                      <Text style={styles.pillText}>{label}</Text>
+              <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                <Text style={[styles.panelKicker, { color: theme.accent }]}>{isDecided ? "Entscheidung" : "Vor der Auswertung"}</Text>
+                <Text style={[styles.panelTitle, { color: theme.text }]}>{decisionSportName}</Text>
+                {!isDecided ? <Text style={[styles.body, { color: theme.muted }]}>Sportart folgt am Mittwoch nach der Auswertung.</Text> : null}
+                {isDecided ? (
+                  <>
+                    {secondarySport ? <Text style={[styles.secondarySport, { color: theme.accent }]}>+ {secondarySport.name}</Text> : null}
+                    <View style={styles.pillRow}>
+                      {state.decisionText.resultLabels.map((label) => (
+                        <View key={label} style={[styles.pill, { backgroundColor: theme.softSurface }]}>
+                          <Text style={[styles.pillText, { color: theme.accent }]}>{label}</Text>
+                        </View>
+                      ))}
                     </View>
-                  ))}
-                </View>
-                <Text style={styles.body}>{state.event.decision_reason ?? state.decisionText.simpleExplanation}</Text>
+                    <Text style={[styles.body, { color: theme.muted }]}>{state.event.decision_reason ?? state.decisionText.simpleExplanation}</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.body, { color: theme.muted }]}>
+                    Deine Auswahl ist gespeichert. Die Sportart bleibt bis zur Auswertung eine Überraschung.
+                  </Text>
+                )}
                 <View style={styles.detailGrid}>
                   <Detail label="Teilnahme" value={attendanceLabel(state.myAttendance?.status)} />
                   <Detail
@@ -323,36 +425,137 @@ export default function HomeScreen() {
                   <SecondaryButton label="Teilnahme ändern" onPress={() => setManualStep("attendance")} />
                   {state.myAttendance?.status !== "not_going" ? <SecondaryButton label="Sport ändern" onPress={() => setManualStep("sports")} /> : null}
                 </View>
-                <PrimaryButton label="Zum Event-Chat" onPress={() => router.push("/chat")} />
+                {isDecided ? (
+                  <PrimaryButton label="Zum Event-Chat" onPress={() => router.push("/chat")} />
+                ) : (
+                  <View style={[styles.lockedChat, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+                    <Text style={[styles.lockedChatText, { color: theme.muted }]}>Chat öffnet nach der Entscheidung.</Text>
+                  </View>
+                )}
               </View>
             ) : null}
           </Stage>
         </Animated.ScrollView>
+        <CityPrompt
+          visible={needsCity}
+          postalCode={postalCode}
+          city={city}
+          onPostalCodeChange={updatePostalCode}
+          onCityChange={setCity}
+          onSave={saveCity}
+          onSkip={skipCityPrompt}
+          busy={cityBusy}
+        />
         <BottomNav active="event" />
       </View>
     </SafeAreaView>
   );
 }
 
+function CityPrompt({
+  visible,
+  postalCode,
+  city,
+  onPostalCodeChange,
+  onCityChange,
+  onSave,
+  onSkip,
+  busy,
+}: {
+  visible: boolean;
+  postalCode: string;
+  city: string;
+  onPostalCodeChange: (value: string) => void;
+  onCityChange: (value: string) => void;
+  onSave: () => void;
+  onSkip: () => void;
+  busy: boolean;
+}) {
+  const { theme } = useTheme();
+  const scale = useRef(new Animated.Value(0.94)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    opacity.setValue(0);
+    scale.setValue(0.94);
+    translateY.setValue(18);
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 140, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, damping: 18, stiffness: 160, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, damping: 18, stiffness: 170, useNativeDriver: true }),
+    ]).start();
+  }, [opacity, scale, translateY, visible]);
+
+  function closeWithAnimation() {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 26, duration: 120, useNativeDriver: true }),
+    ]).start(onSkip);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <KeyboardAvoidingView behavior={undefined} style={styles.cityOverlay}>
+        <Animated.View style={[styles.cityCard, { backgroundColor: theme.surface, borderColor: theme.border, opacity, transform: [{ translateY }, { scale }] }]}>
+          <Text style={[styles.cityKicker, { color: theme.accent }]}>Kurz dein Standort</Text>
+          <Text style={[styles.cityTitle, { color: theme.text }]}>Aus welcher Stadt kommst du?</Text>
+          <TextInput
+            value={postalCode}
+            onChangeText={onPostalCodeChange}
+            placeholder="PLZ"
+            placeholderTextColor={theme.muted}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            maxLength={5}
+            style={[styles.cityInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+          />
+          <TextInput
+            value={city}
+            onChangeText={onCityChange}
+            placeholder="Stadt"
+            placeholderTextColor={theme.muted}
+            autoCapitalize="words"
+            style={[styles.cityInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+          />
+          <Pressable
+            style={[styles.cityButton, { backgroundColor: theme.button }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
+            onPress={onSave}
+            disabled={postalCode.length < 5 || !city.trim() || busy}
+          >
+            <Text style={[styles.cityButtonText, { color: theme.inverse }]}>{busy ? "Speichern..." : "Speichern"}</Text>
+          </Pressable>
+          <Pressable style={styles.citySkip} onPress={closeWithAnimation}>
+            <Text style={[styles.citySkipText, { color: theme.muted }]}>Später</Text>
+          </Pressable>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function Header() {
+  const { mode } = useTheme();
+  const headerLogo = mode === "dark" ? darkLogo : lightLogo;
+
   return (
     <View style={styles.header}>
-      <Image source={logo} style={styles.logo} resizeMode="contain" />
-      <Pressable style={styles.menuButton} onPress={() => router.push("/menu")}>
-        <Text style={styles.menuButtonText}>Menü</Text>
-      </Pressable>
+      <Image source={headerLogo} style={styles.logo} resizeMode="contain" />
+      <ThemeToggle />
     </View>
   );
 }
 
 function Progress({ activeStep }: { activeStep: FlowStep }) {
+  const { theme } = useTheme();
   const steps: FlowStep[] = ["attendance", "sports", "overview"];
   const activeIndex = steps.indexOf(activeStep);
 
   return (
     <View style={styles.progress}>
       {steps.map((step, index) => (
-        <View key={step} style={[styles.progressDot, index <= activeIndex && styles.progressDotActive]} />
+        <View key={step} style={[styles.progressDot, { backgroundColor: index <= activeIndex ? theme.accent : theme.border }]} />
       ))}
     </View>
   );
@@ -378,26 +581,39 @@ function Stage({ children, stepKey }: { children: ReactNode; stepKey: FlowStep }
 }
 
 function PrimaryButton({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const { theme } = useTheme();
+
   return (
-    <Pressable style={({ pressed }) => [styles.primaryButton, disabled && styles.disabled, pressed && !disabled && styles.pressed]} onPress={onPress} disabled={disabled}>
-      <Text style={styles.primaryButtonText}>{label}</Text>
+    <Pressable
+      style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.button }, disabled && styles.disabled, pressed && !disabled && styles.pressed]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text style={[styles.primaryButtonText, { color: theme.inverse }]}>{label}</Text>
     </Pressable>
   );
 }
 
 function SecondaryButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { theme } = useTheme();
+
   return (
-    <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]} onPress={onPress}>
-      <Text style={styles.secondaryButtonText}>{label}</Text>
+    <Pressable
+      style={({ pressed }) => [styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.softSurface }, pressed && styles.pressed]}
+      onPress={onPress}
+    >
+      <Text style={[styles.secondaryButtonText, { color: theme.text }]}>{label}</Text>
     </Pressable>
   );
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
+  const { theme } = useTheme();
+
   return (
-    <View style={styles.detail}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value || "Noch offen"}</Text>
+    <View style={[styles.detail, { borderTopColor: theme.border }]}>
+      <Text style={[styles.detailLabel, { color: theme.muted }]}>{label}</Text>
+      <Text style={[styles.detailValue, { color: theme.text }]}>{value || "Noch offen"}</Text>
     </View>
   );
 }
@@ -411,6 +627,60 @@ function attendanceLabel(status?: AttendanceStatus): string {
 
 function sportName(state: MccEventState, sportId: string): string {
   return state.sports.find((sport) => sport.id === sportId)?.name ?? "Sportart";
+}
+
+async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.zippopotam.us/de/${postalCode}`);
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { places?: Array<{ "place name"?: string }> };
+    return payload.places?.[0]?.["place name"] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function inferCityFromPostalCode(postalCode: string): string {
+  const exact: Record<string, string> = {
+    "10115": "Berlin",
+    "20095": "Hamburg",
+    "28195": "Bremen",
+    "30159": "Hannover",
+    "40210": "Düsseldorf",
+    "50667": "Köln",
+    "60311": "Frankfurt am Main",
+    "70173": "Stuttgart",
+    "80331": "München",
+    "90402": "Nürnberg",
+    "78462": "Konstanz",
+  };
+
+  if (exact[postalCode]) return exact[postalCode];
+  if (postalCode.length < 2) return "";
+
+  const prefix = Number(postalCode.slice(0, 2));
+  if (prefix <= 14) return "Berlin";
+  if (prefix <= 19) return "Brandenburg";
+  if (prefix <= 22) return "Hamburg";
+  if (prefix <= 28) return "Bremen";
+  if (prefix <= 31) return "Hannover";
+  if (prefix <= 34) return "Kassel";
+  if (prefix <= 37) return "Göttingen";
+  if (prefix <= 40) return "Dortmund";
+  if (prefix <= 42) return "Düsseldorf";
+  if (prefix <= 47) return "Ruhrgebiet";
+  if (prefix <= 53) return "Köln";
+  if (prefix <= 56) return "Koblenz";
+  if (prefix <= 60) return "Frankfurt am Main";
+  if (prefix <= 65) return "Wiesbaden";
+  if (prefix <= 69) return "Mannheim";
+  if (prefix <= 73) return "Stuttgart";
+  if (prefix <= 79) return "Konstanz";
+  if (prefix <= 86) return "München";
+  if (prefix <= 89) return "Ulm";
+  if (prefix <= 91) return "Nürnberg";
+  if (prefix <= 96) return "Bamberg";
+  return "Leipzig";
 }
 
 const styles = StyleSheet.create({
@@ -450,6 +720,7 @@ const styles = StyleSheet.create({
   panelKicker: { color: "#4da3ff", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   panelTitle: { color: "#ffffff", fontSize: 28, fontWeight: "900", letterSpacing: 0, lineHeight: 32 },
   body: { color: "#9aa7b8", fontSize: 15, lineHeight: 22 },
+  secondarySport: { color: "#8fc7ff", fontSize: 20, fontWeight: "900", marginTop: -8 },
   optionStack: { gap: 10 },
   option: { gap: 5, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.07)", padding: 16 },
   optionActive: { borderColor: "rgba(77,163,255,0.78)", backgroundColor: "rgba(77,163,255,0.18)" },
@@ -503,6 +774,49 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   secondaryButtonText: { color: "#ffffff", fontSize: 14, fontWeight: "900" },
+  lockedChat: {
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingVertical: 14,
+  },
+  lockedChatText: { color: "#9aa7b8", fontSize: 14, fontWeight: "900" },
+  cityOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 14,
+    paddingBottom: 92,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  cityCard: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 430,
+    gap: 12,
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: "#000000",
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+  },
+  cityKicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  cityTitle: { fontSize: 26, fontWeight: "900", lineHeight: 30 },
+  cityInput: {
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    fontSize: 17,
+    paddingHorizontal: 14,
+    outlineStyle: "none",
+  } as object,
+  cityButton: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
+  cityButtonText: { fontSize: 15, fontWeight: "900" },
+  citySkip: { alignItems: "center", paddingVertical: 5 },
+  citySkipText: { fontSize: 14, fontWeight: "900" },
   notice: { borderRadius: 18, backgroundColor: "rgba(164,62,48,0.18)", padding: 12 },
   noticeText: { color: "#ffb5a8", fontSize: 14, fontWeight: "900", textAlign: "center" },
   pressed: { transform: [{ scale: 0.99 }], opacity: 0.88 },

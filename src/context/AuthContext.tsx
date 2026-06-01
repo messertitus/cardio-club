@@ -1,6 +1,9 @@
 import type { Session, User } from "@supabase/supabase-js";
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
+import { AppState, StyleSheet, View } from "react-native";
 import { supabase } from "../lib/supabase";
+
+const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 
 type AuthContextValue = {
   session: Session | null;
@@ -17,6 +20,31 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastActivityRef = useRef(Date.now());
+
+  const clearLogoutTimer = useCallback(() => {
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+      logoutTimerRef.current = null;
+    }
+  }, []);
+
+  const signOutForInactivity = useCallback(async () => {
+    clearLogoutTimer();
+    await supabase.auth.signOut();
+  }, [clearLogoutTimer]);
+
+  const markActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    clearLogoutTimer();
+
+    if (!session) return;
+
+    logoutTimerRef.current = setTimeout(() => {
+      void signOutForInactivity();
+    }, INACTIVITY_LIMIT_MS);
+  }, [clearLogoutTimer, session, signOutForInactivity]);
 
   useEffect(() => {
     let mounted = true;
@@ -41,6 +69,34 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
+  useEffect(() => {
+    if (session) {
+      markActivity();
+      return clearLogoutTimer;
+    }
+
+    clearLogoutTimer();
+    return undefined;
+  }, [clearLogoutTimer, markActivity, session]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") markActivity();
+    });
+
+    const events = ["pointerdown", "keydown", "scroll", "touchstart"];
+    if (typeof window !== "undefined") {
+      events.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }));
+    }
+
+    return () => {
+      subscription.remove();
+      if (typeof window !== "undefined") {
+        events.forEach((eventName) => window.removeEventListener(eventName, markActivity));
+      }
+    };
+  }, [markActivity]);
+
   const value = useMemo(
     () => ({
       session,
@@ -50,9 +106,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [loading, session],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <View style={styles.activityRoot} onTouchStart={markActivity}>
+        {children}
+      </View>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   return useContext(AuthContext);
 }
+
+const styles = StyleSheet.create({
+  activityRoot: { flex: 1 },
+});

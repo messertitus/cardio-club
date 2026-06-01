@@ -1,63 +1,83 @@
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 
 export type BottomNavKey = "event" | "chat" | "members" | "menu";
 
 export function BottomNav({ active }: { active: BottomNavKey }) {
+  const { width } = useWindowDimensions();
+  const { theme } = useTheme();
+  const compact = width < 360;
   const items = [
     { key: "event", label: "Event", href: "/" },
     { key: "chat", label: "Chat", href: "/chat" },
-    { key: "members", label: "Mitglieder", href: "/members" },
+    { key: "members", label: compact ? "Team" : "Mitglieder", href: "/members" },
     { key: "menu", label: "Menü", href: "/menu" },
   ] as const;
 
   return (
-    <View style={styles.wrap}>
-      {items.map((item) => (
-        <Pressable
-          key={item.key}
-          style={({ pressed }) => [styles.item, active === item.key && styles.itemActive, pressed && styles.itemPressed]}
-          onPress={() => router.push(item.href)}
-        >
-          <Text style={[styles.label, active === item.key && styles.labelActive]}>{item.label}</Text>
-        </Pressable>
-      ))}
+    <View style={[styles.outer, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
+      <View style={styles.wrap}>
+        {items.map((item) => {
+          const isActive = active === item.key;
+
+          return (
+            <Pressable
+              key={item.key}
+              style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+              onPress={() => router.push(item.href)}
+            >
+              <View style={[styles.activeLine, { backgroundColor: isActive ? theme.accent : "transparent" }]} />
+              <Text style={[styles.label, compact && styles.labelCompact, { color: isActive ? theme.text : theme.muted }]} numberOfLines={1}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    gap: 8,
+  outer: {
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "#05070b",
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingHorizontal: 0,
+    paddingTop: 4,
+    paddingBottom: 6,
+  },
+  wrap: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "stretch",
   },
   item: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 48,
     alignItems: "center",
-    borderRadius: 16,
-    minHeight: 42,
     justifyContent: "center",
-    paddingVertical: 10,
-  },
-  itemActive: {
-    backgroundColor: "#ffffff",
+    paddingHorizontal: 2,
+    paddingTop: 8,
+    paddingBottom: 7,
   },
   itemPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.85,
+    opacity: 0.68,
+  },
+  activeLine: {
+    position: "absolute",
+    top: 0,
+    width: 24,
+    height: 3,
+    borderRadius: 999,
   },
   label: {
-    color: "#728197",
-    fontSize: 11,
-    fontWeight: "900",
+    width: "100%",
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "800",
   },
-  labelActive: {
-    color: "#05070b",
+  labelCompact: {
+    fontSize: 11,
   },
 });

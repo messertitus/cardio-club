@@ -1,5 +1,6 @@
 export * from "./attendance";
 export * from "./admin";
+export * from "./adminPanel";
 export * from "./clubs";
 export * from "./chat";
 export * from "./database.types";

@@ -14,6 +14,7 @@ create table if not exists public.chat_messages (
   id uuid primary key default gen_random_uuid(),
   club_id uuid not null references public.clubs (id) on delete cascade,
   event_id uuid references public.weekly_events (id) on delete cascade,
+  sport_id uuid references public.sports (id) on delete cascade,
   user_id uuid not null references public.profiles (id) on delete cascade,
   body text not null check (char_length(trim(body)) between 1 and 1000),
   created_at timestamptz not null default now()
@@ -33,6 +34,7 @@ create table if not exists public.push_subscriptions (
 create index if not exists sport_ideas_status_created_idx on public.sport_ideas (status, created_at desc);
 create index if not exists chat_messages_club_created_idx on public.chat_messages (club_id, created_at desc);
 create index if not exists chat_messages_event_created_idx on public.chat_messages (event_id, created_at desc);
+create index if not exists chat_messages_event_sport_created_idx on public.chat_messages (event_id, sport_id, created_at desc);
 create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
 create index if not exists weekly_events_activity_contact_idx on public.weekly_events (activity_contact_id);
 
@@ -169,7 +171,7 @@ begin
     'Seepark Freiburg',
     (current_week::timestamp + interval '3 days 18 hours 30 minutes')::timestamptz,
     'Erst Teilnahme, dann Sportwahl. Am Mittwoch wird die Entscheidung ausgewertet.',
-    auth.uid()
+    null
   )
   on conflict (club_id, week_start_date) do update
   set club_id = excluded.club_id

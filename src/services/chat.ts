@@ -8,14 +8,16 @@ export type ChatMessageWithAuthor = Row<"chat_messages"> & {
 
 export async function listChatMessages(
   supabase: AppSupabaseClient,
-  clubId: string,
+  input: { clubId: string; eventId: string; sportId?: string | null },
 ): Promise<ServiceResult<ChatMessageWithAuthor[]>> {
-  const { data, error } = await supabase
+  const query = supabase
     .from("chat_messages")
     .select()
-    .eq("club_id", clubId)
+    .eq("club_id", input.clubId)
+    .eq("event_id", input.eventId)
     .order("created_at", { ascending: true })
     .limit(80);
+  const { data, error } = input.sportId ? await query.eq("sport_id", input.sportId) : await query.is("sport_id", null);
 
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Chat konnte nicht geladen werden.") };
@@ -33,13 +35,14 @@ export async function listChatMessages(
 
 export async function sendChatMessage(
   supabase: AppSupabaseClient,
-  input: { clubId: string; eventId?: string | null; userId: string; body: string },
+  input: { clubId: string; eventId: string; sportId?: string | null; userId: string; body: string },
 ): Promise<ServiceResult<Row<"chat_messages">>> {
   const { data, error } = await supabase
     .from("chat_messages")
     .insert({
       club_id: input.clubId,
-      event_id: input.eventId ?? null,
+      event_id: input.eventId,
+      sport_id: input.sportId ?? null,
       user_id: input.userId,
       body: input.body.trim(),
     })

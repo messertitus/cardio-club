@@ -6,7 +6,9 @@ export type MccMember = {
   userId: string;
   displayName: string;
   phone: string | null;
+  city: string | null;
   role: ClubMemberRole;
+  joinedAt: string;
   isActivityContact: boolean;
 };
 
@@ -26,8 +28,8 @@ export async function listMccMembers(
 
   const userIds = memberships.map((membership) => membership.user_id);
   const { data: profiles, error: profilesError } = userIds.length
-    ? await supabase.from("profiles").select("id, display_name, phone").in("id", userIds)
-    : { data: [] as Array<Pick<Row<"profiles">, "id" | "display_name" | "phone">>, error: null };
+    ? await supabase.from("profiles").select("id, display_name, phone, city").in("id", userIds)
+    : { data: [] as Array<Pick<Row<"profiles">, "id" | "display_name" | "phone" | "city">>, error: null };
 
   if (profilesError || !profiles) {
     return { data: null, error: fromPostgrestError(profilesError, "Profile konnten nicht geladen werden.") };
@@ -35,12 +37,15 @@ export async function listMccMembers(
 
   const names = new Map(profiles.map((profile) => [profile.id, toMemberDisplayName(profile.display_name)]));
   const phones = new Map(profiles.map((profile) => [profile.id, profile.phone]));
+  const cities = new Map(profiles.map((profile) => [profile.id, profile.city]));
   return ok(
     memberships.map((membership) => ({
       userId: membership.user_id,
       role: membership.role,
+      joinedAt: membership.joined_at,
       displayName: names.get(membership.user_id) ?? "Mitglied",
       phone: phones.get(membership.user_id) ?? null,
+      city: cities.get(membership.user_id) ?? null,
       isActivityContact: membership.user_id === input.activityContactId,
     })),
   );

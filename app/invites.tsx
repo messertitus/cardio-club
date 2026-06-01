@@ -4,25 +4,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { useAuth } from "../src/context/AuthContext";
+import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
-import { createInvitationCode, listInvitationCodes, type InvitationCodeWithUsage } from "../src/services";
+import { createInvitationCode, isCurrentUserAdmin, listInvitationCodes, type InvitationCodeWithUsage } from "../src/services";
 
 export default function InvitesScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [codes, setCodes] = useState<InvitationCodeWithUsage[]>([]);
-  const [role, setRole] = useState<"admin" | "member">("member");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [profileResult, codeResult] = await Promise.all([
-      supabase.from("profiles").select("role").eq("id", user.id).maybeSingle(),
-      listInvitationCodes(supabase, user.id),
-    ]);
+    const [adminResult, codeResult] = await Promise.all([isCurrentUserAdmin(supabase, user.id), listInvitationCodes(supabase, user.id)]);
 
-    setRole(profileResult.data?.role === "admin" ? "admin" : "member");
+    setIsAdmin(adminResult.data ?? false);
     if (codeResult.data) setCodes(codeResult.data);
     if (codeResult.error) setMessage(codeResult.error.message);
   }, [user]);
@@ -32,9 +31,9 @@ export default function InvitesScreen() {
   }, [load]);
 
   const usedSlots = codes.length;
-  const remaining = role === "admin" ? Number.POSITIVE_INFINITY : Math.max(0, 3 - usedSlots);
-  const canCreate = role === "admin" || remaining > 0;
-  const slotLabels = useMemo(() => (role === "admin" ? ["∞"] : ["1", "2", "3"]), [role]);
+  const remaining = isAdmin ? Number.POSITIVE_INFINITY : Math.max(0, 3 - usedSlots);
+  const canCreate = isAdmin || remaining > 0;
+  const slotLabels = useMemo(() => (isAdmin ? ["∞"] : ["1", "2", "3"]), [isAdmin]);
 
   async function createCode() {
     if (!canCreate || busy) return;
@@ -57,19 +56,20 @@ export default function InvitesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <BrandBackground />
       <View style={styles.shell}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.kicker}>Exklusiver Zugang</Text>
-        <Text style={styles.title}>Codes für Menschen, die wirklich dazugehören.</Text>
+        <Text style={[styles.kicker, { color: theme.accent }]}>Exklusiver Zugang</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Einmalige Einladungscodes</Text>
+        <Text style={[styles.body, { color: theme.muted }]}>{isAdmin ? "Du kannst unbegrenzt Codes erstellen." : `Noch ${remaining} von 3 Codes verfügbar.`}</Text>
 
         <View style={styles.slotRow}>
           {slotLabels.map((slot, index) => {
-            const filled = role === "admin" || index < usedSlots;
+            const filled = isAdmin || index < usedSlots;
             return (
-              <View key={slot} style={[styles.slot, filled && styles.slotFilled]}>
-                <Text style={[styles.slotText, filled && styles.slotTextFilled]}>{slot}</Text>
+              <View key={slot} style={[styles.slot, { borderColor: theme.border, backgroundColor: theme.softSurface }, filled && { borderColor: theme.accent }]}>
+                <Text style={[styles.slotText, { color: filled ? theme.text : theme.muted }]}>{slot}</Text>
               </View>
             );
           })}
@@ -77,23 +77,23 @@ export default function InvitesScreen() {
 
         <Animated.View style={{ transform: [{ scale: pulse }] }}>
           <Pressable
-            style={({ pressed }) => [styles.button, (!canCreate || busy) && styles.disabled, pressed && canCreate && styles.pressed]}
+            style={({ pressed }) => [styles.button, { backgroundColor: theme.button }, (!canCreate || busy) && styles.disabled, pressed && canCreate && styles.pressed]}
             onPress={createCode}
             disabled={!canCreate || busy}
           >
-            <Text style={styles.buttonText}>{busy ? "Erstelle..." : canCreate ? "Neuen Code erzeugen" : "Kontingent genutzt"}</Text>
+            <Text style={[styles.buttonText, { color: theme.inverse }]}>{busy ? "Erstelle..." : canCreate ? "Neuen Code erzeugen" : "Kontingent genutzt"}</Text>
           </Pressable>
         </Animated.View>
 
         {message ? <Text style={styles.notice}>{message}</Text> : null}
 
         <View style={styles.codes}>
-          {codes.length === 0 ? <Text style={styles.empty}>Noch kein Code erstellt.</Text> : null}
+          {codes.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>Noch kein Code erstellt.</Text> : null}
           {codes.map((code) => (
-            <View key={code.code} style={[styles.codeCard, code.used_at && styles.codeCardUsed]}>
-              <Text style={styles.code}>{code.code}</Text>
-              <Text style={styles.codeMeta}>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Bereit zum Teilen"}</Text>
-              {code.usedByPhone ? <Text style={styles.codePhone}>{code.usedByPhone}</Text> : null}
+            <View key={code.code} style={[styles.codeCard, { borderColor: theme.border, backgroundColor: theme.softSurface }, code.used_at && styles.codeCardUsed]}>
+              <Text style={[styles.code, { color: theme.text }]}>{code.code}</Text>
+              <Text style={[styles.codeMeta, { color: theme.muted }]}>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Bereit zum Teilen"}</Text>
+              {code.usedByPhone ? <Text style={[styles.codePhone, { color: theme.accent }]}>{code.usedByPhone}</Text> : null}
             </View>
           ))}
         </View>
@@ -110,6 +110,7 @@ const styles = StyleSheet.create({
   content: { gap: 18, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   kicker: { color: "#4da3ff", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
+  body: { fontSize: 15, lineHeight: 22 },
   slotRow: { flexDirection: "row", gap: 10 },
   slot: {
     alignItems: "center",
