@@ -46,19 +46,6 @@ export async function setMccActivityContact(
   return ok(data);
 }
 
-export async function removeMccMemberFromClub(
-  supabase: AppSupabaseClient,
-  input: { clubId: string; userId: string },
-): Promise<ServiceResult<{ removed: true }>> {
-  const { error } = await supabase.from("club_members").delete().eq("club_id", input.clubId).eq("user_id", input.userId);
-
-  if (error) {
-    return { data: null, error: fromPostgrestError(error, "Mitglied konnte nicht entfernt werden.") };
-  }
-
-  return ok({ removed: true });
-}
-
 export async function deactivateMccMember(
   supabase: AppSupabaseClient,
   input: { userId: string; reason?: string },
