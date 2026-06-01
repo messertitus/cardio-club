@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 
 const symbolLogo = require("../../assets/mcc-logo-white-symbol-transparent.png");
 
@@ -16,6 +17,7 @@ type LogoClip = {
 
 export function AuthIntro({ onDone }: AuthIntroProps) {
   const { width } = useWindowDimensions();
+  const { theme } = useTheme();
   const wave = useRef(new Animated.Value(0)).current;
   const body = useRef(new Animated.Value(0)).current;
   const blade = useRef(new Animated.Value(0)).current;
@@ -34,7 +36,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
       Animated.parallel([
         Animated.timing(blade, { toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       ]),
-      Animated.timing(fullLogo, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(fullLogo, { toValue: 1, duration: 560, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
       Animated.timing(settle, { toValue: 1, duration: 860, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
       Animated.timing(mark, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
     ]).start(() => {
@@ -54,7 +56,8 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
   const logoScale = settle.interpolate({ inputRange: [0, 1], outputRange: [introScale, 1] });
   const logoTranslateY = settle.interpolate({ inputRange: [0, 1], outputRange: [compact ? 54 : 74, 0] });
   const lineWidth = mark.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
-  const assembledPartsOpacity = fullLogo.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 1, 0] });
+  const assembledPartsOpacity = fullLogo.interpolate({ inputRange: [0, 0.25, 1], outputRange: [1, 1, 0] });
+  const logoTint = theme.text;
 
   return (
     <View style={[styles.slot, { height: stageHeight }]}>
@@ -73,6 +76,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
             <LogoPart
               clip={{ x: 0.03, y: 0.52, width: 0.56, height: 0.19 }}
               sourceSize={symbolSourceSize}
+              tintColor={logoTint}
               animatedStyle={{
                 opacity: wave,
                 transform: [
@@ -84,6 +88,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
             <LogoPart
               clip={{ x: 0.3, y: 0.23, width: 0.39, height: 0.37 }}
               sourceSize={symbolSourceSize}
+              tintColor={logoTint}
               animatedStyle={{
                 opacity: body,
                 transform: [
@@ -96,6 +101,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
             <LogoPart
               clip={{ x: 0.48, y: 0.16, width: 0.46, height: 0.19 }}
               sourceSize={symbolSourceSize}
+              tintColor={logoTint}
               animatedStyle={{
                 opacity: blade,
                 transform: [
@@ -108,6 +114,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
             <LogoPart
               clip={{ x: 0.64, y: 0.36, width: 0.28, height: 0.27 }}
               sourceSize={symbolSourceSize}
+              tintColor={logoTint}
               animatedStyle={{
                 opacity: blade,
                 transform: [
@@ -119,6 +126,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
             <LogoPart
               clip={{ x: 0.54, y: 0.12, width: 0.14, height: 0.13 }}
               sourceSize={symbolSourceSize}
+              tintColor={logoTint}
               animatedStyle={{
                 opacity: body,
                 transform: [{ scale: body.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }) }],
@@ -127,6 +135,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
             <LogoPart
               clip={{ x: 0.3, y: 0.24, width: 0.31, height: 0.12 }}
               sourceSize={symbolSourceSize}
+              tintColor={logoTint}
               animatedStyle={{
                 opacity: body,
                 transform: [{ translateX: body.interpolate({ inputRange: [0, 1], outputRange: [-stageWidth * 0.2, 0] }) }],
@@ -141,6 +150,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
               {
                 width: stageWidth,
                 height: symbolHeight,
+                tintColor: logoTint,
                 opacity: fullLogo,
                 transform: [{ scale: fullLogo.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) }],
               },
@@ -159,14 +169,14 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
             },
           ]}
         >
-          <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.wordmarkTop, compact && styles.wordmarkTopCompact]}>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.wordmarkTop, { color: theme.text }, compact && styles.wordmarkTopCompact]}>
             MESSERS
           </Text>
-          <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.wordmarkBottom, compact && styles.wordmarkBottomCompact]}>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.wordmarkBottom, { color: theme.text }, compact && styles.wordmarkBottomCompact]}>
             CARDIO CLUB
           </Text>
-          <View style={[styles.logoLineTrack, { width: stageWidth * 0.44 }]}>
-            <Animated.View style={[styles.logoLineFill, { width: lineWidth }]} />
+          <View style={[styles.logoLineTrack, { backgroundColor: theme.border, width: stageWidth * 0.44 }]}>
+            <Animated.View style={[styles.logoLineFill, { backgroundColor: theme.text, width: lineWidth }]} />
           </View>
         </Animated.View>
       </Animated.View>
@@ -177,10 +187,12 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
 function LogoPart({
   clip,
   sourceSize,
+  tintColor,
   animatedStyle,
 }: {
   clip: LogoClip;
   sourceSize: number;
+  tintColor: string;
   animatedStyle: object;
 }) {
   return (
@@ -206,6 +218,7 @@ function LogoPart({
             top: -sourceSize * clip.y,
             width: sourceSize,
             height: sourceSize,
+            tintColor,
           },
         ]}
       />
@@ -251,7 +264,6 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   wordmarkTop: {
-    color: "#ffffff",
     width: "100%",
     fontSize: 15,
     fontWeight: "800",
@@ -265,7 +277,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   wordmarkBottom: {
-    color: "#ffffff",
     width: "100%",
     fontSize: 34,
     fontWeight: "900",
@@ -281,7 +292,6 @@ const styles = StyleSheet.create({
   logoLineTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.14)",
     overflow: "hidden",
     alignItems: "center",
     marginTop: 4,
@@ -289,6 +299,5 @@ const styles = StyleSheet.create({
   logoLineFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#ffffff",
   },
 });
