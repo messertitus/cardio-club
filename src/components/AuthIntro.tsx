@@ -3,6 +3,7 @@ import { Animated, Easing, Image, StyleSheet, Text, useWindowDimensions, View } 
 import { useTheme } from "../context/ThemeContext";
 
 const symbolLogo = require("../../assets/mcc-logo-white-symbol-transparent.png");
+const blackSymbolLogo = require("../../assets/mcc-logo-black-symbol-transparent.png");
 
 type AuthIntroProps = {
   onDone: () => void;
@@ -51,7 +52,7 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
           },
         ]}
       >
-        <Image source={symbolLogo} resizeMode="contain" style={[styles.symbol, { height: symbolHeight, tintColor: mode === "light" ? "#05070b" : theme.text, width: stageWidth }]} />
+        <Image source={mode === "light" ? blackSymbolLogo : symbolLogo} resizeMode="contain" style={[styles.symbol, { height: symbolHeight, width: stageWidth }]} />
 
         <Animated.View
           style={[
@@ -70,9 +71,9 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
           <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.wordmarkBottom, { color: theme.text }, compact && styles.wordmarkBottomCompact]}>
             CARDIO CLUB
           </Text>
-          <View style={[styles.logoLineTrack, { backgroundColor: theme.border, width: stageWidth * 0.44 }]}>
+          <Animated.View style={[styles.logoLineTrack, { opacity: mark, width: stageWidth * 0.44 }]}>
             <Animated.View style={[styles.logoLineFill, { backgroundColor: theme.text, width: lineWidth }]} />
-          </View>
+          </Animated.View>
         </Animated.View>
       </Animated.View>
     </View>

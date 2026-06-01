@@ -48,7 +48,11 @@ export default function InvitesScreen() {
     setBusy(false);
 
     if (result.error) {
-      setMessage(result.error.message);
+      setMessage(
+        isAdmin && result.error.message.includes("3 Einladungscodes")
+          ? "Supabase nutzt noch die alte Code-Funktion. Bitte Migration 017_admin_invites_unlimited.sql ausfÃ¼hren."
+          : result.error.message,
+      );
       return;
     }
 

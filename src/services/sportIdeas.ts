@@ -61,5 +61,15 @@ export async function isCurrentUserAdmin(supabase: AppSupabaseClient, userId: st
     return { data: null, error: fromPostgrestError(error, "Rolle konnte nicht geladen werden.") };
   }
 
-  return ok(data?.role === "admin");
+  if (data?.role === "admin") {
+    return ok(true);
+  }
+
+  const { data: memberships, error: membershipError } = await supabase.from("club_members").select("role").eq("user_id", userId);
+
+  if (membershipError || !memberships) {
+    return { data: null, error: fromPostgrestError(membershipError, "Rolle konnte nicht geladen werden.") };
+  }
+
+  return ok(memberships.some((membership) => membership.role === "admin"));
 }

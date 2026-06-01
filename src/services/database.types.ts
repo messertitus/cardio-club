@@ -20,6 +20,8 @@ export type Database = {
           city: string | null;
           role: AppRole;
           avatar_url: string | null;
+          deactivated_at: string | null;
+          deactivated_reason: string | null;
           created_at: string;
         };
         Insert: {
@@ -31,6 +33,8 @@ export type Database = {
           city?: string | null;
           role?: AppRole;
           avatar_url?: string | null;
+          deactivated_at?: string | null;
+          deactivated_reason?: string | null;
           created_at?: string;
         };
         Update: {
@@ -41,6 +45,8 @@ export type Database = {
           city?: string | null;
           role?: AppRole;
           avatar_url?: string | null;
+          deactivated_at?: string | null;
+          deactivated_reason?: string | null;
         };
         Relationships: [];
       };
@@ -417,6 +423,38 @@ export type Database = {
       clear_mcc_test_data: {
         Args: Record<PropertyKey, never>;
         Returns: Json;
+      };
+      is_current_mcc_admin: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
+      deactivate_club_member: {
+        Args: { target_user_id: string; reason?: string };
+        Returns: boolean;
+      };
+      admin_upsert_sport: {
+        Args: {
+          target_sport_id: string | null;
+          sport_name: string;
+          sport_category: string;
+          sport_intensity: SportIntensityLevel;
+          sport_location_type: SportLocationType;
+          sport_tags?: string[];
+        };
+        Returns: {
+          id: string;
+          name: string;
+          category: string;
+          intensity_level: SportIntensityLevel;
+          location_type: SportLocationType;
+          combinable_tags: string[];
+          created_by: string | null;
+          created_at: string;
+        };
+      };
+      admin_delete_sport: {
+        Args: { target_sport_id: string };
+        Returns: boolean;
       };
     };
     Enums: Record<string, never>;

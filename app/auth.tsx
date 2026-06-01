@@ -265,6 +265,20 @@ export default function AuthScreen() {
       return;
     }
 
+    const deactivation = await supabase.from("profiles").select("deactivated_at,deactivated_reason").eq("id", userId).maybeSingle();
+    if (deactivation.error && deactivation.error.code !== "PGRST204") {
+      setMessage("Profilstatus konnte nicht geprüft werden.");
+      setLoading(false);
+      return;
+    }
+
+    if (deactivation.data?.deactivated_at) {
+      await supabase.auth.signOut();
+      setMessage(deactivation.data.deactivated_reason ?? "Dein Zugang wurde deaktiviert. Bitte wende dich an einen Admin.");
+      setLoading(false);
+      return;
+    }
+
     await AsyncStorage.removeItem(PENDING_DISPLAY_NAME_KEY);
     await AsyncStorage.removeItem(PENDING_PHONE_KEY);
     setLoading(false);
