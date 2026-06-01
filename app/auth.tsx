@@ -296,6 +296,7 @@ export default function AuthScreen() {
                     <ThemeToggle />
                   </View>
                 ) : null}
+                <AuthIntro onDone={finishIntro} />
               </View>
             }
           >
@@ -401,7 +402,6 @@ export default function AuthScreen() {
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <AuthIntro onDone={finishIntro} />
     </SafeAreaView>
   );
 }
@@ -1017,7 +1017,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
   },
   panelContent: { gap: 18 },
-  panelTop: { alignItems: "center", minHeight: 256, justifyContent: "center" },
+  panelTop: { alignItems: "center", minHeight: 220, justifyContent: "center" },
   themeSlot: { position: "absolute", top: 0, right: 0, zIndex: 2 },
   title: { color: "#ffffff", fontSize: 29, fontWeight: "900", letterSpacing: 0, lineHeight: 34 },
   subtitle: { color: "#9aa7b8", fontSize: 16, lineHeight: 24 },
