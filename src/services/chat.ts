@@ -55,13 +55,3 @@ export async function sendChatMessage(
 
   return ok(data);
 }
-
-export async function clearMccTestChat(supabase: AppSupabaseClient): Promise<ServiceResult<{ deleted: number }>> {
-  const { data, error } = await supabase.rpc("clear_mcc_test_chat", {});
-
-  if (error || typeof data !== "number") {
-    return { data: null, error: fromPostgrestError(error, "Chat konnte nicht geleert werden.") };
-  }
-
-  return ok({ deleted: data });
-}

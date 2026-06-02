@@ -55,6 +55,11 @@ export async function reviewSportIdea(
 }
 
 export async function isCurrentUserAdmin(supabase: AppSupabaseClient, userId: string): Promise<ServiceResult<boolean>> {
+  const rpcResult = await supabase.rpc("is_current_mcc_admin");
+  if (!rpcResult.error && typeof rpcResult.data === "boolean") {
+    return ok(rpcResult.data);
+  }
+
   const { data, error } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
 
   if (error) {

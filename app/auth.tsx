@@ -13,8 +13,9 @@ import { consumeInvitationCode, ensureProfile, validateInvitationCode } from "..
 const PENDING_INVITE_KEY = "mcc.pendingInviteCode";
 const PENDING_DISPLAY_NAME_KEY = "mcc.pendingDisplayName";
 const PENDING_PHONE_KEY = "mcc.pendingPhone";
+const PENDING_RESET_PHONE_KEY = "mcc.pendingResetPhone";
 
-type AuthStep = "login" | "invite" | "signup" | "sms";
+type AuthStep = "login" | "invite" | "signup" | "sms" | "resetPhone" | "resetSms" | "resetPin";
 type CountryDialCode = { iso: string; dialCode: string };
 type FlagPattern =
   | { kind: "stripes"; direction: "horizontal" | "vertical"; colors: string[] }
@@ -46,12 +47,18 @@ export default function AuthScreen() {
     if (step === "signup") return "Fast drin.";
     if (step === "sms") return "Code bestätigen.";
     if (step === "invite") return "Dein Zugang.";
+    if (step === "resetPhone") return "PIN vergessen?";
+    if (step === "resetSms") return "Code bestätigen.";
+    if (step === "resetPin") return "Neue PIN.";
     return "Willkommen zurück.";
   }, [step]);
   const subtitle = useMemo(() => {
     if (step === "invite") return "Einladungscode eingeben.";
     if (step === "signup") return "Profil und App-PIN erstellen.";
     if (step === "sms") return "SMS-Code bestätigen.";
+    if (step === "resetPhone") return "Wir senden dir einen SMS-Code.";
+    if (step === "resetSms") return "Danach kannst du deine PIN neu setzen.";
+    if (step === "resetPin") return "Mindestens 4 Ziffern.";
     return null;
   }, [step]);
 
@@ -229,6 +236,114 @@ export default function AuthScreen() {
     await finishAuthenticatedFlow(authResult.data.user?.id, normalizedPhone);
   }
 
+  async function startPinReset() {
+    setLoading(true);
+    setMessage(null);
+    setSuccessMessage(null);
+
+    if (!isValidPhone(normalizedPhone)) {
+      setMessage("Bitte gib deine Telefonnummer ein.");
+      setLoading(false);
+      return;
+    }
+
+    const result = await supabase.auth.signInWithOtp({
+      phone: normalizedPhone,
+      options: { shouldCreateUser: false, channel: "sms" },
+    });
+
+    if (result.error && !isOtpSignupBlockedError(result.error.message)) {
+      setMessage(mapAuthError(result.error.message));
+      setLoading(false);
+      return;
+    }
+
+    await AsyncStorage.setItem(PENDING_RESET_PHONE_KEY, normalizedPhone);
+    setSmsCode("");
+    setPin("");
+    setSuccessMessage(`Falls ein Account mit ${normalizedPhone} besteht, schicken wir dir einen SMS-Code.`);
+    setStep("resetSms");
+    setLoading(false);
+  }
+
+  async function verifyPinResetSmsCode() {
+    setLoading(true);
+    setMessage(null);
+    setSuccessMessage(null);
+
+    const pendingPhone = (await AsyncStorage.getItem(PENDING_RESET_PHONE_KEY)) ?? normalizedPhone;
+    const token = smsCode.replace(/\D/g, "");
+
+    if (!isValidPhone(pendingPhone) || token.length < 4) {
+      setMessage("Bitte gib den SMS-Code ein.");
+      setLoading(false);
+      return;
+    }
+
+    const result = await supabase.auth.verifyOtp({
+      phone: pendingPhone,
+      token,
+      type: "sms",
+    });
+
+    if (result.error) {
+      setMessage(mapAuthError(result.error.message));
+      setLoading(false);
+      return;
+    }
+
+    setPin("");
+    setSuccessMessage("Telefon bestätigt.");
+    setStep("resetPin");
+    setLoading(false);
+  }
+
+  async function submitPinReset() {
+    setLoading(true);
+    setMessage(null);
+    setSuccessMessage(null);
+
+    const pendingPhone = (await AsyncStorage.getItem(PENDING_RESET_PHONE_KEY)) ?? normalizedPhone;
+
+    if (!isValidPhone(pendingPhone)) {
+      setMessage("Telefonnummer konnte nicht geprüft werden.");
+      setLoading(false);
+      return;
+    }
+
+    if (!isValidPin(pin)) {
+      setMessage("Bitte nutze eine App-PIN mit mindestens 4 Ziffern.");
+      setLoading(false);
+      return;
+    }
+
+    const samePinCheck = await supabase.auth.signInWithPassword({ phone: pendingPhone, password: appPinToAuthPassword(pendingPhone, pin) });
+    if (!samePinCheck.error) {
+      setMessage("Bitte wähle eine neue PIN. Diese PIN ist bereits aktiv.");
+      setLoading(false);
+      return;
+    }
+
+    const sameLegacyPinCheck = await supabase.auth.signInWithPassword({ phone: pendingPhone, password: pin });
+    if (!sameLegacyPinCheck.error) {
+      setMessage("Bitte wähle eine neue PIN. Diese PIN ist bereits aktiv.");
+      setLoading(false);
+      return;
+    }
+
+    const session = await supabase.auth.getSession();
+    const update = await supabase.auth.updateUser({ password: appPinToAuthPassword(pendingPhone, pin) });
+
+    if (update.error || !session.data.session?.user.id) {
+      setMessage(mapAuthError(update.error?.message ?? "PIN konnte nicht gespeichert werden."));
+      setLoading(false);
+      return;
+    }
+
+    await AsyncStorage.removeItem(PENDING_RESET_PHONE_KEY);
+    await finishAuthenticatedFlow(session.data.session.user.id, pendingPhone);
+  }
+
   async function finishAuthenticatedFlow(userId?: string, phoneValue?: string) {
     if (!userId) {
       setMessage("Login erfolgreich, aber der Nutzer konnte nicht geladen werden.");
@@ -339,6 +454,9 @@ export default function AuthScreen() {
                 <ErrorText>{message}</ErrorText>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Logge ein..." : "Einloggen"} onPress={submitLogin} disabled={loading || !isValidPhone(normalizedPhone) || !isValidPin(pin)} />
+                <Pressable onPress={() => switchStep("resetPhone")} style={styles.subtleTextButton}>
+                  <Text style={[styles.textButtonLabel, styles.subtleTextButtonLabel]}>PIN vergessen?</Text>
+                </Pressable>
                 <Pressable onPress={() => switchStep("invite")} style={styles.textButton}>
                   <Text style={styles.textButtonLabel}>Ich habe einen Einladungscode</Text>
                 </Pressable>
@@ -410,6 +528,59 @@ export default function AuthScreen() {
                     <Text style={styles.textButtonLabel}>Zurück</Text>
                   </Pressable>
                 </View>
+              </View>
+            ) : null}
+
+            {step === "resetPhone" ? (
+              <View style={styles.form}>
+                <PhoneField
+                  compact={compactPhoneField}
+                  countryIso={countryIso}
+                  dialCode={dialCode}
+                  onCountryChange={setCountryIso}
+                  onDialCodeChange={setDialCode}
+                  phone={phone}
+                  onPhoneChange={setPhone}
+                />
+                <ErrorText>{message}</ErrorText>
+                {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
+                <Button label={loading ? "Sende..." : "SMS-Code senden"} onPress={startPinReset} disabled={loading || !isValidPhone(normalizedPhone)} />
+                <Pressable onPress={() => switchStep("login")} disabled={loading} style={styles.textButton}>
+                  <Text style={styles.textButtonLabel}>Zurück zum Login</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {step === "resetSms" ? (
+              <View style={styles.form}>
+                <SoftField
+                  value={smsCode}
+                  onChangeText={(value) => setSmsCode(value.replace(/\D/g, "").slice(0, 8))}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  textContentType="oneTimeCode"
+                  placeholder="SMS-Code"
+                />
+                <ErrorText>{message}</ErrorText>
+                {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
+                <Button label={loading ? "Prüfe..." : "Code prüfen"} onPress={verifyPinResetSmsCode} disabled={loading || smsCode.length < 4} />
+                <View style={styles.smsActions}>
+                  <Pressable onPress={startPinReset} disabled={loading} style={styles.textButton}>
+                    <Text style={styles.textButtonLabel}>SMS erneut senden</Text>
+                  </Pressable>
+                  <Pressable onPress={() => switchStep("resetPhone")} disabled={loading} style={styles.textButton}>
+                    <Text style={styles.textButtonLabel}>Zurück</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {step === "resetPin" ? (
+              <View style={styles.form}>
+                <PinField value={pin} onChangeText={setPin} placeholder="Neue App-PIN" showFeedback />
+                <ErrorText>{message}</ErrorText>
+                {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
+                <Button label={loading ? "Speichere..." : "PIN speichern"} onPress={submitPinReset} disabled={loading || !isValidPin(pin)} />
               </View>
             ) : null}
           </AnimatedPanel>
@@ -956,6 +1127,11 @@ function isInvalidLoginError(message: string): boolean {
   return message.toLowerCase().includes("invalid login credentials");
 }
 
+function isOtpSignupBlockedError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("signups not allowed") || normalized.includes("signup disabled");
+}
+
 function isValidPhone(value: string): boolean {
   return /^\+[1-9]\d{7,14}$/.test(value);
 }
@@ -1160,4 +1336,6 @@ const styles = StyleSheet.create({
   smsActions: { flexDirection: "row", justifyContent: "center", gap: 12, flexWrap: "wrap" },
   textButton: { alignSelf: "center", padding: 8 },
   textButtonLabel: { color: "#8fc7ff", fontSize: 14, fontWeight: "900" },
+  subtleTextButton: { alignSelf: "center", paddingHorizontal: 8, paddingVertical: 2, marginTop: -6 },
+  subtleTextButtonLabel: { fontSize: 13, opacity: 0.72 },
 });

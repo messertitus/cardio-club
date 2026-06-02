@@ -64,10 +64,6 @@ export function Pill({ children }: PropsWithChildren) {
   );
 }
 
-export function Row({ children }: PropsWithChildren) {
-  return <View style={styles.row}>{children}</View>;
-}
-
 export function EmptyState({ title, body }: { title: string; body?: string }) {
   return (
     <Card>
@@ -204,11 +200,6 @@ const styles = StyleSheet.create({
     color: "#8fc7ff",
     fontSize: 13,
     fontWeight: "700",
-  },
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
   },
   center: {
     alignItems: "center",

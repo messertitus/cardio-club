@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { PageHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
 import { requestWebPushSubscription, saveWebPushSubscription } from "../src/services";
@@ -33,8 +34,7 @@ export default function PushScreen() {
       <BrandBackground />
       <View style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.kicker}>Updates</Text>
-          <Text style={styles.title}>Push</Text>
+          <PageHeader kicker="Updates" title="Push" />
           <Text style={styles.body}>
             Benachrichtigungen für Entscheidung und Event-Updates. Auf dem Handy funktioniert das nach dem Hinzufügen zum Startbildschirm am zuverlässigsten.
           </Text>
@@ -53,6 +53,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05080d" },
   shell: { flex: 1 },
   content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  headerText: { flex: 1, minWidth: 0 },
   kicker: { color: "#65a8ff", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   title: { color: "#f7fbff", fontSize: 34, fontWeight: "900" },
   body: { color: "#aab7c8", fontSize: 16, lineHeight: 24 },

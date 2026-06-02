@@ -15,7 +15,8 @@
     "web": {
       "bundler": "metro",
       "lang": "de",
-      "themeColor": "#05070b"
+      "themeColor": "#05070b",
+      "favicon": "./assets/mcc-logo-white-symbol-transparent.png"
     },
     "plugins": ["expo-router"],
     "experiments": {

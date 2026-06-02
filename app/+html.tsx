@@ -15,6 +15,11 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="MCC" />
         <meta name="format-detection" content="telephone=no,date=no,address=no,email=no" />
+        <link id="mcc-favicon" rel="icon" type="image/png" href="/assets/mcc-logo-white-symbol-transparent.png" />
+        <link rel="icon" type="image/png" href="/assets/mcc-logo-black-symbol-transparent.png" media="(prefers-color-scheme: light)" />
+        <link rel="icon" type="image/png" href="/assets/mcc-logo-white-symbol-transparent.png" media="(prefers-color-scheme: dark)" />
+        <link rel="apple-touch-icon" href="/assets/mcc-logo-black-symbol-transparent.png" />
+        <script dangerouslySetInnerHTML={{ __html: FAVICON_THEME_SCRIPT }} />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: WEB_RESET }} />
       </head>
@@ -42,4 +47,25 @@ const WEB_RESET = `
   * {
     -webkit-tap-highlight-color: transparent;
   }
+`;
+
+const FAVICON_THEME_SCRIPT = `
+  (function () {
+    var darkIcon = "/assets/mcc-logo-white-symbol-transparent.png";
+    var lightIcon = "/assets/mcc-logo-black-symbol-transparent.png";
+    var query = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+
+    function setFavicon() {
+      var link = document.getElementById("mcc-favicon");
+      if (!link) return;
+      link.setAttribute("href", query && query.matches ? darkIcon : lightIcon);
+    }
+
+    setFavicon();
+    if (query && query.addEventListener) {
+      query.addEventListener("change", setFavicon);
+    } else if (query && query.addListener) {
+      query.addListener(setFavicon);
+    }
+  })();
 `;

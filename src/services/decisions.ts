@@ -109,6 +109,9 @@ async function selectActivityContact(
   eventId: string,
   selectedSportId: string,
 ): Promise<string | null> {
+  const sportContact = await selectPrimarySportContact(supabase, selectedSportId);
+  if (sportContact) return sportContact;
+
   const [votes, attendance] = await Promise.all([fetchVotes(supabase, eventId), fetchAttendance(supabase, eventId)]);
   if (votes.error || attendance.error) return null;
 
@@ -120,6 +123,21 @@ async function selectActivityContact(
     .sort((a, b) => a.vote_rank - b.vote_rank || a.created_at.localeCompare(b.created_at));
 
   return selectedVoters[0]?.user_id ?? attendance.data.find((row) => row.status === "going")?.user_id ?? null;
+}
+
+async function selectPrimarySportContact(supabase: AppSupabaseClient, sportId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("sport_contacts")
+    .select("user_id, is_primary, created_at")
+    .eq("sport_id", sportId)
+    .order("is_primary", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return data.user_id;
 }
 
 export async function createSubgroupsFromDecision(
@@ -143,6 +161,10 @@ export async function createSubgroupsFromDecision(
     return ok({ subgroups: [] });
   }
 
+  const subgroupContactIds = await Promise.all(
+    subgroups.map(async (subgroup) => (await selectPrimarySportContact(supabase, subgroup.sportId)) ?? subgroup.userIds[0] ?? null),
+  );
+
   const { data, error } = await supabase
     .from("event_subgroups")
     .insert(
@@ -150,7 +172,7 @@ export async function createSubgroupsFromDecision(
         event_id: input.eventId,
         sport_id: subgroup.sportId,
         title: `Group ${index + 1}`,
-        activity_contact_id: subgroup.userIds[0] ?? null,
+        activity_contact_id: subgroupContactIds[index],
       })),
     )
     .select();
