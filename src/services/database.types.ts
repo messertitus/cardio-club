@@ -18,6 +18,8 @@ export type Database = {
           phone: string | null;
           postal_code: string | null;
           city: string | null;
+          favorite_sports: string | null;
+          birth_date: string | null;
           role: AppRole;
           avatar_url: string | null;
           deactivated_at: string | null;
@@ -31,6 +33,8 @@ export type Database = {
           phone?: string | null;
           postal_code?: string | null;
           city?: string | null;
+          favorite_sports?: string | null;
+          birth_date?: string | null;
           role?: AppRole;
           avatar_url?: string | null;
           deactivated_at?: string | null;
@@ -43,6 +47,8 @@ export type Database = {
           phone?: string | null;
           postal_code?: string | null;
           city?: string | null;
+          favorite_sports?: string | null;
+          birth_date?: string | null;
           role?: AppRole;
           avatar_url?: string | null;
           deactivated_at?: string | null;
@@ -95,6 +101,8 @@ export type Database = {
         Row: {
           id: string;
           name: string;
+          description: string | null;
+          location_description: string | null;
           category: string;
           intensity_level: SportIntensityLevel;
           location_type: SportLocationType;
@@ -105,6 +113,8 @@ export type Database = {
         Insert: {
           id?: string;
           name: string;
+          description?: string | null;
+          location_description?: string | null;
           category: string;
           intensity_level: SportIntensityLevel;
           location_type: SportLocationType;
@@ -114,10 +124,37 @@ export type Database = {
         };
         Update: {
           name?: string;
+          description?: string | null;
+          location_description?: string | null;
           category?: string;
           intensity_level?: SportIntensityLevel;
           location_type?: SportLocationType;
           combinable_tags?: string[];
+        };
+        Relationships: [];
+      };
+      sport_contacts: {
+        Row: {
+          id: string;
+          sport_id: string;
+          user_id: string;
+          note: string | null;
+          is_primary: boolean;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sport_id: string;
+          user_id: string;
+          note?: string | null;
+          is_primary?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          note?: string | null;
+          is_primary?: boolean;
         };
         Relationships: [];
       };
@@ -397,6 +434,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      profile_change_requests: {
+        Row: {
+          id: string;
+          user_id: string;
+          requested_display_name: string;
+          status: "pending" | "approved" | "rejected";
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          requested_display_name: string;
+          status?: "pending" | "approved" | "rejected";
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          requested_display_name?: string;
+          status?: "pending" | "approved" | "rejected";
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -440,10 +504,14 @@ export type Database = {
           sport_intensity: SportIntensityLevel;
           sport_location_type: SportLocationType;
           sport_tags?: string[];
+          sport_description?: string | null;
+          sport_location_description?: string | null;
         };
         Returns: {
           id: string;
           name: string;
+          description: string | null;
+          location_description: string | null;
           category: string;
           intensity_level: SportIntensityLevel;
           location_type: SportLocationType;
@@ -455,6 +523,39 @@ export type Database = {
       admin_delete_sport: {
         Args: { target_sport_id: string };
         Returns: boolean;
+      };
+      admin_upsert_sport_contact: {
+        Args: {
+          target_sport_id: string;
+          target_user_id: string;
+          contact_note?: string | null;
+          primary_contact?: boolean;
+        };
+        Returns: {
+          id: string;
+          sport_id: string;
+          user_id: string;
+          note: string | null;
+          is_primary: boolean;
+          created_by: string | null;
+          created_at: string;
+        };
+      };
+      admin_delete_sport_contact: {
+        Args: { target_sport_id: string; target_user_id: string };
+        Returns: boolean;
+      };
+      review_profile_name_change: {
+        Args: { request_id: string; next_status: string };
+        Returns: {
+          id: string;
+          user_id: string;
+          requested_display_name: string;
+          status: "pending" | "approved" | "rejected";
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+        };
       };
     };
     Enums: Record<string, never>;

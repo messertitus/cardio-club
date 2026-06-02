@@ -5,10 +5,17 @@ import type { AppSupabaseClient } from "./supabaseClient";
 export type MccSportAdminInput = {
   sportId?: string | null;
   name: string;
+  description?: string | null;
+  locationDescription?: string | null;
   category: string;
   intensityLevel: SportIntensityLevel;
   locationType: SportLocationType;
   combinableTags: string[];
+};
+
+export type MccSportContact = Row<"sport_contacts"> & {
+  sportName: string;
+  displayName: string;
 };
 
 export async function updateMccMemberRole(
@@ -44,6 +51,78 @@ export async function setMccActivityContact(
   }
 
   return ok(data);
+}
+
+export async function listMccSportContacts(supabase: AppSupabaseClient): Promise<ServiceResult<MccSportContact[]>> {
+  const { data: contacts, error } = await supabase
+    .from("sport_contacts")
+    .select()
+    .order("is_primary", { ascending: false })
+    .order("created_at", { ascending: true });
+
+  if (error || !contacts) {
+    return { data: null, error: fromPostgrestError(error, "Ansprechpartner konnten nicht geladen werden.") };
+  }
+
+  const sportIds = [...new Set(contacts.map((contact) => contact.sport_id))];
+  const userIds = [...new Set(contacts.map((contact) => contact.user_id))];
+
+  const [sportsResult, profilesResult] = await Promise.all([
+    sportIds.length ? supabase.from("sports").select("id, name").in("id", sportIds) : Promise.resolve({ data: [], error: null }),
+    userIds.length ? supabase.from("profiles").select("id, display_name").in("id", userIds) : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (sportsResult.error || profilesResult.error || !sportsResult.data || !profilesResult.data) {
+    return {
+      data: null,
+      error: fromPostgrestError(sportsResult.error ?? profilesResult.error, "Ansprechpartner konnten nicht vollständig geladen werden."),
+    };
+  }
+
+  const sportNames = new Map(sportsResult.data.map((sport) => [sport.id, sport.name]));
+  const profileNames = new Map(profilesResult.data.map((profile) => [profile.id, profile.display_name]));
+
+  return ok(
+    contacts.map((contact) => ({
+      ...contact,
+      sportName: sportNames.get(contact.sport_id) ?? "Sportart",
+      displayName: profileNames.get(contact.user_id) ?? "Mitglied",
+    })),
+  );
+}
+
+export async function upsertMccSportContact(
+  supabase: AppSupabaseClient,
+  input: { sportId: string; userId: string; note?: string | null; isPrimary?: boolean },
+): Promise<ServiceResult<Row<"sport_contacts">>> {
+  const { data, error } = await supabase.rpc("admin_upsert_sport_contact", {
+    target_sport_id: input.sportId,
+    target_user_id: input.userId,
+    contact_note: input.note ?? null,
+    primary_contact: input.isPrimary ?? true,
+  });
+
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Ansprechpartner konnte nicht gespeichert werden.") };
+  }
+
+  return ok(data);
+}
+
+export async function deleteMccSportContact(
+  supabase: AppSupabaseClient,
+  input: { sportId: string; userId: string },
+): Promise<ServiceResult<{ deleted: true }>> {
+  const { data, error } = await supabase.rpc("admin_delete_sport_contact", {
+    target_sport_id: input.sportId,
+    target_user_id: input.userId,
+  });
+
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Ansprechpartner konnte nicht entfernt werden.") };
+  }
+
+  return ok({ deleted: true });
 }
 
 export async function deactivateMccMember(
@@ -84,6 +163,8 @@ export async function upsertMccSport(supabase: AppSupabaseClient, input: MccSpor
     sport_intensity: input.intensityLevel,
     sport_location_type: input.locationType,
     sport_tags: input.combinableTags.map((tag) => tag.trim()).filter(Boolean),
+    sport_description: input.description?.trim() || null,
+    sport_location_description: input.locationDescription?.trim() || null,
   });
 
   if (error || !data) {

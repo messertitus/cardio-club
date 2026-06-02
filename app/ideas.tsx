@@ -1,9 +1,10 @@
-import { Redirect } from "expo-router";
+﻿import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { PageHeader } from "../src/components/PageHeader";
 import { Button, LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
@@ -74,8 +75,7 @@ export default function IdeasScreen() {
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={styles.kicker}>Sportideen</Text>
-          <Text style={styles.title}>Neue Aktivität vorschlagen</Text>
+          <PageHeader kicker="Sportideen" title="Neue Aktivität vorschlagen" />
           {message ? <Text style={styles.notice}>{message}</Text> : null}
 
           <View style={styles.card}>
@@ -143,6 +143,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
   shell: { flex: 1 },
   content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  submenuBack: { alignItems: "flex-end" },
   kicker: { color: "#4da3ff", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
   notice: { color: "#5eead4", fontSize: 14, fontWeight: "900" },

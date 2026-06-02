@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { PageHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -50,7 +51,7 @@ export default function InvitesScreen() {
     if (result.error) {
       setMessage(
         isAdmin && result.error.message.includes("3 Einladungscodes")
-          ? "Supabase nutzt noch die alte Code-Funktion. Bitte Migration 017_admin_invites_unlimited.sql ausfÃ¼hren."
+          ? "Supabase nutzt noch die alte Code-Funktion. Bitte Migration 017_admin_invites_unlimited.sql ausführen."
           : result.error.message,
       );
       return;
@@ -63,97 +64,79 @@ export default function InvitesScreen() {
     await Share.share({ message: buildInviteMessage(code) });
   }
 
-  async function shareWhatsApp(code: string) {
-    const text = encodeURIComponent(buildInviteMessage(code));
-    const appUrl = `whatsapp://send?text=${text}`;
-    const webUrl = `https://wa.me/?text=${text}`;
-    const canOpenApp = await Linking.canOpenURL(appUrl);
-    await Linking.openURL(canOpenApp ? appUrl : webUrl);
-  }
-
-  async function shareSms(code: string) {
-    await Linking.openURL(`sms:?&body=${encodeURIComponent(buildInviteMessage(code))}`);
-  }
-
-  async function shareInstagram(code: string) {
-    await Share.share({ message: buildInviteMessage(code) });
-  }
-
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <BrandBackground />
       <View style={styles.shell}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.kicker, { color: theme.accent }]}>Exklusiver Zugang</Text>
-        <Text style={[styles.title, { color: theme.text }]}>Einmalige Einladungscodes</Text>
-        <Text style={[styles.body, { color: theme.muted }]}>{isAdmin ? "Du kannst unbegrenzt Codes erstellen." : `Noch ${remaining} von 3 Codes verfügbar.`}</Text>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <PageHeader kicker="Exklusiver Zugang" title="Einmalige Einladungscodes" />
+          <Text style={[styles.body, { color: theme.muted }]}>{isAdmin ? "Du kannst unbegrenzt Codes erstellen." : `Noch ${remaining} von 3 Codes verfügbar.`}</Text>
 
-        <View style={styles.slotRow}>
-          {slotLabels.map((slot, index) => {
-            const filled = isAdmin || index < usedSlots;
-            return (
-              <View key={slot} style={[styles.slot, { borderColor: theme.border, backgroundColor: theme.softSurface }, filled && { borderColor: theme.accent }]}>
-                <Text style={[styles.slotText, { color: filled ? theme.text : theme.muted }]}>{slot}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <Animated.View style={{ transform: [{ scale: pulse }] }}>
-          <Pressable
-            style={({ pressed }) => [styles.button, { backgroundColor: theme.button }, (!canCreate || busy) && styles.disabled, pressed && canCreate && styles.pressed]}
-            onPress={createCode}
-            disabled={!canCreate || busy}
-          >
-            <Text style={[styles.buttonText, { color: theme.inverse }]}>{busy ? "Erstelle..." : canCreate ? "Neuen Code erzeugen" : "Kontingent genutzt"}</Text>
-          </Pressable>
-        </Animated.View>
-
-        {message ? <Text style={styles.notice}>{message}</Text> : null}
-
-        <View style={styles.codes}>
-          {codes.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>Noch kein Code erstellt.</Text> : null}
-          {codes.map((code) => (
-            <View key={code.code} style={[styles.codeCard, { borderColor: theme.border, backgroundColor: theme.softSurface }, code.used_at && styles.codeCardUsed]}>
-              <Text style={[styles.code, { color: theme.text }]}>{code.code}</Text>
-              <Text style={[styles.codeMeta, { color: theme.muted }]}>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Bereit zum Teilen"}</Text>
-              {code.usedByPhone ? <Text style={[styles.codePhone, { color: theme.accent }]}>{code.usedByPhone}</Text> : null}
-              {!code.used_at ? (
-                <View style={styles.shareRow}>
-                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareWhatsApp(code.code)}>
-                    <Text style={[styles.shareText, { color: theme.text }]}>WhatsApp</Text>
-                  </Pressable>
-                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareSms(code.code)}>
-                    <Text style={[styles.shareText, { color: theme.text }]}>SMS</Text>
-                  </Pressable>
-                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareInstagram(code.code)}>
-                    <Text style={[styles.shareText, { color: theme.text }]}>Instagram</Text>
-                  </Pressable>
-                  <Pressable style={[styles.shareButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareCode(code.code)}>
-                    <Text style={[styles.shareText, { color: theme.text }]}>Teilen</Text>
-                  </Pressable>
+          <View style={styles.slotRow}>
+            {slotLabels.map((slot, index) => {
+              const filled = isAdmin || index < usedSlots;
+              return (
+                <View key={slot} style={[styles.slot, { borderColor: theme.border, backgroundColor: theme.softSurface }, filled && { borderColor: theme.accent }]}>
+                  <Text style={[styles.slotText, { color: filled ? theme.text : theme.muted }]}>{slot}</Text>
                 </View>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-      <BottomNav active="menu" />
+              );
+            })}
+          </View>
+
+          <Animated.View style={{ transform: [{ scale: pulse }] }}>
+            <Pressable
+              style={({ pressed }) => [styles.button, { backgroundColor: theme.button }, (!canCreate || busy) && styles.disabled, pressed && canCreate && styles.pressed]}
+              onPress={createCode}
+              disabled={!canCreate || busy}
+            >
+              <Text style={[styles.buttonText, { color: theme.inverse }]}>{busy ? "Erstelle..." : canCreate ? "Neuen Code erzeugen" : "Kontingent genutzt"}</Text>
+            </Pressable>
+          </Animated.View>
+
+          {message ? <Text style={styles.notice}>{message}</Text> : null}
+
+          <View style={styles.codes}>
+            {codes.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>Noch kein Code erstellt.</Text> : null}
+            {codes.map((code) => (
+              <View key={code.code} style={[styles.codeCard, { borderColor: theme.border, backgroundColor: theme.softSurface }, code.used_at && styles.codeCardUsed]}>
+                <Text style={[styles.code, { color: theme.text }]}>{code.code}</Text>
+                <Text style={[styles.codeMeta, { color: theme.muted }]}>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Bereit zum Teilen"}</Text>
+                {code.usedByPhone ? <Text style={[styles.codePhone, { color: theme.accent }]}>{code.usedByPhone}</Text> : null}
+                {!code.used_at ? (
+                  <Pressable style={[styles.shareIconButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareCode(code.code)}>
+                    <Text style={[styles.shareLabel, { color: theme.text }]}>Teilen</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+        <BottomNav active="menu" />
       </View>
     </SafeAreaView>
   );
 }
 
 function buildInviteMessage(code: string): string {
-  return `Dein Einladungscode für Messers Cardio Club: ${code}`;
+  return `Hey du, dein Einladungscode für den Cardio Club lautet: ${code}\nLink: ${getInviteLink()}`;
+}
+
+function getInviteLink(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return "https://messers-cardio-club.com";
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#05070b" },
+  safeArea: { flex: 1 },
   shell: { flex: 1 },
   content: { gap: 18, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
-  kicker: { color: "#4da3ff", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
+  header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  headerText: { flex: 1, minWidth: 0 },
+  kicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  title: { fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
   body: { fontSize: 15, lineHeight: 22 },
   slotRow: { flexDirection: "row", gap: 10 },
   slot: {
@@ -163,31 +146,24 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.07)",
   },
-  slotFilled: { borderColor: "rgba(77,163,255,0.7)", backgroundColor: "rgba(77,163,255,0.18)" },
-  slotText: { color: "#728197", fontSize: 16, fontWeight: "900" },
-  slotTextFilled: { color: "#ffffff" },
+  slotText: { fontSize: 16, fontWeight: "900" },
   notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "900" },
-  button: { alignItems: "center", borderRadius: 18, backgroundColor: "#ffffff", paddingVertical: 15 },
-  buttonText: { color: "#05070b", fontSize: 15, fontWeight: "900" },
+  button: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
+  buttonText: { fontSize: 15, fontWeight: "900" },
   pressed: { transform: [{ scale: 0.99 }], opacity: 0.86 },
   disabled: { opacity: 0.42 },
   codes: { gap: 10 },
-  empty: { color: "#9aa7b8", fontSize: 15, lineHeight: 22 },
+  empty: { fontSize: 15, lineHeight: 22 },
   codeCard: {
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(77,163,255,0.46)",
-    backgroundColor: "rgba(77,163,255,0.14)",
     padding: 18,
   },
   codeCardUsed: { opacity: 0.52 },
-  code: { color: "#ffffff", fontSize: 28, fontWeight: "900", letterSpacing: 1, textAlign: "center" },
-  codeMeta: { color: "#c6d7ea", fontSize: 12, fontWeight: "900", marginTop: 8, textAlign: "center", textTransform: "uppercase" },
-  codePhone: { color: "#8fc7ff", fontSize: 13, fontWeight: "800", marginTop: 4, textAlign: "center" },
-  shareRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 14 },
-  shareButton: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
-  shareText: { fontSize: 12, fontWeight: "900" },
+  code: { fontSize: 28, fontWeight: "900", letterSpacing: 1, textAlign: "center" },
+  codeMeta: { fontSize: 12, fontWeight: "900", marginTop: 8, textAlign: "center", textTransform: "uppercase" },
+  codePhone: { fontSize: 13, fontWeight: "800", marginTop: 4, textAlign: "center" },
+  shareIconButton: { alignItems: "center", alignSelf: "center", justifyContent: "center", minWidth: 92, height: 48, borderRadius: 999, borderWidth: 1, marginTop: 14, paddingHorizontal: 16 },
+  shareLabel: { fontSize: 14, fontWeight: "900", lineHeight: 18 },
 });
