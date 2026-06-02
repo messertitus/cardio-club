@@ -1,0 +1,425 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="3400" viewBox="0 0 2400 3400" role="img" aria-labelledby="title desc">
+  <title id="title">Messers Cardio Club - Entwickler Architektur-Grafik</title>
+  <desc id="desc">Datei- und Modulkarte fuer Softwareentwicklung: Abhaengigkeiten, Kommunikationswege, Schichten und Konsolidierungspotenziale.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f9fc; }
+      .panel { fill: #ffffff; stroke: #d4dce8; stroke-width: 2; }
+      .panel-soft { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 2; }
+      .title { fill: #0b1220; font: 900 48px Arial, sans-serif; }
+      .subtitle { fill: #526071; font: 500 23px Arial, sans-serif; }
+      .section { fill: #0b1220; font: 900 30px Arial, sans-serif; }
+      .layer-title { fill: #ffffff; font: 900 22px Arial, sans-serif; }
+      .box { fill: #ffffff; stroke: #b7c2d0; stroke-width: 2; }
+      .screen { fill: #e8f2ff; stroke: #3d82d8; stroke-width: 2; }
+      .component { fill: #edf7ff; stroke: #62a6de; stroke-width: 2; }
+      .context { fill: #eef2ff; stroke: #7367d8; stroke-width: 2; }
+      .service { fill: #eafaf4; stroke: #2b9a70; stroke-width: 2; }
+      .lib { fill: #f3edff; stroke: #865ed6; stroke-width: 2; }
+      .db { fill: #fff4e6; stroke: #d8892d; stroke-width: 2; }
+      .risk { fill: #fff0ee; stroke: #d35e4c; stroke-width: 2; }
+      .opportunity { fill: #fffbe6; stroke: #caa72d; stroke-width: 2; }
+      .dark { fill: #101820; stroke: #263241; stroke-width: 2; }
+      .file-title { fill: #0b1220; font: 900 17px Arial, sans-serif; }
+      .file-title-light { fill: #ffffff; font: 900 17px Arial, sans-serif; }
+      .txt { fill: #354052; font: 500 14px Arial, sans-serif; }
+      .txt-light { fill: #d7e1ee; font: 500 14px Arial, sans-serif; }
+      .tiny { fill: #607084; font: 500 12px Arial, sans-serif; }
+      .note-title { fill: #5c4800; font: 900 17px Arial, sans-serif; }
+      .note { fill: #665820; font: 500 14px Arial, sans-serif; }
+      .arrow { stroke: #657386; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .arrow-blue { stroke: #3d82d8; stroke-width: 2.4; fill: none; marker-end: url(#arrow-blue); }
+      .arrow-green { stroke: #2b9a70; stroke-width: 2.4; fill: none; marker-end: url(#arrow-green); }
+      .arrow-purple { stroke: #765bd7; stroke-width: 2.4; fill: none; marker-end: url(#arrow-purple); }
+      .arrow-orange { stroke: #d8892d; stroke-width: 2.4; fill: none; marker-end: url(#arrow-orange); }
+      .dash { stroke-dasharray: 9 7; }
+      .layer-ui { fill: #1d4f8f; }
+      .layer-state { fill: #5b4abb; }
+      .layer-service { fill: #1f7a58; }
+      .layer-domain { fill: #6744ad; }
+      .layer-data { fill: #a45f16; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#657386"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#3d82d8"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#2b9a70"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#765bd7"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#d8892d"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="2400" height="3400"/>
+  <rect class="panel" x="70" y="55" width="2260" height="145" rx="28"/>
+  <text class="title" x="110" y="116">Messers Cardio Club - Entwickler Architektur-Grafik</text>
+  <text class="subtitle" x="110" y="160">Welche Dateien welche Verantwortung tragen, wie sie kommunizieren und wo Optimierungs- oder Konsolidierungspotenzial liegt.</text>
+
+  <!-- Layer map -->
+  <rect class="panel" x="70" y="250" width="2260" height="730" rx="28"/>
+  <text class="section" x="110" y="305">1. Schichtenmodell und Datei-Kommunikation</text>
+  <text class="tiny" x="110" y="333">Leserichtung: Screens rufen Contexts und Services. Services sprechen Supabase. Domain-Libs bleiben pure TypeScript und werden von Services/Tests genutzt.</text>
+
+  <rect class="layer-ui" x="110" y="380" width="160" height="120" rx="20"/>
+  <text class="layer-title" x="138" y="430">UI</text>
+  <text class="txt-light" x="128" y="458">app/*.tsx</text>
+
+  <rect class="screen" x="340" y="365" width="340" height="160" rx="18"/>
+  <text class="file-title" x="360" y="397">app/auth.tsx</text>
+  <text class="txt" x="360" y="425">Telefon-Login, Registrierung</text>
+  <text class="txt" x="360" y="447">SMS-Verifikation, PIN-Reset</text>
+  <text class="txt" x="360" y="469">nutzt Supabase Auth direkt</text>
+  <text class="tiny" x="360" y="495">Optimierung: Auth-Flows in Hook/Service extrahieren</text>
+
+  <rect class="screen" x="720" y="365" width="340" height="160" rx="18"/>
+  <text class="file-title" x="740" y="397">app/index.tsx</text>
+  <text class="txt" x="740" y="425">Hauptscreen fuer Event-Flow</text>
+  <text class="txt" x="740" y="447">Teilnahme -> Voting -> Ueberblick</text>
+  <text class="txt" x="740" y="469">laedt Live-App-State</text>
+  <text class="tiny" x="740" y="495">Optimierung: Step-UI in Komponenten teilen</text>
+
+  <rect class="screen" x="1100" y="365" width="340" height="160" rx="18"/>
+  <text class="file-title" x="1120" y="397">app/admin.tsx</text>
+  <text class="txt" x="1120" y="425">Admin-Unterseiten in einer Datei</text>
+  <text class="txt" x="1120" y="447">Mitglieder, Sportarten, APs</text>
+  <text class="txt" x="1120" y="469">bestaetigte Schreibaktionen</text>
+  <text class="tiny" x="1120" y="495">Optimierung: in Feature-Komponenten aufteilen</text>
+
+  <rect class="screen" x="1480" y="365" width="340" height="160" rx="18"/>
+  <text class="file-title" x="1500" y="397">app/menu.tsx</text>
+  <text class="txt" x="1500" y="425">Navigation, Benachrichtigungen</text>
+  <text class="txt" x="1500" y="447">lokaler Read-State</text>
+  <text class="txt" x="1500" y="469">Admin-Kontextlinks</text>
+  <text class="tiny" x="1500" y="495">Optimierung: Notification-Modul extrahieren</text>
+
+  <rect class="screen" x="1860" y="365" width="260" height="160" rx="18"/>
+  <text class="file-title" x="1880" y="397">Weitere Screens</text>
+  <text class="txt" x="1880" y="425">chat, members</text>
+  <text class="txt" x="1880" y="447">profile, invites</text>
+  <text class="txt" x="1880" y="469">ideas, pin, push</text>
+
+  <rect class="layer-state" x="110" y="590" width="160" height="120" rx="20"/>
+  <text class="layer-title" x="129" y="640">State</text>
+  <text class="txt-light" x="128" y="668">src/context</text>
+
+  <rect class="context" x="340" y="575" width="330" height="150" rx="18"/>
+  <text class="file-title" x="360" y="607">src/context/AuthContext.tsx</text>
+  <text class="txt" x="360" y="635">Session, User, Logout</text>
+  <text class="txt" x="360" y="657">hoert Auth-State-Changes</text>
+  <text class="tiny" x="360" y="687">Zentral fuer Route Protection</text>
+
+  <rect class="context" x="720" y="575" width="330" height="150" rx="18"/>
+  <text class="file-title" x="740" y="607">src/context/ThemeContext.tsx</text>
+  <text class="txt" x="740" y="635">Dark/Light Theme</text>
+  <text class="txt" x="740" y="657">liefert Farb-Tokens</text>
+  <text class="tiny" x="740" y="687">Optimierung: Design Tokens staerker typisieren</text>
+
+  <rect class="component" x="1100" y="575" width="520" height="150" rx="18"/>
+  <text class="file-title" x="1120" y="607">src/components/*</text>
+  <text class="txt" x="1120" y="635">PageHeader, BottomNav, ThemeToggle, AuthIntro</text>
+  <text class="txt" x="1120" y="657">BrandBackground, Motion, ui.tsx</text>
+  <text class="tiny" x="1120" y="687">Gute Konsolidierung: wiederverwendbare Layout-Bausteine</text>
+
+  <rect class="layer-service" x="110" y="800" width="160" height="120" rx="20"/>
+  <text class="layer-title" x="128" y="850">Services</text>
+  <text class="txt-light" x="128" y="878">src/services</text>
+
+  <rect class="service" x="340" y="780" width="330" height="165" rx="18"/>
+  <text class="file-title" x="360" y="812">Auth-nahe Services</text>
+  <text class="txt" x="360" y="840">profiles.ts</text>
+  <text class="txt" x="360" y="862">invitations.ts</text>
+  <text class="txt" x="360" y="884">members.ts</text>
+  <text class="txt" x="360" y="906">push.ts</text>
+
+  <rect class="service" x="720" y="780" width="330" height="165" rx="18"/>
+  <text class="file-title" x="740" y="812">Event Services</text>
+  <text class="txt" x="740" y="840">liveApp.ts, events.ts</text>
+  <text class="txt" x="740" y="862">attendance.ts, votes.ts</text>
+  <text class="txt" x="740" y="884">proposals.ts, chat.ts</text>
+  <text class="txt" x="740" y="906">decisions.ts</text>
+
+  <rect class="service" x="1100" y="780" width="330" height="165" rx="18"/>
+  <text class="file-title" x="1120" y="812">Admin Services</text>
+  <text class="txt" x="1120" y="840">adminPanel.ts</text>
+  <text class="txt" x="1120" y="862">sportIdeas.ts</text>
+  <text class="txt" x="1120" y="884">RPCs fuer Admin-Schreiben</text>
+  <text class="tiny" x="1120" y="916">Optimierung: Admin service in files splitten</text>
+
+  <rect class="lib" x="1480" y="780" width="330" height="165" rx="18"/>
+  <text class="file-title" x="1500" y="812">Domain Libs</text>
+  <text class="txt" x="1500" y="840">fairSportSelection.ts</text>
+  <text class="txt" x="1500" y="862">sportCompatibility.ts</text>
+  <text class="txt" x="1500" y="884">votingRules.ts</text>
+  <text class="txt" x="1500" y="906">decisionPresentation.ts</text>
+
+  <rect class="dark" x="1860" y="780" width="260" height="165" rx="18"/>
+  <text class="file-title-light" x="1880" y="812">Supabase</text>
+  <text class="txt-light" x="1880" y="840">src/lib/supabase.ts</text>
+  <text class="txt-light" x="1880" y="862">database.types.ts</text>
+  <text class="txt-light" x="1880" y="884">migrations/*.sql</text>
+
+  <path class="arrow-blue" d="M270 440 L340 440"/>
+  <path class="arrow-purple" d="M510 525 C510 545, 510 555, 510 575"/>
+  <path class="arrow-purple" d="M890 525 C890 545, 890 555, 890 575"/>
+  <path class="arrow-green" d="M890 725 C890 750, 890 760, 890 780"/>
+  <path class="arrow-green" d="M1270 525 C1270 650, 1270 700, 1270 780"/>
+  <path class="arrow-purple" d="M1430 860 L1480 860"/>
+  <path class="arrow-orange" d="M1810 860 L1860 860"/>
+  <path class="arrow-green" d="M670 862 L720 862"/>
+  <path class="arrow-green" d="M1050 862 L1100 862"/>
+
+  <!-- Dependency flow -->
+  <rect class="panel" x="70" y="1040" width="2260" height="520" rx="28"/>
+  <text class="section" x="110" y="1092">2. Konkreter Datenfluss: vom Tap bis zur Datenbank</text>
+  <text class="tiny" x="110" y="1120">Diese Ansicht zeigt, warum die Schichten so getrennt sind und wo Kommunikation stattfindet.</text>
+
+  <rect class="screen" x="120" y="1170" width="280" height="120" rx="18"/>
+  <text class="file-title" x="140" y="1202">Screen</text>
+  <text class="txt" x="140" y="1230">Pressable / Button</text>
+  <text class="txt" x="140" y="1252">lokaler UI-State</text>
+
+  <rect class="context" x="490" y="1170" width="280" height="120" rx="18"/>
+  <text class="file-title" x="510" y="1202">Context</text>
+  <text class="txt" x="510" y="1230">Auth user</text>
+  <text class="txt" x="510" y="1252">Theme tokens</text>
+
+  <rect class="service" x="860" y="1170" width="300" height="120" rx="18"/>
+  <text class="file-title" x="880" y="1202">Service</text>
+  <text class="txt" x="880" y="1230">typed input</text>
+  <text class="txt" x="880" y="1252">ServiceResult</text>
+
+  <rect class="lib" x="1250" y="1170" width="300" height="120" rx="18"/>
+  <text class="file-title" x="1270" y="1202">Domain Lib</text>
+  <text class="txt" x="1270" y="1230">pure calculation</text>
+  <text class="txt" x="1270" y="1252">unit tested</text>
+
+  <rect class="dark" x="1640" y="1170" width="300" height="120" rx="18"/>
+  <text class="file-title-light" x="1660" y="1202">Supabase</text>
+  <text class="txt-light" x="1660" y="1230">RLS / RPC</text>
+  <text class="txt-light" x="1660" y="1252">PostgreSQL tables</text>
+
+  <rect class="screen" x="2020" y="1170" width="200" height="120" rx="18"/>
+  <text class="file-title" x="2040" y="1202">UI update</text>
+  <text class="txt" x="2040" y="1230">load()</text>
+  <text class="txt" x="2040" y="1252">feedback</text>
+
+  <path class="arrow-blue" d="M400 1230 L490 1230"/>
+  <path class="arrow-green" d="M770 1230 L860 1230"/>
+  <path class="arrow-purple" d="M1160 1230 L1250 1230"/>
+  <path class="arrow-orange" d="M1550 1230 L1640 1230"/>
+  <path class="arrow" d="M1940 1230 L2020 1230"/>
+  <path class="arrow dash" d="M2120 1290 C2120 1410, 260 1410, 260 1290"/>
+
+  <rect class="opportunity" x="120" y="1360" width="560" height="120" rx="18"/>
+  <text class="note-title" x="140" y="1392">Optimierungspotenzial: Feature Hooks</text>
+  <text class="note" x="140" y="1420">Mehrere Screens kombinieren UI-State, Validierung und Service-Aufrufe.</text>
+  <text class="note" x="140" y="1442">Moeglich: useAuthFlow(), useAdminSports(), useEventVoting().</text>
+
+  <rect class="opportunity" x="740" y="1360" width="560" height="120" rx="18"/>
+  <text class="note-title" x="760" y="1392">Optimierungspotenzial: AdminScreen splitten</text>
+  <text class="note" x="760" y="1420">app/admin.tsx ist funktional breit.</text>
+  <text class="note" x="760" y="1442">Moeglich: AdminMembersPanel, AdminSportsPanel, AdminContactsPanel.</text>
+
+  <rect class="opportunity" x="1360" y="1360" width="560" height="120" rx="18"/>
+  <text class="note-title" x="1380" y="1392">Optimierungspotenzial: Notification Service</text>
+  <text class="note" x="1380" y="1420">Benachrichtigungen entstehen derzeit im Menue-Screen.</text>
+  <text class="note" x="1380" y="1442">Moeglich: notifications.ts mit read-state und Kontextlinks.</text>
+
+  <!-- File clusters -->
+  <rect class="panel" x="70" y="1620" width="2260" height="1040" rx="28"/>
+  <text class="section" x="110" y="1672">3. Datei-Cluster und Konsolidierungsfragen</text>
+  <text class="tiny" x="110" y="1700">Die Cluster zeigen, welche Dateien wahrscheinlich zusammen gehoeren und wo Schnittstellen scharf gehalten werden sollten.</text>
+
+  <rect class="panel-soft" x="120" y="1740" width="520" height="360" rx="24"/>
+  <text class="section" x="145" y="1784">Auth Cluster</text>
+  <rect class="screen" x="150" y="1810" width="220" height="72" rx="14"/>
+  <text class="file-title" x="168" y="1840">app/auth.tsx</text>
+  <text class="tiny" x="168" y="1862">grosse Flow-Datei</text>
+  <rect class="screen" x="390" y="1810" width="220" height="72" rx="14"/>
+  <text class="file-title" x="408" y="1840">app/pin.tsx</text>
+  <text class="tiny" x="408" y="1862">PIN aendern</text>
+  <rect class="service" x="150" y="1905" width="220" height="72" rx="14"/>
+  <text class="file-title" x="168" y="1935">profiles.ts</text>
+  <text class="tiny" x="168" y="1957">ensure/update profile</text>
+  <rect class="service" x="390" y="1905" width="220" height="72" rx="14"/>
+  <text class="file-title" x="408" y="1935">invitations.ts</text>
+  <text class="tiny" x="408" y="1957">invite validation</text>
+  <rect class="context" x="150" y="2000" width="220" height="72" rx="14"/>
+  <text class="file-title" x="168" y="2030">AuthContext.tsx</text>
+  <text class="tiny" x="168" y="2052">session source</text>
+  <rect class="risk" x="390" y="2000" width="220" height="72" rx="14"/>
+  <text class="file-title" x="408" y="2030">Frage</text>
+  <text class="tiny" x="408" y="2052">Auth-Logik aus Screen?</text>
+
+  <rect class="panel-soft" x="710" y="1740" width="520" height="360" rx="24"/>
+  <text class="section" x="735" y="1784">Event Cluster</text>
+  <rect class="screen" x="740" y="1810" width="220" height="72" rx="14"/>
+  <text class="file-title" x="758" y="1840">app/index.tsx</text>
+  <text class="tiny" x="758" y="1862">main flow</text>
+  <rect class="service" x="980" y="1810" width="220" height="72" rx="14"/>
+  <text class="file-title" x="998" y="1840">liveApp.ts</text>
+  <text class="tiny" x="998" y="1862">current state</text>
+  <rect class="service" x="740" y="1905" width="220" height="72" rx="14"/>
+  <text class="file-title" x="758" y="1935">attendance.ts</text>
+  <text class="tiny" x="758" y="1957">going/maybe/not</text>
+  <rect class="service" x="980" y="1905" width="220" height="72" rx="14"/>
+  <text class="file-title" x="998" y="1935">votes.ts</text>
+  <text class="tiny" x="998" y="1957">ranked votes</text>
+  <rect class="service" x="740" y="2000" width="220" height="72" rx="14"/>
+  <text class="file-title" x="758" y="2030">decisions.ts</text>
+  <text class="tiny" x="758" y="2052">preview/finalize</text>
+  <rect class="risk" x="980" y="2000" width="220" height="72" rx="14"/>
+  <text class="file-title" x="998" y="2030">Frage</text>
+  <text class="tiny" x="998" y="2052">Step components?</text>
+
+  <rect class="panel-soft" x="1300" y="1740" width="520" height="360" rx="24"/>
+  <text class="section" x="1325" y="1784">Admin Cluster</text>
+  <rect class="screen" x="1330" y="1810" width="220" height="72" rx="14"/>
+  <text class="file-title" x="1348" y="1840">app/admin.tsx</text>
+  <text class="tiny" x="1348" y="1862">multi-section UI</text>
+  <rect class="service" x="1570" y="1810" width="220" height="72" rx="14"/>
+  <text class="file-title" x="1588" y="1840">adminPanel.ts</text>
+  <text class="tiny" x="1588" y="1862">RPC wrapper</text>
+  <rect class="service" x="1330" y="1905" width="220" height="72" rx="14"/>
+  <text class="file-title" x="1348" y="1935">sportIdeas.ts</text>
+  <text class="tiny" x="1348" y="1957">review ideas</text>
+  <rect class="service" x="1570" y="1905" width="220" height="72" rx="14"/>
+  <text class="file-title" x="1588" y="1935">members.ts</text>
+  <text class="tiny" x="1588" y="1957">member list</text>
+  <rect class="db" x="1330" y="2000" width="220" height="72" rx="14"/>
+  <text class="file-title" x="1348" y="2030">admin RPCs</text>
+  <text class="tiny" x="1348" y="2052">security definer</text>
+  <rect class="risk" x="1570" y="2000" width="220" height="72" rx="14"/>
+  <text class="file-title" x="1588" y="2030">Frage</text>
+  <text class="tiny" x="1588" y="2052">split service?</text>
+
+  <rect class="panel-soft" x="1890" y="1740" width="250" height="360" rx="24"/>
+  <text class="section" x="1915" y="1784">DB Cluster</text>
+  <rect class="db" x="1915" y="1810" width="190" height="72" rx="14"/>
+  <text class="file-title" x="1933" y="1840">migrations</text>
+  <text class="tiny" x="1933" y="1862">schema/RLS/RPC</text>
+  <rect class="db" x="1915" y="1905" width="190" height="72" rx="14"/>
+  <text class="file-title" x="1933" y="1935">database.types</text>
+  <text class="tiny" x="1933" y="1957">typed DB</text>
+  <rect class="risk" x="1915" y="2000" width="190" height="72" rx="14"/>
+  <text class="file-title" x="1933" y="2030">Frage</text>
+  <text class="tiny" x="1933" y="2052">typegen automate?</text>
+
+  <rect class="panel-soft" x="120" y="2160" width="700" height="360" rx="24"/>
+  <text class="section" x="145" y="2204">Domain Cluster</text>
+  <rect class="lib" x="150" y="2230" width="285" height="72" rx="14"/>
+  <text class="file-title" x="168" y="2260">fairSportSelection.ts</text>
+  <text class="tiny" x="168" y="2282">core decision engine</text>
+  <rect class="lib" x="465" y="2230" width="285" height="72" rx="14"/>
+  <text class="file-title" x="483" y="2260">sportCompatibility.ts</text>
+  <text class="tiny" x="483" y="2282">combination rules</text>
+  <rect class="lib" x="150" y="2325" width="285" height="72" rx="14"/>
+  <text class="file-title" x="168" y="2355">votingRules.ts</text>
+  <text class="tiny" x="168" y="2377">ranked voting limits</text>
+  <rect class="lib" x="465" y="2325" width="285" height="72" rx="14"/>
+  <text class="file-title" x="483" y="2355">votingEligibility.ts</text>
+  <text class="tiny" x="483" y="2377">attendee filter</text>
+  <rect class="lib" x="150" y="2420" width="285" height="72" rx="14"/>
+  <text class="file-title" x="168" y="2450">decisionPresentation.ts</text>
+  <text class="tiny" x="168" y="2472">German explanation</text>
+  <rect class="opportunity" x="465" y="2420" width="285" height="72" rx="14"/>
+  <text class="file-title" x="483" y="2450">Stark</text>
+  <text class="tiny" x="483" y="2472">pure + unit-tested</text>
+
+  <rect class="panel-soft" x="900" y="2160" width="700" height="360" rx="24"/>
+  <text class="section" x="925" y="2204">UI Component Cluster</text>
+  <rect class="component" x="930" y="2230" width="285" height="72" rx="14"/>
+  <text class="file-title" x="948" y="2260">PageHeader.tsx</text>
+  <text class="tiny" x="948" y="2282">consistent subpages</text>
+  <rect class="component" x="1245" y="2230" width="285" height="72" rx="14"/>
+  <text class="file-title" x="1263" y="2260">BottomNav.tsx</text>
+  <text class="tiny" x="1263" y="2282">main navigation</text>
+  <rect class="component" x="930" y="2325" width="285" height="72" rx="14"/>
+  <text class="file-title" x="948" y="2355">AuthIntro.tsx</text>
+  <text class="tiny" x="948" y="2377">logo animation</text>
+  <rect class="component" x="1245" y="2325" width="285" height="72" rx="14"/>
+  <text class="file-title" x="1263" y="2355">Motion.tsx</text>
+  <text class="tiny" x="1263" y="2377">feedback animation</text>
+  <rect class="component" x="930" y="2420" width="285" height="72" rx="14"/>
+  <text class="file-title" x="948" y="2450">ui.tsx</text>
+  <text class="tiny" x="948" y="2472">Button/Loading/Error</text>
+  <rect class="opportunity" x="1245" y="2420" width="285" height="72" rx="14"/>
+  <text class="file-title" x="1263" y="2450">Potenzial</text>
+  <text class="tiny" x="1263" y="2472">Input/Card components</text>
+
+  <rect class="panel-soft" x="1680" y="2160" width="460" height="360" rx="24"/>
+  <text class="section" x="1705" y="2204">Legacy / Beobachten</text>
+  <rect class="screen" x="1710" y="2230" width="370" height="72" rx="14"/>
+  <text class="file-title" x="1728" y="2260">app/clubs/*</text>
+  <text class="tiny" x="1728" y="2282">older club screens</text>
+  <rect class="screen" x="1710" y="2325" width="370" height="72" rx="14"/>
+  <text class="file-title" x="1728" y="2355">app/events/[eventId]/*</text>
+  <text class="tiny" x="1728" y="2377">older event subflows</text>
+  <rect class="risk" x="1710" y="2420" width="370" height="72" rx="14"/>
+  <text class="file-title" x="1728" y="2450">Frage</text>
+  <text class="tiny" x="1728" y="2472">Noch produktiv genutzt oder entfernen?</text>
+
+  <path class="arrow-blue" d="M370 1846 L390 1846"/>
+  <path class="arrow-green" d="M610 1941 C670 1941, 680 1941, 710 1941"/>
+  <path class="arrow-purple" d="M750 2258 C820 2258, 850 2258, 900 2258"/>
+  <path class="arrow-orange" d="M1790 1846 C1850 1846, 1875 1846, 1915 1846"/>
+
+  <!-- Optimization roadmap -->
+  <rect class="panel" x="70" y="2710" width="2260" height="550" rx="28"/>
+  <text class="section" x="110" y="2762">4. Konkrete Optimierungs- und Konsolidierungsoptionen</text>
+  <text class="tiny" x="110" y="2790">Priorisiert nach Wartbarkeit, Risiko und Nutzen fuer die naechste Entwicklungsphase.</text>
+
+  <rect class="opportunity" x="120" y="2830" width="470" height="170" rx="18"/>
+  <text class="note-title" x="145" y="2862">A. Feature Hooks einfuehren</text>
+  <text class="note" x="145" y="2890">Warum: Screens enthalten viel Ablauf- und Lade-Logik.</text>
+  <text class="note" x="145" y="2912">Wie: useAuthFlow, useEventFlow, useAdminPanel.</text>
+  <text class="note" x="145" y="2934">Nutzen: kleinere Screens, bessere Tests.</text>
+
+  <rect class="opportunity" x="640" y="2830" width="470" height="170" rx="18"/>
+  <text class="note-title" x="665" y="2862">B. Admin in Panels splitten</text>
+  <text class="note" x="665" y="2890">Warum: app/admin.tsx ist ein grosser Koordinator.</text>
+  <text class="note" x="665" y="2912">Wie: AdminMembersPanel, AdminSportsPanel.</text>
+  <text class="note" x="665" y="2934">Nutzen: UI-Aenderungen werden risikoaermer.</text>
+
+  <rect class="opportunity" x="1160" y="2830" width="470" height="170" rx="18"/>
+  <text class="note-title" x="1185" y="2862">C. Gemeinsame Form-Controls</text>
+  <text class="note" x="1185" y="2890">Warum: Inputs/Chips wiederholen sich.</text>
+  <text class="note" x="1185" y="2912">Wie: AppInput, ChipGroup, ConfirmSheet shared.</text>
+  <text class="note" x="1185" y="2934">Nutzen: konsistenter Look, weniger Bugs.</text>
+
+  <rect class="opportunity" x="1680" y="2830" width="470" height="170" rx="18"/>
+  <text class="note-title" x="1705" y="2862">D. Notification Service</text>
+  <text class="note" x="1705" y="2890">Warum: Menue baut Notifications selbst.</text>
+  <text class="note" x="1705" y="2912">Wie: services/notifications.ts + hook.</text>
+  <text class="note" x="1705" y="2934">Nutzen: Admin-Inbox wartbarer.</text>
+
+  <rect class="risk" x="120" y="3040" width="470" height="150" rx="18"/>
+  <text class="note-title" x="145" y="3072">E. Legacy-Routen klaeren</text>
+  <text class="note" x="145" y="3100">app/clubs/* und app/events/* wirken aelter.</text>
+  <text class="note" x="145" y="3122">Entscheiden: behalten, migrieren oder entfernen.</text>
+
+  <rect class="risk" x="640" y="3040" width="470" height="150" rx="18"/>
+  <text class="note-title" x="665" y="3072">F. Direct Supabase in Screens</text>
+  <text class="note" x="665" y="3100">Auth/Profile nutzen teils Supabase direkt.</text>
+  <text class="note" x="665" y="3122">Langfristig in Services kapseln.</text>
+
+  <rect class="risk" x="1160" y="3040" width="470" height="150" rx="18"/>
+  <text class="note-title" x="1185" y="3072">G. Typegen automatisieren</text>
+  <text class="note" x="1185" y="3100">database.types.ts ist kritisch.</text>
+  <text class="note" x="1185" y="3122">Supabase Typegen in Buildprozess pruefen.</text>
+
+  <rect class="risk" x="1680" y="3040" width="470" height="150" rx="18"/>
+  <text class="note-title" x="1705" y="3072">H. Error/Toast System</text>
+  <text class="note" x="1705" y="3100">Viele Screens haben eigene message states.</text>
+  <text class="note" x="1705" y="3122">Ein gemeinsames Feedback-System waere sauberer.</text>
+
+  <rect class="dark" x="70" y="3300" width="2260" height="70" rx="24"/>
+  <text class="file-title-light" x="110" y="3342">Entwickler-Kernaussage:</text>
+  <text class="txt-light" x="340" y="3342">Die Architektur ist bereits sinnvoll geschichtet. Der groesste Hebel liegt jetzt in kleineren Feature-Hooks, geteilten UI-Controls und Split grosser Screens.</text>
+</svg>

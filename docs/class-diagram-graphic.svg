@@ -1,0 +1,444 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="3100" viewBox="0 0 2200 3100" role="img" aria-labelledby="title desc">
+  <title id="title">Messers Cardio Club - vollstaendige Architektur-Grafik</title>
+  <desc id="desc">Grafisches Klassendiagramm der App mit Screens, UI, Contexts, Services, Business-Logik, Supabase-Datenmodell und zentralen App-Flows.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #d8dee9; stroke-width: 2; }
+      .panel-dark { fill: #101820; stroke: #263241; stroke-width: 2; }
+      .title { fill: #0b1220; font: 900 46px Arial, sans-serif; }
+      .subtitle { fill: #526071; font: 500 23px Arial, sans-serif; }
+      .section { fill: #0b1220; font: 900 29px Arial, sans-serif; }
+      .section-light { fill: #ffffff; font: 900 29px Arial, sans-serif; }
+      .box { fill: #ffffff; stroke: #b9c3d0; stroke-width: 2; }
+      .box-blue { fill: #e8f2ff; stroke: #4c8fd9; stroke-width: 2; }
+      .box-green { fill: #eafaf4; stroke: #2f9d73; stroke-width: 2; }
+      .box-orange { fill: #fff4e6; stroke: #e38b29; stroke-width: 2; }
+      .box-red { fill: #fff0ee; stroke: #d66a57; stroke-width: 2; }
+      .box-purple { fill: #f1edff; stroke: #8064d8; stroke-width: 2; }
+      .box-dark { fill: #16202b; stroke: #435166; stroke-width: 2; }
+      .box-title { fill: #0b1220; font: 900 18px Arial, sans-serif; }
+      .box-title-light { fill: #ffffff; font: 900 18px Arial, sans-serif; }
+      .box-text { fill: #354052; font: 500 15px Arial, sans-serif; }
+      .box-text-light { fill: #d7e1ee; font: 500 15px Arial, sans-serif; }
+      .small { fill: #637084; font: 500 13px Arial, sans-serif; }
+      .small-light { fill: #aebbd0; font: 500 13px Arial, sans-serif; }
+      .comment { fill: #fffbe8; stroke: #d5b642; stroke-width: 2; }
+      .comment-title { fill: #5c4800; font: 900 17px Arial, sans-serif; }
+      .comment-text { fill: #675820; font: 500 14px Arial, sans-serif; }
+      .arrow { stroke: #6b7788; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .arrow-blue { stroke: #3f82d7; stroke-width: 2.4; fill: none; marker-end: url(#arrow-blue); }
+      .arrow-green { stroke: #2f9d73; stroke-width: 2.4; fill: none; marker-end: url(#arrow-green); }
+      .arrow-red { stroke: #c85a48; stroke-width: 2.4; fill: none; marker-end: url(#arrow-red); }
+      .dash { stroke-dasharray: 8 8; }
+      .db-line { stroke: #5e6b7d; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .legend { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#6b7788"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#3f82d7"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#2f9d73"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#c85a48"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2200" height="3100"/>
+  <rect class="panel" x="70" y="55" width="2060" height="130"/>
+  <text class="title" x="110" y="112">Messers Cardio Club - vollstaendige Architektur-Grafik</text>
+  <text class="subtitle" x="110" y="154">Screens, UI, Contexts, Services, Business-Logik, Supabase-Datenmodell und zentrale App-Flows auf einen Blick.</text>
+
+  <rect class="legend" x="1580" y="78" width="500" height="82" rx="18"/>
+  <rect class="box-blue" x="1610" y="101" width="24" height="24" rx="5"/>
+  <text class="small" x="1642" y="119">Screens / App UI</text>
+  <rect class="box-green" x="1780" y="101" width="24" height="24" rx="5"/>
+  <text class="small" x="1812" y="119">Services</text>
+  <rect class="box-orange" x="1932" y="101" width="24" height="24" rx="5"/>
+  <text class="small" x="1964" y="119">DB</text>
+  <rect class="box-purple" x="1610" y="132" width="24" height="24" rx="5"/>
+  <text class="small" x="1642" y="150">Business-Logik</text>
+  <rect class="comment" x="1780" y="132" width="24" height="24" rx="5"/>
+  <text class="small" x="1812" y="150">Kommentar</text>
+
+  <!-- SECTION 1 -->
+  <rect class="panel" x="70" y="230" width="2060" height="555" rx="28"/>
+  <text class="section" x="110" y="282">1. App-Oberflaeche und Navigation</text>
+  <text class="small" x="110" y="310">Expo Router verbindet die Screens. AuthContext schuetzt Routen, ThemeContext steuert hell/dunkel.</text>
+
+  <rect class="box-dark" x="120" y="350" width="240" height="122" rx="18"/>
+  <text class="box-title-light" x="140" y="382">ExpoRouterApp</text>
+  <text class="box-text-light" x="140" y="410">+ Stack Navigation</text>
+  <text class="box-text-light" x="140" y="432">+ Route Protection</text>
+  <text class="box-text-light" x="140" y="454">+ Web HTML Config</text>
+
+  <rect class="box-blue" x="430" y="340" width="250" height="150" rx="18"/>
+  <text class="box-title" x="450" y="372">AuthScreen</text>
+  <text class="box-text" x="450" y="400">+ Login Phone + PIN</text>
+  <text class="box-text" x="450" y="422">+ Invite Registrierung</text>
+  <text class="box-text" x="450" y="444">+ SMS Verifizierung</text>
+  <text class="box-text" x="450" y="466">+ PIN vergessen</text>
+
+  <rect class="box-blue" x="720" y="340" width="270" height="150" rx="18"/>
+  <text class="box-title" x="740" y="372">HomeEventScreen</text>
+  <text class="box-text" x="740" y="400">+ Teilnahme zuerst</text>
+  <text class="box-text" x="740" y="422">+ Sport-Abstimmung</text>
+  <text class="box-text" x="740" y="444">+ Event-Ueberblick</text>
+  <text class="box-text" x="740" y="466">+ Ergebnis nach Algo</text>
+
+  <rect class="box-blue" x="1030" y="340" width="230" height="150" rx="18"/>
+  <text class="box-title" x="1050" y="372">ChatScreen</text>
+  <text class="box-text" x="1050" y="400">+ Event-Chat</text>
+  <text class="box-text" x="1050" y="422">+ Send with Enter</text>
+  <text class="box-text" x="1050" y="444">+ erst nach Entscheidung</text>
+
+  <rect class="box-blue" x="1300" y="340" width="240" height="150" rx="18"/>
+  <text class="box-title" x="1320" y="372">MembersScreen</text>
+  <text class="box-text" x="1320" y="400">+ Name, Stadt, Rolle</text>
+  <text class="box-text" x="1320" y="422">+ Alter statt Geburtstag</text>
+  <text class="box-text" x="1320" y="444">+ Datenschutz-Profil</text>
+
+  <rect class="box-blue" x="1580" y="340" width="240" height="150" rx="18"/>
+  <text class="box-title" x="1600" y="372">MenuScreen</text>
+  <text class="box-text" x="1600" y="400">+ Profil / PIN / Push</text>
+  <text class="box-text" x="1600" y="422">+ Einladungscodes</text>
+  <text class="box-text" x="1600" y="444">+ Benachrichtigungen</text>
+
+  <rect class="box-blue" x="1860" y="340" width="230" height="150" rx="18"/>
+  <text class="box-title" x="1880" y="372">AdminScreen</text>
+  <text class="box-text" x="1880" y="400">+ Mitglieder</text>
+  <text class="box-text" x="1880" y="422">+ Sportarten</text>
+  <text class="box-text" x="1880" y="444">+ Sport-APs</text>
+  <text class="box-text" x="1880" y="466">+ Anfragen</text>
+
+  <rect class="box-blue" x="430" y="550" width="250" height="128" rx="18"/>
+  <text class="box-title" x="450" y="582">ProfileScreen</text>
+  <text class="box-text" x="450" y="610">+ Profil bearbeiten</text>
+  <text class="box-text" x="450" y="632">+ Namensanfrage</text>
+  <text class="box-text" x="450" y="654">+ Nummer aendern</text>
+
+  <rect class="box-blue" x="720" y="550" width="240" height="128" rx="18"/>
+  <text class="box-title" x="740" y="582">InvitesScreen</text>
+  <text class="box-text" x="740" y="610">+ Codes erstellen</text>
+  <text class="box-text" x="740" y="632">+ Codes teilen</text>
+  <text class="box-text" x="740" y="654">+ Nutzung anzeigen</text>
+
+  <rect class="box-blue" x="1000" y="550" width="240" height="128" rx="18"/>
+  <text class="box-title" x="1020" y="582">IdeasScreen</text>
+  <text class="box-text" x="1020" y="610">+ Sportidee einreichen</text>
+  <text class="box-text" x="1020" y="632">+ Ort / Uhrzeit</text>
+  <text class="box-text" x="1020" y="654">+ Admin-Pruefung</text>
+
+  <rect class="box-blue" x="1280" y="550" width="220" height="128" rx="18"/>
+  <text class="box-title" x="1300" y="582">PinScreen</text>
+  <text class="box-text" x="1300" y="610">+ PIN aendern</text>
+  <text class="box-text" x="1300" y="632">+ aktuelle PIN pruefen</text>
+
+  <rect class="box-blue" x="1540" y="550" width="220" height="128" rx="18"/>
+  <text class="box-title" x="1560" y="582">PushScreen</text>
+  <text class="box-text" x="1560" y="610">+ Permission</text>
+  <text class="box-text" x="1560" y="632">+ Token speichern</text>
+
+  <rect class="box-purple" x="1810" y="550" width="280" height="128" rx="18"/>
+  <text class="box-title" x="1830" y="582">Shared UI</text>
+  <text class="box-text" x="1830" y="610">PageHeader, BottomNav</text>
+  <text class="box-text" x="1830" y="632">ThemeToggle, BrandBG</text>
+  <text class="box-text" x="1830" y="654">AuthIntro, Motion, Buttons</text>
+
+  <rect class="box-green" x="120" y="550" width="240" height="128" rx="18"/>
+  <text class="box-title" x="140" y="582">Contexts</text>
+  <text class="box-text" x="140" y="610">AuthContext</text>
+  <text class="box-text" x="140" y="632">ThemeContext</text>
+  <text class="box-text" x="140" y="654">Supabase Session</text>
+
+  <path class="arrow-blue" d="M360 410 C390 410, 400 410, 430 410"/>
+  <path class="arrow-blue" d="M360 430 C520 520, 680 520, 820 550"/>
+  <path class="arrow" d="M680 405 L720 405"/>
+  <path class="arrow" d="M990 405 L1030 405"/>
+  <path class="arrow" d="M1260 405 L1300 405"/>
+  <path class="arrow" d="M1540 405 L1580 405"/>
+  <path class="arrow" d="M1820 405 L1860 405"/>
+  <path class="arrow-green" d="M240 550 L240 472"/>
+  <path class="arrow-green" d="M360 620 C520 720, 1620 720, 1810 620"/>
+
+  <rect class="comment" x="120" y="705" width="1970" height="50" rx="14"/>
+  <text class="comment-title" x="140" y="736">Kommentar:</text>
+  <text class="comment-text" x="245" y="736">Die Hauptnutzung ist Mobile-first: App startet auf dem Event, danach Chat, Mitglieder und Menue. Adminfunktionen sind nur fuer Admins sichtbar.</text>
+
+  <!-- SECTION 2 -->
+  <rect class="panel" x="70" y="835" width="2060" height="690" rx="28"/>
+  <text class="section" x="110" y="887">2. Services und Business-Logik</text>
+  <text class="small" x="110" y="915">Services kapseln Supabase-Zugriffe. Der Algorithmus bleibt reine TypeScript-Logik und ist testbar.</text>
+
+  <rect class="box-dark" x="120" y="955" width="260" height="132" rx="18"/>
+  <text class="box-title-light" x="140" y="987">SupabaseClient</text>
+  <text class="box-text-light" x="140" y="1015">+ Auth</text>
+  <text class="box-text-light" x="140" y="1037">+ Database</text>
+  <text class="box-text-light" x="140" y="1059">+ persisted Session</text>
+
+  <rect class="box-green" x="450" y="945" width="255" height="152" rx="18"/>
+  <text class="box-title" x="470" y="977">Auth/Profile Services</text>
+  <text class="box-text" x="470" y="1005">ProfilesService</text>
+  <text class="box-text" x="470" y="1027">InvitationsService</text>
+  <text class="box-text" x="470" y="1049">MembersService</text>
+  <text class="box-text" x="470" y="1071">PushService</text>
+
+  <rect class="box-green" x="760" y="945" width="255" height="152" rx="18"/>
+  <text class="box-title" x="780" y="977">Event Services</text>
+  <text class="box-text" x="780" y="1005">EventsService</text>
+  <text class="box-text" x="780" y="1027">AttendanceService</text>
+  <text class="box-text" x="780" y="1049">ProposalsService</text>
+  <text class="box-text" x="780" y="1071">VotesService</text>
+
+  <rect class="box-green" x="1070" y="945" width="255" height="152" rx="18"/>
+  <text class="box-title" x="1090" y="977">Decision Services</text>
+  <text class="box-text" x="1090" y="1005">DecisionsService</text>
+  <text class="box-text" x="1090" y="1027">createSubgroups</text>
+  <text class="box-text" x="1090" y="1049">resolveSportContact</text>
+  <text class="box-text" x="1090" y="1071">persistDecision</text>
+
+  <rect class="box-green" x="1380" y="945" width="255" height="152" rx="18"/>
+  <text class="box-title" x="1400" y="977">Admin Services</text>
+  <text class="box-text" x="1400" y="1005">AdminPanelService</text>
+  <text class="box-text" x="1400" y="1027">SportIdeasService</text>
+  <text class="box-text" x="1400" y="1049">ChatService</text>
+  <text class="box-text" x="1400" y="1071">LiveAppService</text>
+
+  <rect class="box-purple" x="450" y="1190" width="285" height="162" rx="18"/>
+  <text class="box-title" x="470" y="1222">FairSportSelection</text>
+  <text class="box-text" x="470" y="1250">+ previous week exclusion</text>
+  <text class="box-text" x="470" y="1272">+ majority baseline</text>
+  <text class="box-text" x="470" y="1294">+ fairness boost</text>
+  <text class="box-text" x="470" y="1316">+ combined/subgroups</text>
+
+  <rect class="box-purple" x="790" y="1190" width="255" height="162" rx="18"/>
+  <text class="box-title" x="810" y="1222">VotingRules</text>
+  <text class="box-text" x="810" y="1250">+ max 3 votes</text>
+  <text class="box-text" x="810" y="1272">+ 1.0 / 0.6 / 0.3</text>
+  <text class="box-text" x="810" y="1294">+ no duplicate sport</text>
+
+  <rect class="box-purple" x="1090" y="1190" width="255" height="162" rx="18"/>
+  <text class="box-title" x="1110" y="1222">VotingEligibility</text>
+  <text class="box-text" x="1110" y="1250">+ only proposed sports</text>
+  <text class="box-text" x="1110" y="1272">+ at least one vote</text>
+  <text class="box-text" x="1110" y="1294">+ not-going excluded</text>
+
+  <rect class="box-purple" x="1390" y="1190" width="255" height="162" rx="18"/>
+  <text class="box-title" x="1410" y="1222">SportCompatibility</text>
+  <text class="box-text" x="1410" y="1250">+ canCombineSports</text>
+  <text class="box-text" x="1410" y="1272">+ confidence</text>
+  <text class="box-text" x="1410" y="1294">+ reason</text>
+
+  <rect class="box-purple" x="1690" y="1190" width="255" height="162" rx="18"/>
+  <text class="box-title" x="1710" y="1222">DecisionPresentation</text>
+  <text class="box-text" x="1710" y="1250">+ plain language</text>
+  <text class="box-text" x="1710" y="1272">+ hide math by default</text>
+  <text class="box-text" x="1710" y="1294">+ score breakdown</text>
+
+  <rect class="box-green" x="120" y="1190" width="260" height="162" rx="18"/>
+  <text class="box-title" x="140" y="1222">ResultService</text>
+  <text class="box-text" x="140" y="1250">+ ok()</text>
+  <text class="box-text" x="140" y="1272">+ fail()</text>
+  <text class="box-text" x="140" y="1294">+ fromPostgrestError()</text>
+  <text class="box-text" x="140" y="1316">typed error handling</text>
+
+  <path class="arrow-green" d="M380 1020 L450 1020"/>
+  <path class="arrow-green" d="M380 1035 C530 1135, 650 1135, 760 1050"/>
+  <path class="arrow-green" d="M1015 1020 L1070 1020"/>
+  <path class="arrow-green" d="M1325 1020 L1380 1020"/>
+  <path class="arrow-blue" d="M1198 1097 C1198 1130, 1198 1160, 1198 1190"/>
+  <path class="arrow-blue" d="M1090 1270 L1045 1270"/>
+  <path class="arrow-blue" d="M1090 1295 C1020 1385, 860 1380, 735 1300"/>
+  <path class="arrow-blue" d="M1345 1270 L1390 1270"/>
+  <path class="arrow-blue" d="M1645 1270 L1690 1270"/>
+  <path class="arrow" d="M380 1270 L450 1270"/>
+
+  <rect class="comment" x="120" y="1432" width="1970" height="50" rx="14"/>
+  <text class="comment-title" x="140" y="1463">Kommentar:</text>
+  <text class="comment-text" x="245" y="1463">Der Algorithmus ist bewusst nicht im Service versteckt. Services laden Daten, rufen Pure Functions auf und speichern Ergebnisse.</text>
+
+  <!-- SECTION 3 -->
+  <rect class="panel" x="70" y="1575" width="2060" height="900" rx="28"/>
+  <text class="section" x="110" y="1627">3. Supabase/PostgreSQL-Datenmodell</text>
+  <text class="small" x="110" y="1655">Zentrales relationales Modell mit RLS, Admin-RPCs und einmaligen Einladungscodes.</text>
+
+  <rect class="box-orange" x="120" y="1700" width="260" height="165" rx="18"/>
+  <text class="box-title" x="140" y="1732">profiles</text>
+  <text class="box-text" x="140" y="1760">id, display_name</text>
+  <text class="box-text" x="140" y="1782">phone unique, city</text>
+  <text class="box-text" x="140" y="1804">birth_date, favorite_sports</text>
+  <text class="box-text" x="140" y="1826">role, deactivated_at</text>
+
+  <rect class="box-orange" x="470" y="1700" width="245" height="135" rx="18"/>
+  <text class="box-title" x="490" y="1732">clubs</text>
+  <text class="box-text" x="490" y="1760">id, name</text>
+  <text class="box-text" x="490" y="1782">description</text>
+  <text class="box-text" x="490" y="1804">created_by</text>
+
+  <rect class="box-orange" x="805" y="1700" width="250" height="145" rx="18"/>
+  <text class="box-title" x="825" y="1732">club_members</text>
+  <text class="box-text" x="825" y="1760">club_id, user_id</text>
+  <text class="box-text" x="825" y="1782">role: member/mod/admin</text>
+  <text class="box-text" x="825" y="1804">joined_at</text>
+
+  <rect class="box-orange" x="1145" y="1700" width="280" height="180" rx="18"/>
+  <text class="box-title" x="1165" y="1732">sports</text>
+  <text class="box-text" x="1165" y="1760">name, description</text>
+  <text class="box-text" x="1165" y="1782">location_description</text>
+  <text class="box-text" x="1165" y="1804">category, intensity</text>
+  <text class="box-text" x="1165" y="1826">location_type</text>
+  <text class="box-text" x="1165" y="1848">combinable_tags</text>
+
+  <rect class="box-orange" x="1535" y="1700" width="310" height="190" rx="18"/>
+  <text class="box-title" x="1555" y="1732">weekly_events</text>
+  <text class="box-text" x="1555" y="1760">club_id, week_start_date</text>
+  <text class="box-text" x="1555" y="1782">selected_sport_id</text>
+  <text class="box-text" x="1555" y="1804">secondary_sport_id</text>
+  <text class="box-text" x="1555" y="1826">status, starts_at</text>
+  <text class="box-text" x="1555" y="1848">decision_reason</text>
+  <text class="box-text" x="1555" y="1870">activity_contact_id</text>
+
+  <rect class="box-orange" x="120" y="1970" width="260" height="150" rx="18"/>
+  <text class="box-title" x="140" y="2002">attendance</text>
+  <text class="box-text" x="140" y="2030">event_id, user_id</text>
+  <text class="box-text" x="140" y="2052">status: going/maybe/not</text>
+  <text class="box-text" x="140" y="2074">subgroup_id</text>
+
+  <rect class="box-orange" x="470" y="1970" width="250" height="150" rx="18"/>
+  <text class="box-title" x="490" y="2002">sport_votes</text>
+  <text class="box-text" x="490" y="2030">event_id, sport_id</text>
+  <text class="box-text" x="490" y="2052">user_id</text>
+  <text class="box-text" x="490" y="2074">weight</text>
+
+  <rect class="box-orange" x="805" y="1970" width="260" height="150" rx="18"/>
+  <text class="box-title" x="825" y="2002">sport_proposals</text>
+  <text class="box-text" x="825" y="2030">event_id, sport_id</text>
+  <text class="box-text" x="825" y="2052">proposed_by</text>
+  <text class="box-text" x="825" y="2074">note</text>
+
+  <rect class="box-orange" x="1145" y="1970" width="280" height="150" rx="18"/>
+  <text class="box-title" x="1165" y="2002">event_subgroups</text>
+  <text class="box-text" x="1165" y="2030">event_id, sport_id</text>
+  <text class="box-text" x="1165" y="2052">title, location</text>
+  <text class="box-text" x="1165" y="2074">starts_at, contact_id</text>
+
+  <rect class="box-orange" x="1535" y="1970" width="300" height="150" rx="18"/>
+  <text class="box-title" x="1555" y="2002">chat_messages</text>
+  <text class="box-text" x="1555" y="2030">club_id, event_id</text>
+  <text class="box-text" x="1555" y="2052">subgroup_id, user_id</text>
+  <text class="box-text" x="1555" y="2074">body, created_at</text>
+
+  <rect class="box-orange" x="120" y="2230" width="285" height="150" rx="18"/>
+  <text class="box-title" x="140" y="2262">invitation_codes</text>
+  <text class="box-text" x="140" y="2290">code, created_by</text>
+  <text class="box-text" x="140" y="2312">used_by, used_at</text>
+  <text class="box-text" x="140" y="2334">single-use</text>
+
+  <rect class="box-orange" x="470" y="2230" width="285" height="150" rx="18"/>
+  <text class="box-title" x="490" y="2262">sport_ideas</text>
+  <text class="box-text" x="490" y="2290">name, note</text>
+  <text class="box-text" x="490" y="2312">location, preferred_time</text>
+  <text class="box-text" x="490" y="2334">status, suggested_by</text>
+
+  <rect class="box-orange" x="805" y="2230" width="295" height="150" rx="18"/>
+  <text class="box-title" x="825" y="2262">sport_contacts</text>
+  <text class="box-text" x="825" y="2290">sport_id, user_id</text>
+  <text class="box-text" x="825" y="2312">note, is_primary</text>
+  <text class="box-text" x="825" y="2334">one primary per sport</text>
+
+  <rect class="box-orange" x="1145" y="2230" width="320" height="150" rx="18"/>
+  <text class="box-title" x="1165" y="2262">profile_change_requests</text>
+  <text class="box-text" x="1165" y="2290">user_id</text>
+  <text class="box-text" x="1165" y="2312">requested_display_name</text>
+  <text class="box-text" x="1165" y="2334">status, reviewed_by</text>
+
+  <rect class="box-orange" x="1535" y="2230" width="300" height="150" rx="18"/>
+  <text class="box-title" x="1555" y="2262">preference_history</text>
+  <text class="box-text" x="1555" y="2290">club_id, user_id</text>
+  <text class="box-text" x="1555" y="2312">sport_id, week_start</text>
+  <text class="box-text" x="1555" y="2334">was_selected, voted_for</text>
+
+  <path class="db-line" d="M380 1765 L470 1765"/>
+  <path class="db-line" d="M715 1768 L805 1768"/>
+  <path class="db-line" d="M1055 1768 L1145 1768"/>
+  <path class="db-line" d="M1425 1780 L1535 1780"/>
+  <path class="db-line" d="M1690 1890 C1690 1940, 250 1930, 250 1970"/>
+  <path class="db-line" d="M1690 1890 C1690 1940, 595 1930, 595 1970"/>
+  <path class="db-line" d="M1690 1890 C1690 1940, 935 1930, 935 1970"/>
+  <path class="db-line" d="M1690 1890 C1690 1940, 1285 1930, 1285 1970"/>
+  <path class="db-line" d="M1690 1890 L1690 1970"/>
+  <path class="db-line" d="M250 1865 L250 1970"/>
+  <path class="db-line" d="M1285 1880 L1285 1970"/>
+  <path class="db-line" d="M1285 1880 C1285 2150, 952 2150, 952 2230"/>
+  <path class="db-line" d="M250 1865 C250 2160, 262 2160, 262 2230"/>
+  <path class="db-line" d="M250 1865 C250 2160, 612 2160, 612 2230"/>
+  <path class="db-line" d="M250 1865 C250 2160, 1305 2160, 1305 2230"/>
+  <path class="db-line" d="M250 1865 C250 2160, 1685 2160, 1685 2230"/>
+
+  <rect class="comment" x="120" y="2410" width="1970" height="50" rx="14"/>
+  <text class="comment-title" x="140" y="2441">Kommentar:</text>
+  <text class="comment-text" x="245" y="2441">Die wichtigsten Schreiboperationen fuer Admins laufen ueber Security-Definer-RPCs, damit RLS klar kontrolliert bleibt.</text>
+
+  <!-- SECTION 4 -->
+  <rect class="panel" x="70" y="2525" width="2060" height="435" rx="28"/>
+  <text class="section" x="110" y="2577">4. Zentrale App-Flows</text>
+  <text class="small" x="110" y="2605">Diese Sequenzen beschreiben, wie Nutzer und Admins die App tatsaechlich verwenden.</text>
+
+  <rect class="box-blue" x="120" y="2650" width="300" height="210" rx="18"/>
+  <text class="box-title" x="140" y="2682">Registrierung</text>
+  <text class="box-text" x="140" y="2710">1. Einladungscode</text>
+  <text class="box-text" x="140" y="2732">2. Name + Telefon</text>
+  <text class="box-text" x="140" y="2754">3. App-PIN</text>
+  <text class="box-text" x="140" y="2776">4. SMS bestaetigen</text>
+  <text class="box-text" x="140" y="2798">5. Code verbrauchen</text>
+  <text class="box-text" x="140" y="2820">6. Profil erstellen</text>
+
+  <rect class="box-blue" x="480" y="2650" width="300" height="210" rx="18"/>
+  <text class="box-title" x="500" y="2682">Event-Nutzung</text>
+  <text class="box-text" x="500" y="2710">1. Komme ich?</text>
+  <text class="box-text" x="500" y="2732">2. Nur Teilnehmer voten</text>
+  <text class="box-text" x="500" y="2754">3. Bis zu 3 Sportarten</text>
+  <text class="box-text" x="500" y="2776">4. Ergebnis bleibt geheim</text>
+  <text class="box-text" x="500" y="2798">5. Mittwoch Auswertung</text>
+  <text class="box-text" x="500" y="2820">6. Eventdetails + Chat</text>
+
+  <rect class="box-purple" x="840" y="2650" width="320" height="210" rx="18"/>
+  <text class="box-title" x="860" y="2682">Fairness-Algorithmus</text>
+  <text class="box-text" x="860" y="2710">1. Vorwoche ausschliessen</text>
+  <text class="box-text" x="860" y="2732">2. Stimmen zaehlen</text>
+  <text class="box-text" x="860" y="2754">3. Vernachlaessigung boosten</text>
+  <text class="box-text" x="860" y="2776">4. Wiederholung bestrafen</text>
+  <text class="box-text" x="860" y="2798">5. Kombi/Subgruppen pruefen</text>
+  <text class="box-text" x="860" y="2820">6. Erklaerung erzeugen</text>
+
+  <rect class="box-green" x="1220" y="2650" width="300" height="210" rx="18"/>
+  <text class="box-title" x="1240" y="2682">Admin-Flow</text>
+  <text class="box-text" x="1240" y="2710">1. Benachrichtigung</text>
+  <text class="box-text" x="1240" y="2732">2. Anfrage oeffnen</text>
+  <text class="box-text" x="1240" y="2754">3. Bestaetigen/Ablehnen</text>
+  <text class="box-text" x="1240" y="2776">4. Sportarten pflegen</text>
+  <text class="box-text" x="1240" y="2798">5. AP setzen</text>
+  <text class="box-text" x="1240" y="2820">6. Rechte verwalten</text>
+
+  <rect class="box-red" x="1580" y="2650" width="340" height="210" rx="18"/>
+  <text class="box-title" x="1600" y="2682">Sicherheitsregeln</text>
+  <text class="box-text" x="1600" y="2710">+ Telefon ist Login-Identitaet</text>
+  <text class="box-text" x="1600" y="2732">+ Einladungscode single-use</text>
+  <text class="box-text" x="1600" y="2754">+ PIN-Reset ohne User-Leak</text>
+  <text class="box-text" x="1600" y="2776">+ deaktivierte Nutzer blockiert</text>
+  <text class="box-text" x="1600" y="2798">+ Admin-Aktionen bestaetigen</text>
+  <text class="box-text" x="1600" y="2820">+ RLS + Admin-RPCs</text>
+
+  <path class="arrow-blue" d="M420 2755 L480 2755"/>
+  <path class="arrow-blue" d="M780 2755 L840 2755"/>
+  <path class="arrow-green" d="M1160 2755 L1220 2755"/>
+  <path class="arrow-red" d="M1520 2755 L1580 2755"/>
+
+  <rect class="panel-dark" x="70" y="2990" width="2060" height="70" rx="24"/>
+  <text class="section-light" x="110" y="3035">Kurzfassung:</text>
+  <text class="box-text-light" x="285" y="3035">Mobile-first Club-App mit exklusivem Zugang, Event-Flow, fairer Sportentscheidung, Chat, Profilen, Adminverwaltung und Supabase als Backend.</text>
+</svg>
