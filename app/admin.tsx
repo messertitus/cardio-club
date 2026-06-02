@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -37,6 +37,7 @@ const intensityOptions: SportIntensityLevel[] = ["low", "medium", "high"];
 const locationOptions: SportLocationType[] = ["indoor", "outdoor", "water", "field", "flexible"];
 
 type AdminSection = "overview" | "contacts" | "sports" | "members" | "nameRequests";
+type PendingConfirm = { title: string; detail: string; onConfirm: () => void } | null;
 
 type SportDraft = {
   name: string;
@@ -76,6 +77,7 @@ export default function AdminScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const contactsBySport = useMemo(() => {
     const map = new Map<string, MccSportContact[]>();
@@ -139,10 +141,13 @@ export default function AdminScreen() {
   }, [params.section]);
 
   function confirmAdminAction(title: string, detail: string, onConfirm: () => void) {
-    Alert.alert(title, detail, [
-      { text: "Abbrechen", style: "cancel" },
-      { text: "Bestätigen", style: "destructive", onPress: onConfirm },
-    ]);
+    setPendingConfirm({ title, detail, onConfirm });
+  }
+
+  function runConfirmedAction() {
+    const action = pendingConfirm?.onConfirm;
+    setPendingConfirm(null);
+    action?.();
   }
 
   async function changeRole(member: MccMember, role: ClubMemberRole) {
@@ -473,6 +478,7 @@ export default function AdminScreen() {
             </View>
           ) : null}
         </ScrollView>
+        {pendingConfirm ? <ConfirmSheet confirm={pendingConfirm} onCancel={() => setPendingConfirm(null)} onConfirm={runConfirmedAction} /> : null}
         <BottomNav active="menu" />
       </View>
     </SafeAreaView>
@@ -482,6 +488,28 @@ export default function AdminScreen() {
 function AdminInput(props: React.ComponentProps<typeof TextInput>) {
   const { theme } = useTheme();
   return <TextInput placeholderTextColor={theme.muted} style={[styles.input, props.multiline && styles.textArea, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]} {...props} />;
+}
+
+function ConfirmSheet({ confirm, onCancel, onConfirm }: { confirm: Exclude<PendingConfirm, null>; onCancel: () => void; onConfirm: () => void }) {
+  const { theme } = useTheme();
+
+  return (
+    <View style={styles.confirmOverlay} pointerEvents="box-none">
+      <Pressable style={styles.confirmScrim} onPress={onCancel} />
+      <View style={[styles.confirmCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+        <Text style={[styles.confirmTitle, { color: theme.text }]}>{confirm.title}</Text>
+        <Text style={[styles.confirmBody, { color: theme.muted }]}>{confirm.detail}</Text>
+        <View style={styles.confirmActions}>
+          <Pressable style={[styles.confirmButton, { backgroundColor: theme.softSurface }]} onPress={onCancel}>
+            <Text style={[styles.confirmButtonText, { color: theme.text }]}>Abbrechen</Text>
+          </Pressable>
+          <Pressable style={[styles.confirmButton, styles.confirmDangerButton]} onPress={onConfirm}>
+            <Text style={styles.confirmDangerText}>Bestätigen</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function AdminMenuCard({ title, body, onPress }: { title: string; body: string; onPress: () => void }) {
@@ -662,4 +690,40 @@ const styles = StyleSheet.create({
   dangerButton: { backgroundColor: "rgba(255,126,106,0.16)" },
   dangerText: { color: "#ff8d7a", fontSize: 12, fontWeight: "900" },
   pressed: { opacity: 0.82 },
+  confirmOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 40,
+    justifyContent: "flex-end",
+  },
+  confirmScrim: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0,0,0,0.48)",
+  },
+  confirmCard: {
+    gap: 12,
+    margin: 16,
+    marginBottom: 96,
+    borderRadius: 26,
+    borderWidth: 1,
+    padding: 18,
+    shadowColor: "#000000",
+    shadowOpacity: 0.22,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 18 },
+  },
+  confirmTitle: { fontSize: 21, fontWeight: "900", lineHeight: 25 },
+  confirmBody: { fontSize: 14, lineHeight: 21 },
+  confirmActions: { flexDirection: "row", gap: 10 },
+  confirmButton: { flex: 1, alignItems: "center", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 12 },
+  confirmButtonText: { fontSize: 13, fontWeight: "900" },
+  confirmDangerButton: { backgroundColor: "rgba(255,126,106,0.18)" },
+  confirmDangerText: { color: "#ff8d7a", fontSize: 13, fontWeight: "900" },
 });
