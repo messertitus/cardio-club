@@ -8,10 +8,14 @@ import type { VoteRank } from "../../../src/lib/votingRules";
 import { supabase } from "../../../src/lib/supabase";
 import {
   getEventDecisionPreview,
+  listEventNoGos,
   listEventProposals,
   listEventVotes,
+  listSportProfilesForSports,
   listSports,
+  removeSportNoGo,
   removeVote,
+  setSportNoGo,
   voteForSport,
   type EventDecisionPreview,
   type Row,
@@ -22,7 +26,9 @@ export default function VoteOnSportsScreen() {
   const { user } = useAuth();
   const [sports, setSports] = useState<Row<"sports">[]>([]);
   const [proposals, setProposals] = useState<Row<"sport_proposals">[]>([]);
+  const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);
   const [votes, setVotes] = useState<Row<"sport_votes">[]>([]);
+  const [noGos, setNoGos] = useState<Row<"sport_no_gos">[]>([]);
   const [preview, setPreview] = useState<EventDecisionPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,14 +58,23 @@ export default function VoteOnSportsScreen() {
       listEventVotes(supabase, eventId),
       getEventDecisionPreview(supabase, { eventId }),
     ]);
+    const proposedSportIds = proposalsResult.data?.map((proposal) => proposal.sport_id) ?? [];
+    const [profilesResult, noGosResult] = await Promise.all([
+      listSportProfilesForSports(supabase, proposedSportIds),
+      listEventNoGos(supabase, eventId),
+    ]);
     setSports(sportsResult.data ?? []);
     setProposals(proposalsResult.data ?? []);
+    setSportProfiles(profilesResult.data ?? []);
     setVotes(votesResult.data ?? []);
+    setNoGos(noGosResult.data ?? []);
     setPreview(previewResult.data);
     setError(
       sportsResult.error?.message ??
         proposalsResult.error?.message ??
+        profilesResult.error?.message ??
         votesResult.error?.message ??
+        noGosResult.error?.message ??
         previewResult.error?.message ??
         null,
     );
@@ -72,6 +87,10 @@ export default function VoteOnSportsScreen() {
       return;
     }
 
+    if (noGos.some((noGo) => noGo.user_id === user.id && noGo.sport_id === sportId)) {
+      return;
+    }
+
     const result = await voteForSport(supabase, {
       eventId,
       sportId,
@@ -79,6 +98,36 @@ export default function VoteOnSportsScreen() {
       rank,
     });
 
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    await load();
+  }
+
+  async function toggleNoGo(sportId: string) {
+    if (!user) {
+      router.replace("/auth");
+      return;
+    }
+
+    const existing = noGos.find((noGo) => noGo.user_id === user.id && noGo.sport_id === sportId);
+    if (existing) {
+      const result = await removeSportNoGo(supabase, { eventId, sportId, userId: user.id });
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
+      await load();
+      return;
+    }
+
+    if (myVoteBySport.has(sportId)) {
+      await removeVote(supabase, { eventId, sportId, userId: user.id });
+    }
+
+    const result = await setSportNoGo(supabase, { eventId, sportId, userId: user.id });
     if (result.error) {
       setError(result.error.message);
       return;
@@ -150,12 +199,15 @@ export default function VoteOnSportsScreen() {
       {proposals.map((proposal) => {
         const sport = sportsById.get(proposal.sport_id);
         const myVote = myVoteBySport.get(proposal.sport_id);
+        const myNoGo = noGos.some((entry) => entry.user_id === user?.id && entry.sport_id === proposal.sport_id);
 
         return (
           <Card key={proposal.id}>
             <Pill>{countVotes(proposal.sport_id)} gewichtete Stimmen</Pill>
             <Text style={ui.cardTitle}>{sport?.name ?? proposal.sport_id}</Text>
-            <Text style={ui.body}>{sport ? `${sport.category} · ${sport.location_type}` : "Vorgeschlagene Sportart"}</Text>
+            <Text style={ui.body}>{sport ? `${sport.category} · ${sport.intensity_level}` : "Vorgeschlagene Sportart"}</Text>
+            <Text style={ui.body}>{profileSummary(sportProfiles, proposal.sport_id)}</Text>
+            {myNoGo ? <Text style={ui.body}>Dein No-Go ist gespeichert.</Text> : null}
             {myVote ? <Text style={ui.body}>Deine Auswahl: {rankLabel(myVote.vote_rank as VoteRank)}</Text> : null}
             {[1, 2, 3].map((rank) => {
               const typedRank = rank as VoteRank;
@@ -166,15 +218,28 @@ export default function VoteOnSportsScreen() {
                   key={rank}
                   label={rankLabel(typedRank)}
                   variant={myVote?.vote_rank === typedRank ? "primary" : "secondary"}
-                  disabled={Boolean(rankUsedByOtherSport)}
+                  disabled={Boolean(rankUsedByOtherSport || myNoGo)}
                   onPress={() => setRankedVote(proposal.sport_id, typedRank)}
                 />
               );
             })}
             {myVote ? <Button label="Stimme entfernen" variant="ghost" onPress={() => removeMyVote(proposal.sport_id)} /> : null}
+            <Button
+              label={myNoGo ? "No-Go entfernen" : "Als No-Go markieren"}
+              variant="ghost"
+              onPress={() => toggleNoGo(proposal.sport_id)}
+            />
           </Card>
         );
       })}
     </Screen>
   );
+}
+
+function profileSummary(profiles: Row<"sport_profiles">[], sportId: string): string {
+  const sportProfiles = profiles.filter((profile) => profile.sport_id === sportId);
+  if (sportProfiles.length === 0) return "Noch kein konkretes Sportprofil hinterlegt.";
+  const locations = sportProfiles.map((profile) => profile.location_name).filter(Boolean);
+  const locationText = [...new Set(locations)].slice(0, 2).join(", ");
+  return `${sportProfiles.length} Profil${sportProfiles.length === 1 ? "" : "e"}${locationText ? ` · ${locationText}` : ""}`;
 }

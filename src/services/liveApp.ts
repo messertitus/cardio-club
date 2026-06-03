@@ -1,25 +1,32 @@
 import { buildDecisionPresentation } from "../lib/decisionPresentation";
-import { selectFairSport, type FairSportSelectionResult, type Sport } from "../lib/fairSportSelection";
 import { excludeNonAttendingVotes } from "../lib/votingEligibility";
 import type { VoteRank } from "../lib/votingRules";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import { listAttendance, updateAttendance } from "./attendance";
 import type { AttendanceStatus, Row } from "./database.types";
+import { listEventActivities } from "./eventActivities";
 import { getEventDecisionPreview } from "./decisions";
+import { listEventNoGos, removeSportNoGo, setSportNoGo } from "./noGos";
 import { listEventProposals, listSports } from "./proposals";
+import { listSportProfilesForSports } from "./sportProfiles";
 import type { AppSupabaseClient } from "./supabaseClient";
 import { listEventVotes, removeVote, voteForSport } from "./votes";
+import type { FairConstellationDecision } from "../lib/fairConstellationSelection";
 
 export type MccEventState = {
   clubId: string;
   event: Row<"weekly_events">;
   sports: Row<"sports">[];
   proposals: Row<"sport_proposals">[];
+  sportProfiles: Row<"sport_profiles">[];
   votes: Row<"sport_votes">[];
+  noGos: Row<"sport_no_gos">[];
   attendance: Row<"attendance">[];
+  eventActivities: Row<"event_activities">[];
   myAttendance: Row<"attendance"> | null;
   myVotes: Row<"sport_votes">[];
-  decision: FairSportSelectionResult;
+  myNoGos: Row<"sport_no_gos">[];
+  decision: FairConstellationDecision;
   decisionText: ReturnType<typeof buildDecisionPresentation>;
 };
 
@@ -55,27 +62,29 @@ export async function getMccEventState(
     return { data: null, error: fromPostgrestError(eventError, "Event konnte nicht geladen werden.") };
   }
 
-  const [sports, proposals, votes, attendance, decisionPreview] = await Promise.all([
+  const [sports, proposals, votes, attendance, noGos, decisionPreview, eventActivities] = await Promise.all([
     listSports(supabase),
     listEventProposals(supabase, event.id),
     listEventVotes(supabase, event.id),
     listAttendance(supabase, event.id),
+    listEventNoGos(supabase, event.id),
     getEventDecisionPreview(supabase, { eventId: event.id }),
+    listEventActivities(supabase, event.id),
   ]);
 
   if (sports.error) return { data: null, error: sports.error };
   if (proposals.error) return { data: null, error: proposals.error };
   if (votes.error) return { data: null, error: votes.error };
   if (attendance.error) return { data: null, error: attendance.error };
+  if (noGos.error) return { data: null, error: noGos.error };
+  if (eventActivities.error) return { data: null, error: eventActivities.error };
+
+  const proposedSportIds = [...new Set(proposals.data.map((proposal) => proposal.sport_id))];
+  const sportProfiles = await listSportProfilesForSports(supabase, proposedSportIds);
+  if (sportProfiles.error) return { data: null, error: sportProfiles.error };
 
   const visibleVotes = excludeNonAttendingVotes(votes.data, attendance.data);
-  const decision = decisionPreview.error
-    ? selectFairSport({
-        sports: sports.data.map(mapSport),
-        proposals: proposals.data.map((proposal) => ({ sportId: proposal.sport_id })),
-        votes: visibleVotes.map((vote) => ({ sportId: vote.sport_id, userId: vote.user_id, weight: vote.weight })),
-      })
-    : decisionPreview.data;
+  const decision = decisionPreview.error ? emptyDecision(decisionPreview.error.message) : decisionPreview.data;
   const names = new Map(sports.data.map((sport) => [sport.id, sport.name]));
 
   return ok({
@@ -83,10 +92,14 @@ export async function getMccEventState(
     event,
     sports: sports.data,
     proposals: proposals.data,
+    sportProfiles: sportProfiles.data,
     votes: visibleVotes,
+    noGos: noGos.data,
     attendance: attendance.data,
+    eventActivities: eventActivities.data,
     myAttendance: attendance.data.find((row) => row.user_id === userId) ?? null,
     myVotes: visibleVotes.filter((row) => row.user_id === userId).sort((a, b) => a.vote_rank - b.vote_rank),
+    myNoGos: noGos.data.filter((row) => row.user_id === userId),
     decision,
     decisionText: buildDecisionPresentation(decision, names),
   });
@@ -113,6 +126,20 @@ export async function clearMccVote(
   return removeVote(supabase, input);
 }
 
+export async function saveMccNoGo(
+  supabase: AppSupabaseClient,
+  input: { eventId: string; userId: string; sportId: string },
+) {
+  return setSportNoGo(supabase, input);
+}
+
+export async function clearMccNoGo(
+  supabase: AppSupabaseClient,
+  input: { eventId: string; userId: string; sportId: string },
+) {
+  return removeSportNoGo(supabase, input);
+}
+
 export async function finalizeMccDecisionIfReady(
   supabase: AppSupabaseClient,
   eventId: string,
@@ -133,11 +160,12 @@ export async function finalizeMccDecisionIfReady(
   return ok({ attempted: true });
 }
 
-function mapSport(row: Row<"sports">): Sport {
+function emptyDecision(reason: string): FairConstellationDecision {
   return {
-    id: row.id,
-    name: row.name,
-    category: row.category,
-    compatibleSportIds: row.combinable_tags,
+    mode: "none",
+    activities: [],
+    scores: [],
+    excludedProfiles: [],
+    reason,
   };
 }

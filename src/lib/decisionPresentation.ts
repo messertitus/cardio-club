@@ -1,4 +1,4 @@
-import type { FairSportSelectionResult, SportScore } from "./fairSportSelection";
+import type { CandidateScore, FairConstellationDecision, ScoreBreakdown } from "./fairConstellationSelection";
 
 export type SportNameMap = Map<string, string>;
 
@@ -7,127 +7,151 @@ export type DecisionPresentation = {
   secondarySportName?: string;
   resultLabels: string[];
   simpleExplanation: string;
-  scoreRows: Array<{
+  activityRows: Array<{
     sportId: string;
     sportName: string;
+    profileId: string;
+    profileName: string;
+    locationName?: string | null;
+    participantCount: number;
+  }>;
+  scoreRows: Array<{
+    id: string;
+    label: string;
+    eventTyp: string;
+    teilnahme: number;
     stimmen: number;
     fairnessAusgleich: number;
-    abwechslung: number;
-    wiederholungsabzug: number;
+    minderheitenschutz: number;
+    togetherness: number;
+    wetter: number;
+    machbarkeit: number;
+    rotation: number;
+    verlaesslichkeit: number;
+    gesamt: number;
   }>;
 };
 
 export function buildDecisionPresentation(
-  decision: FairSportSelectionResult,
+  decision: FairConstellationDecision,
   sportNames: SportNameMap,
 ): DecisionPresentation {
-  const winningScore = decision.selectedSportId
-    ? decision.scores.find((score) => score.sportId === decision.selectedSportId)
-    : undefined;
-  const runnerUp = decision.secondarySportId
-    ? decision.scores.find((score) => score.sportId === decision.secondarySportId)
-    : decision.scores[1];
+  const winner = decision.scores[0];
 
   return {
-    selectedSportName: nameForSport(decision.selectedSportId, sportNames),
-    secondarySportName: decision.secondarySportId ? nameForSport(decision.secondarySportId, sportNames) : undefined,
-    resultLabels: getResultLabels(decision, winningScore),
-    simpleExplanation: getSimpleExplanation(decision, sportNames, winningScore, runnerUp),
+    selectedSportName: activityLabel(decision.activities[0], sportNames) ?? nameForSport(decision.selectedSportId, sportNames),
+    secondarySportName: decision.activities[1]
+      ? activityLabel(decision.activities[1], sportNames)
+      : decision.secondarySportId
+        ? nameForSport(decision.secondarySportId, sportNames)
+        : undefined,
+    resultLabels: getResultLabels(decision),
+    simpleExplanation: getSimpleExplanation(decision, winner, sportNames),
+    activityRows: decision.activities.map((activity) => ({
+      sportId: activity.sportId,
+      sportName: nameForSport(activity.sportId, sportNames),
+      profileId: activity.profileId,
+      profileName: activity.profileName,
+      locationName: activity.locationName,
+      participantCount: activity.participantCount,
+    })),
     scoreRows: decision.scores.map((score) => mapScoreRow(score, sportNames)),
   };
 }
 
-function getResultLabels(decision: FairSportSelectionResult, winningScore?: SportScore): string[] {
+function getResultLabels(decision: FairConstellationDecision): string[] {
   if (decision.mode === "none") {
     return ["Keine Entscheidung"];
   }
 
-  const labels: string[] = [];
+  const labels: string[] = [modeLabel(decision.mode)];
+  const breakdown = decision.scoreBreakdown;
 
-  if (decision.mode === "combined") {
-    labels.push("Gemeinsamer Cardiotag");
-  }
-
-  if (decision.mode === "subgroups") {
-    labels.push("Untergruppen");
-  }
-
-  if (isFairnessAdjusted(decision, winningScore)) {
+  if (breakdown && breakdown.fairness + breakdown.minorityProtection > 0.7) {
     labels.push("Fairness-Ausgleich");
   }
 
-  if (isMajorityBased(decision, winningScore)) {
-    labels.push("Mehrheit");
+  if (breakdown && breakdown.togetherness > 0.8) {
+    labels.push("Gemeinsames Club-Event");
   }
 
-  if (labels.length === 0) {
-    labels.push("Ausgewogen entschieden");
+  if (breakdown && breakdown.weather < 0) {
+    labels.push("Wetter abgewogen");
   }
 
   return labels;
 }
 
 function getSimpleExplanation(
-  decision: FairSportSelectionResult,
+  decision: FairConstellationDecision,
+  winner: CandidateScore | undefined,
   sportNames: SportNameMap,
-  winningScore?: SportScore,
-  runnerUp?: SportScore,
 ): string {
   if (decision.mode === "none") {
-    return "Es gibt noch keine Entscheidung, weil keine vorgeschlagene Sportart eine Stimme hat.";
+    return decision.reason || "Es gibt noch keine Entscheidung, weil keine machbare Konstellation gefunden wurde.";
   }
 
-  const selected = nameForSport(decision.selectedSportId, sportNames);
-  const second = nameForSport(decision.secondarySportId, sportNames);
-
-  if (decision.mode === "combined" && decision.secondarySportId) {
-    return `${selected} wurde ausgewählt. ${second} passt gut dazu und hatte ebenfalls starken Rückhalt, deshalb empfiehlt die App einen gemeinsamen Cardiotag.`;
+  if (!winner) {
+    return decision.reason;
   }
 
-  if (decision.mode === "subgroups" && decision.secondarySportId) {
-    return `${selected} liegt vorne. ${second} hat ebenfalls starken Rückhalt, passt aber nicht gut als ein gemeinsames Event dazu. Deshalb empfiehlt die App Untergruppen.`;
+  const first = activityLabel(decision.activities[0], sportNames) ?? "Die erste Aktivität";
+  const second = activityLabel(decision.activities[1], sportNames);
+  const fairnessActive = winner.scoreBreakdown.fairness + winner.scoreBreakdown.minorityProtection > 0.7;
+  const weatherActive = winner.scoreBreakdown.weather < 0;
+
+  if (decision.mode === "single") {
+    return `${first} wurde als Single Event gewählt, weil Zustimmung, Fairness, Wetter und Machbarkeit insgesamt am besten passen.`;
   }
 
-  if (isFairnessAdjusted(decision, winningScore)) {
-    return `${selected} wurde ausgewählt, weil mehrere Mitglieder mit dieser Präferenz in den letzten Wochen nicht berücksichtigt wurden.`;
+  if (decision.mode === "multi_sport" && second) {
+    return `${first} und ${second} wurden als Multi-Sport Event gewählt, weil beide Wünsche sinnvoll sichtbar werden und die Profile nah genug für ein gemeinsames Event liegen.`;
   }
 
-  if (isMajorityBased(decision, winningScore)) {
-    return `${selected} hatte die meisten Stimmen. Die Sportart von letzter Woche wurde automatisch ausgeschlossen.`;
+  if (decision.mode === "twin" && second) {
+    return `${first} und ${second} wurden als Twin Event gewählt, weil zwei echte Gruppen entstanden sind und diese Lösung fairer ist als eine Gruppe zu ignorieren.`;
   }
 
-  if (runnerUp) {
-    return `${selected} wurde ausgewählt, weil es insgesamt am besten zu den Stimmen und zur Abwechslung der letzten Wochen passt.`;
+  if (fairnessActive) {
+    return `${first} wurde gewählt, weil der Fairness-Ausgleich mehrere zuletzt übergangene Wünsche berücksichtigt.`;
   }
 
-  return `${selected} wurde ausgewählt.`;
+  if (weatherActive) {
+    return `${first} wurde gewählt, obwohl Wetterfaktoren abgewogen werden mussten.`;
+  }
+
+  return decision.reason;
 }
 
-function isMajorityBased(decision: FairSportSelectionResult, winningScore?: SportScore): boolean {
-  if (!winningScore || decision.mode === "none") {
-    return false;
-  }
-
-  return decision.scores.every((score) => winningScore.baseVoteScore >= score.baseVoteScore);
-}
-
-function isFairnessAdjusted(decision: FairSportSelectionResult, winningScore?: SportScore): boolean {
-  if (!winningScore || decision.mode === "none" || winningScore.fairnessScore <= 0) {
-    return false;
-  }
-
-  return decision.scores.some((score) => score.baseVoteScore > winningScore.baseVoteScore);
-}
-
-function mapScoreRow(score: SportScore, sportNames: SportNameMap) {
+function mapScoreRow(score: CandidateScore, sportNames: SportNameMap) {
+  const breakdown = score.scoreBreakdown;
   return {
-    sportId: score.sportId,
-    sportName: nameForSport(score.sportId, sportNames),
-    stimmen: score.baseVoteScore,
-    fairnessAusgleich: score.fairnessScore,
-    abwechslung: score.diversityScore,
-    wiederholungsabzug: score.repetitionPenalty,
+    id: score.id,
+    label: score.activities.map((activity) => activityLabel(activity, sportNames)).join(" + "),
+    eventTyp: modeLabel(score.mode),
+    teilnahme: breakdown.participation,
+    stimmen: breakdown.preference,
+    fairnessAusgleich: breakdown.fairness,
+    minderheitenschutz: breakdown.minorityProtection,
+    togetherness: breakdown.togetherness,
+    wetter: breakdown.weather,
+    machbarkeit: breakdown.practicality,
+    rotation: breakdown.rotation,
+    verlaesslichkeit: breakdown.reliability,
+    gesamt: score.finalScore,
   };
+}
+
+function activityLabel(
+  activity: FairConstellationDecision["activities"][number] | undefined,
+  sportNames: SportNameMap,
+): string | undefined {
+  if (!activity) {
+    return undefined;
+  }
+
+  const sportName = nameForSport(activity.sportId, sportNames);
+  return `${sportName} · ${activity.profileName}`;
 }
 
 function nameForSport(sportId: string | undefined, sportNames: SportNameMap): string {
@@ -136,4 +160,11 @@ function nameForSport(sportId: string | undefined, sportNames: SportNameMap): st
   }
 
   return sportNames.get(sportId) ?? sportId;
+}
+
+function modeLabel(mode: FairConstellationDecision["mode"]): string {
+  if (mode === "multi_sport") return "Multi-Sport";
+  if (mode === "twin") return "Twin Event";
+  if (mode === "single") return "Single Event";
+  return "Keine Entscheidung";
 }

@@ -12,10 +12,12 @@ import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import type { VoteRank } from "../src/lib/votingRules";
 import {
+  clearMccNoGo,
   clearMccVote,
   getMccEventState,
   getMyProfile,
   saveMccAttendance,
+  saveMccNoGo,
   saveMccVoteRank,
   updateProfileCity,
   type AttendanceStatus,
@@ -125,6 +127,9 @@ export default function HomeScreen() {
       user_id: user.id,
       status,
       subgroup_id: null,
+      actual_status: null,
+      checked_by: null,
+      checked_at: null,
       created_at: state.myAttendance?.created_at ?? new Date().toISOString(),
     };
 
@@ -156,6 +161,7 @@ export default function HomeScreen() {
 
   async function chooseSport(sportId: string) {
     if (!user || !state || state.myAttendance?.status === "not_going" || isDecided) return;
+    if (state.myNoGos.some((noGo) => noGo.sport_id === sportId)) return;
 
     const existing = state.myVotes.find((vote) => vote.sport_id === sportId);
     if (existing) {
@@ -203,6 +209,28 @@ export default function HomeScreen() {
     });
 
     const result = await saveMccVoteRank(supabase, { eventId: state.event.id, userId: user.id, sportId, rank });
+    if (result.error) setNotice(result.error.message);
+    void load();
+  }
+
+  async function toggleNoGo(sportId: string) {
+    if (!user || !state || state.myAttendance?.status === "not_going" || isDecided) return;
+    const existing = state.myNoGos.find((noGo) => noGo.sport_id === sportId);
+    setNotice(null);
+
+    if (existing) {
+      const result = await clearMccNoGo(supabase, { eventId: state.event.id, userId: user.id, sportId });
+      if (result.error) setNotice(result.error.message);
+      void load();
+      return;
+    }
+
+    const existingVote = state.myVotes.find((vote) => vote.sport_id === sportId);
+    if (existingVote) {
+      await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId });
+    }
+
+    const result = await saveMccNoGo(supabase, { eventId: state.event.id, userId: user.id, sportId });
     if (result.error) setNotice(result.error.message);
     void load();
   }
@@ -344,6 +372,8 @@ export default function HomeScreen() {
                 <View style={styles.voteStack}>
                   {proposedSports.map((sport) => {
                     const vote = state.myVotes.find((row) => row.sport_id === sport.id);
+                    const noGo = state.myNoGos.some((row) => row.sport_id === sport.id);
+                    const profileHint = profileSummary(state, sport.id);
                     return (
                       <Reveal key={sport.id} index={proposedSports.indexOf(sport)}>
                       <MotionPressable
@@ -352,6 +382,7 @@ export default function HomeScreen() {
                           styles.sportCard,
                           { borderColor: theme.border, backgroundColor: theme.softSurface },
                           vote && { borderColor: theme.accent, backgroundColor: theme.button },
+                          noGo && { borderColor: "#ff8d7a", backgroundColor: "rgba(255,126,106,0.14)" },
                         ]}
                         pressedStyle={styles.pressed}
                         onPress={() => chooseSport(sport.id)}
@@ -359,10 +390,15 @@ export default function HomeScreen() {
                         <View style={styles.sportTextWrap}>
                           <Text style={[styles.sportName, { color: vote ? theme.inverse : theme.text }]}>{sport.name}</Text>
                           <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>
-                            {sport.location_type} · {sport.intensity_level}
+                            {sport.category} · {sport.intensity_level}
                           </Text>
+                          {profileHint ? <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>{profileHint}</Text> : null}
                         </View>
-                        {vote ? (
+                        {noGo ? (
+                          <Pressable style={styles.noGoButton} onPress={() => toggleNoGo(sport.id)}>
+                            <Text style={styles.noGoButtonText}>No-Go</Text>
+                          </Pressable>
+                        ) : vote ? (
                           <View style={styles.rankPicker}>
                             {voteRanks.map((rank) => (
                               <Pressable
@@ -377,6 +413,11 @@ export default function HomeScreen() {
                         ) : (
                           <Text style={[styles.addMark, { color: theme.accent }]}>+</Text>
                         )}
+                        {!vote && !noGo ? (
+                          <Pressable style={styles.noGoGhost} onPress={() => toggleNoGo(sport.id)}>
+                            <Text style={[styles.noGoGhostText, { color: noGo ? "#ff8d7a" : theme.muted }]}>No-Go</Text>
+                          </Pressable>
+                        ) : null}
                       </MotionPressable>
                       </Reveal>
                     );
@@ -415,7 +456,10 @@ export default function HomeScreen() {
                     value={
                       state.myAttendance?.status === "not_going"
                         ? "Nicht relevant"
-                        : state.myVotes.map((vote) => `${vote.vote_rank}. ${sportName(state, vote.sport_id)}`).join(" · ")
+                        : [
+                            state.myVotes.map((vote) => `${vote.vote_rank}. ${sportName(state, vote.sport_id)}`).join(" · "),
+                            state.myNoGos.length > 0 ? `No-Go: ${state.myNoGos.map((noGo) => sportName(state, noGo.sport_id)).join(", ")}` : "",
+                          ].filter(Boolean).join(" · ")
                     }
                   />
                   <Detail label="Zeit" value={eventDate ? eventDate.toLocaleString("de-DE", { weekday: "long", hour: "2-digit", minute: "2-digit" }) : "Noch offen"} />
@@ -629,6 +673,14 @@ function sportName(state: MccEventState, sportId: string): string {
   return state.sports.find((sport) => sport.id === sportId)?.name ?? "Sportart";
 }
 
+function profileSummary(state: MccEventState, sportId: string): string {
+  const profiles = state.sportProfiles.filter((profile) => profile.sport_id === sportId);
+  if (profiles.length === 0) return "Noch kein konkretes Sportprofil";
+  const locations = profiles.map((profile) => profile.location_name).filter(Boolean);
+  const locationText = [...new Set(locations)].slice(0, 2).join(", ");
+  return `${profiles.length} Profil${profiles.length === 1 ? "" : "e"}${locationText ? ` · ${locationText}` : ""}`;
+}
+
 async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
   try {
     const response = await fetch(`https://api.zippopotam.us/de/${postalCode}`);
@@ -752,6 +804,10 @@ const styles = StyleSheet.create({
   rankDotActive: { backgroundColor: "#ffffff" },
   rankText: { color: "#d9ecff", fontWeight: "900" },
   rankTextActive: { color: "#05070b" },
+  noGoButton: { borderRadius: 999, backgroundColor: "rgba(255,126,106,0.22)", paddingHorizontal: 10, paddingVertical: 8 },
+  noGoButtonText: { color: "#ffb5a8", fontSize: 12, fontWeight: "900" },
+  noGoGhost: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6 },
+  noGoGhostText: { fontSize: 12, fontWeight: "900" },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { borderRadius: 999, backgroundColor: "rgba(77,163,255,0.16)", paddingHorizontal: 10, paddingVertical: 6 },
   pillText: { color: "#8fc7ff", fontSize: 12, fontWeight: "900" },

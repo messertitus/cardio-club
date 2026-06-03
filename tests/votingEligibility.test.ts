@@ -20,9 +20,9 @@ describe("voting eligibility", () => {
     ]);
   });
 
-  it("keeps votes when a member has no explicit not-going status", () => {
+  it("excludes votes when a member has no explicit going or maybe status", () => {
     const votes = [{ user_id: "u1", sport_id: "running" }];
 
-    expect(excludeNonAttendingVotes(votes, [])).toEqual(votes);
+    expect(excludeNonAttendingVotes(votes, [])).toEqual([]);
   });
 });

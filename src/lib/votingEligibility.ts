@@ -11,6 +11,6 @@ export function excludeNonAttendingVotes<TVote extends VoteLike>(
   votes: TVote[],
   attendance: AttendanceLike[],
 ): TVote[] {
-  const nonAttendingUsers = new Set(attendance.filter((row) => row.status === "not_going").map((row) => row.user_id));
-  return votes.filter((vote) => !nonAttendingUsers.has(vote.user_id));
+  const attendingUsers = new Set(attendance.filter((row) => row.status === "going" || row.status === "maybe").map((row) => row.user_id));
+  return votes.filter((vote) => attendingUsers.has(vote.user_id));
 }

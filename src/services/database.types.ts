@@ -5,6 +5,9 @@ export type SportIntensityLevel = "low" | "medium" | "high";
 export type SportLocationType = "indoor" | "outdoor" | "water" | "field" | "flexible";
 export type WeeklyEventStatus = "proposing" | "voting" | "decided" | "completed" | "cancelled";
 export type AttendanceStatus = "going" | "maybe" | "not_going";
+export type ActualAttendanceStatus = "present" | "absent" | "excused" | "unknown";
+export type EventDecisionType = "single" | "multi_sport" | "twin" | "none";
+export type EventActivityRole = "primary" | "secondary";
 export type AppRole = "admin" | "member";
 
 export type Database = {
@@ -133,6 +136,87 @@ export type Database = {
         };
         Relationships: [];
       };
+      sport_profiles: {
+        Row: {
+          id: string;
+          sport_id: string;
+          name: string;
+          location_name: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          venue_group_key: string | null;
+          location_type: SportLocationType;
+          is_indoor: boolean;
+          minimum_group_size: number;
+          maximum_group_size: number | null;
+          required_equipment: string[];
+          available_equipment: string[];
+          cost_note: string | null;
+          opening_notes: string | null;
+          lighting_available: boolean | null;
+          transit_notes: string | null;
+          amenity_notes: string | null;
+          reservation_required: boolean | null;
+          safety_notes: string | null;
+          ap_required: boolean;
+          weather_rules: Json;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sport_id: string;
+          name: string;
+          location_name?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          venue_group_key?: string | null;
+          location_type?: SportLocationType;
+          is_indoor?: boolean;
+          minimum_group_size?: number;
+          maximum_group_size?: number | null;
+          required_equipment?: string[];
+          available_equipment?: string[];
+          cost_note?: string | null;
+          opening_notes?: string | null;
+          lighting_available?: boolean | null;
+          transit_notes?: string | null;
+          amenity_notes?: string | null;
+          reservation_required?: boolean | null;
+          safety_notes?: string | null;
+          ap_required?: boolean;
+          weather_rules?: Json;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          sport_id?: string;
+          name?: string;
+          location_name?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          venue_group_key?: string | null;
+          location_type?: SportLocationType;
+          is_indoor?: boolean;
+          minimum_group_size?: number;
+          maximum_group_size?: number | null;
+          required_equipment?: string[];
+          available_equipment?: string[];
+          cost_note?: string | null;
+          opening_notes?: string | null;
+          lighting_available?: boolean | null;
+          transit_notes?: string | null;
+          amenity_notes?: string | null;
+          reservation_required?: boolean | null;
+          safety_notes?: string | null;
+          ap_required?: boolean;
+          weather_rules?: Json;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
       sport_contacts: {
         Row: {
           id: string;
@@ -165,6 +249,9 @@ export type Database = {
           week_start_date: string;
           selected_sport_id: string | null;
           secondary_sport_id: string | null;
+          decision_type: EventDecisionType | null;
+          decision_scorecard: Json | null;
+          weather_snapshot: Json | null;
           status: WeeklyEventStatus;
           location: string | null;
           starts_at: string | null;
@@ -179,6 +266,9 @@ export type Database = {
           week_start_date: string;
           selected_sport_id?: string | null;
           secondary_sport_id?: string | null;
+          decision_type?: EventDecisionType | null;
+          decision_scorecard?: Json | null;
+          weather_snapshot?: Json | null;
           status?: WeeklyEventStatus;
           location?: string | null;
           starts_at?: string | null;
@@ -190,6 +280,9 @@ export type Database = {
         Update: {
           selected_sport_id?: string | null;
           secondary_sport_id?: string | null;
+          decision_type?: EventDecisionType | null;
+          decision_scorecard?: Json | null;
+          weather_snapshot?: Json | null;
           status?: WeeklyEventStatus;
           location?: string | null;
           starts_at?: string | null;
@@ -246,6 +339,28 @@ export type Database = {
         };
         Relationships: [];
       };
+      sport_no_gos: {
+        Row: {
+          id: string;
+          event_id: string;
+          sport_id: string;
+          user_id: string;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          sport_id: string;
+          user_id: string;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          reason?: string | null;
+        };
+        Relationships: [];
+      };
       attendance: {
         Row: {
           id: string;
@@ -253,6 +368,9 @@ export type Database = {
           user_id: string;
           status: AttendanceStatus;
           subgroup_id: string | null;
+          actual_status: ActualAttendanceStatus | null;
+          checked_by: string | null;
+          checked_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -261,11 +379,17 @@ export type Database = {
           user_id: string;
           status?: AttendanceStatus;
           subgroup_id?: string | null;
+          actual_status?: ActualAttendanceStatus | null;
+          checked_by?: string | null;
+          checked_at?: string | null;
           created_at?: string;
         };
         Update: {
           status?: AttendanceStatus;
           subgroup_id?: string | null;
+          actual_status?: ActualAttendanceStatus | null;
+          checked_by?: string | null;
+          checked_at?: string | null;
         };
         Relationships: [];
       };
@@ -278,6 +402,9 @@ export type Database = {
           week_start_date: string;
           was_selected: boolean;
           voted_for: boolean;
+          vote_rank: number | null;
+          covered_by_decision: boolean;
+          covered_by_activity_type: EventDecisionType | null;
           created_at: string;
         };
         Insert: {
@@ -288,11 +415,59 @@ export type Database = {
           week_start_date: string;
           was_selected?: boolean;
           voted_for?: boolean;
+          vote_rank?: number | null;
+          covered_by_decision?: boolean;
+          covered_by_activity_type?: EventDecisionType | null;
           created_at?: string;
         };
         Update: {
           was_selected?: boolean;
           voted_for?: boolean;
+          vote_rank?: number | null;
+          covered_by_decision?: boolean;
+          covered_by_activity_type?: EventDecisionType | null;
+        };
+        Relationships: [];
+      };
+      event_activities: {
+        Row: {
+          id: string;
+          event_id: string;
+          sport_id: string;
+          sport_profile_id: string | null;
+          role: EventActivityRole;
+          activity_type: EventDecisionType;
+          title: string;
+          location: string | null;
+          starts_at: string | null;
+          activity_contact_id: string | null;
+          assigned_user_ids: string[];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          sport_id: string;
+          sport_profile_id?: string | null;
+          role: EventActivityRole;
+          activity_type: EventDecisionType;
+          title: string;
+          location?: string | null;
+          starts_at?: string | null;
+          activity_contact_id?: string | null;
+          assigned_user_ids?: string[];
+          created_at?: string;
+        };
+        Update: {
+          sport_id?: string;
+          sport_profile_id?: string | null;
+          role?: EventActivityRole;
+          activity_type?: EventDecisionType;
+          title?: string;
+          location?: string | null;
+          starts_at?: string | null;
+          activity_contact_id?: string | null;
+          assigned_user_ids?: string[];
         };
         Relationships: [];
       };
@@ -544,6 +719,24 @@ export type Database = {
       admin_delete_sport_contact: {
         Args: { target_sport_id: string; target_user_id: string };
         Returns: boolean;
+      };
+      review_event_attendance: {
+        Args: {
+          target_event_id: string;
+          target_user_id: string;
+          next_actual_status: ActualAttendanceStatus;
+        };
+        Returns: {
+          id: string;
+          event_id: string;
+          user_id: string;
+          status: AttendanceStatus;
+          subgroup_id: string | null;
+          actual_status: ActualAttendanceStatus | null;
+          checked_by: string | null;
+          checked_at: string | null;
+          created_at: string;
+        };
       };
       review_profile_name_change: {
         Args: { request_id: string; next_status: string };

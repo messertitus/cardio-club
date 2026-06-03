@@ -5,7 +5,6 @@ import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../.
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
 import { supabase } from "../../../src/lib/supabase";
 import {
-  createSubgroupsFromDecision,
   finalizeEventDecision,
   getEventDecisionPreview,
   listSports,
@@ -22,7 +21,6 @@ export default function DecisionResultScreen() {
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sportsById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport])), [sports]);
   const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
   const presentation = useMemo(
     () => (decision ? buildDecisionPresentation(decision, sportNames) : null),
@@ -48,13 +46,6 @@ export default function DecisionResultScreen() {
   async function finalize() {
     setSaving(true);
     const result = await finalizeEventDecision(supabase, { eventId });
-
-    if (!result.error && result.data.decision.mode === "subgroups") {
-      await createSubgroupsFromDecision(supabase, {
-        eventId,
-        decision: result.data.decision,
-      });
-    }
 
     setSaving(false);
 
@@ -83,23 +74,30 @@ export default function DecisionResultScreen() {
           <Card>
             <Text style={ui.cardTitle}>Warum diese Sportart?</Text>
             <Text style={ui.body}>{presentation.simpleExplanation}</Text>
-            <Text style={ui.body}>Die Sportart von letzter Woche wurde dabei nicht erneut zugelassen.</Text>
+            <Text style={ui.body}>Die Sportart von letzter Woche bekommt einen Rotations-Malus, wird aber nicht hart ausgeschlossen.</Text>
           </Card>
 
-          {decision.mode === "combined" ? (
+          {decision.mode === "multi_sport" ? (
             <Card>
-              <Text style={ui.cardTitle}>Gemeinsamer Cardiotag</Text>
-              <Text style={ui.body}>Beide Sportarten haben starken Rückhalt und passen als gemeinsamer Plan zusammen.</Text>
+              <Text style={ui.cardTitle}>Multi-Sport Event</Text>
+              <Text style={ui.body}>Mehrere Sportprofile liegen nah genug beieinander, damit es ein gemeinsames Club-Event bleibt.</Text>
             </Card>
           ) : null}
 
-          {decision.mode === "subgroups" ? (
+          {decision.mode === "twin" ? (
             <Card>
-              <Text style={ui.cardTitle}>Untergruppen</Text>
-              <Text style={ui.body}>Die Unterstützung ist klar geteilt. Die App empfiehlt getrennte Gruppen statt einen faulen Kompromiss.</Text>
-              {decision.subgroups?.map((group) => (
-                <Text key={group.sportId} style={ui.body}>
-                  {sportsById.get(group.sportId)?.name ?? group.sportId}: {group.userIds.length} Personen
+              <Text style={ui.cardTitle}>Twin Event</Text>
+              <Text style={ui.body}>Die Unterstützung ist klar geteilt. Die App empfiehlt zwei echte Gruppen statt einen faulen Kompromiss.</Text>
+            </Card>
+          ) : null}
+
+          {presentation.activityRows.length > 0 ? (
+            <Card>
+              <Text style={ui.cardTitle}>Konkrete Aktivitäten</Text>
+              {presentation.activityRows.map((activity) => (
+                <Text key={activity.profileId} style={ui.body}>
+                  {activity.sportName}: {activity.profileName}
+                  {activity.locationName ? ` · ${activity.locationName}` : ""} · {activity.participantCount} Personen
                 </Text>
               ))}
             </Card>
@@ -115,12 +113,19 @@ export default function DecisionResultScreen() {
             />
             {showScoreBreakdown
               ? presentation.scoreRows.map((score) => (
-                  <Card key={score.sportId}>
-                    <Text style={ui.cardTitle}>{score.sportName}</Text>
+                  <Card key={score.id}>
+                    <Text style={ui.cardTitle}>{score.label}</Text>
+                    <Text style={ui.body}>Typ: {score.eventTyp}</Text>
+                    <Text style={ui.body}>Teilnahme: {score.teilnahme}</Text>
                     <Text style={ui.body}>Stimmen: {score.stimmen}</Text>
                     <Text style={ui.body}>Fairness-Ausgleich: {score.fairnessAusgleich}</Text>
-                    <Text style={ui.body}>Abwechslung: {score.abwechslung}</Text>
-                    <Text style={ui.body}>Wiederholungsabzug: {score.wiederholungsabzug}</Text>
+                    <Text style={ui.body}>Minderheitenschutz: {score.minderheitenschutz}</Text>
+                    <Text style={ui.body}>Togetherness: {score.togetherness}</Text>
+                    <Text style={ui.body}>Wetter: {score.wetter}</Text>
+                    <Text style={ui.body}>Machbarkeit: {score.machbarkeit}</Text>
+                    <Text style={ui.body}>Rotation: {score.rotation}</Text>
+                    <Text style={ui.body}>Verlässlichkeit: {score.verlaesslichkeit}</Text>
+                    <Text style={ui.body}>Gesamt: {score.gesamt}</Text>
                   </Card>
                 ))
               : null}

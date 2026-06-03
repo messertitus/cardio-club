@@ -19,10 +19,13 @@ import {
   listMccSports,
   listMccSportContacts,
   listProfileNameChangeRequests,
+  listSportProfiles,
   reviewProfileNameChangeRequest,
+  setSportProfileActive,
   updateMccMemberRole,
   upsertMccSportContact,
   upsertMccSport,
+  upsertSportProfile,
   type ClubMemberRole,
   type MccEventState,
   type MccMember,
@@ -36,7 +39,7 @@ const roles: ClubMemberRole[] = ["member", "mod", "admin"];
 const intensityOptions: SportIntensityLevel[] = ["low", "medium", "high"];
 const locationOptions: SportLocationType[] = ["indoor", "outdoor", "water", "field", "flexible"];
 
-type AdminSection = "overview" | "contacts" | "sports" | "members" | "nameRequests";
+type AdminSection = "overview" | "contacts" | "sports" | "profiles" | "members" | "nameRequests";
 type PendingConfirm = { title: string; detail: string; onConfirm: () => void } | null;
 
 type SportDraft = {
@@ -59,6 +62,36 @@ const emptySportDraft: SportDraft = {
   combinableTags: "",
 };
 
+type ProfileDraft = {
+  sportId: string;
+  name: string;
+  locationName: string;
+  latitude: string;
+  longitude: string;
+  venueGroupKey: string;
+  locationType: SportLocationType;
+  minimumGroupSize: string;
+  maximumGroupSize: string;
+  apRequired: boolean;
+  reservationRequired: boolean;
+  lightingAvailable: boolean;
+};
+
+const emptyProfileDraft: ProfileDraft = {
+  sportId: "",
+  name: "",
+  locationName: "",
+  latitude: "",
+  longitude: "",
+  venueGroupKey: "",
+  locationType: "flexible",
+  minimumGroupSize: "1",
+  maximumGroupSize: "",
+  apRequired: false,
+  reservationRequired: false,
+  lightingAvailable: false,
+};
+
 export default function AdminScreen() {
   const params = useLocalSearchParams<{ section?: string }>();
   const { loading, user } = useAuth();
@@ -66,10 +99,13 @@ export default function AdminScreen() {
   const [state, setState] = useState<MccEventState | null>(null);
   const [members, setMembers] = useState<MccMember[]>([]);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
+  const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);
   const [sportContacts, setSportContacts] = useState<MccSportContact[]>([]);
   const [nameRequests, setNameRequests] = useState<Row<"profile_change_requests">[]>([]);
   const [sportDraft, setSportDraft] = useState<SportDraft>(emptySportDraft);
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [editingSportId, setEditingSportId] = useState<string | null>(null);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [contactSportId, setContactSportId] = useState<string | null>(null);
   const [contactUserId, setContactUserId] = useState<string | null>(null);
   const [contactNote, setContactNote] = useState("");
@@ -106,18 +142,26 @@ export default function AdminScreen() {
       return;
     }
 
-    const [membersResult, sportsResult, contactsResult, nameRequestsResult] = await Promise.all([
+    const [membersResult, sportsResult, contactsResult, profilesResult, nameRequestsResult] = await Promise.all([
       listMccMembers(supabase, {
         clubId: eventResult.data.clubId,
       }),
       listMccSports(supabase),
       listMccSportContacts(supabase),
+      listSportProfiles(supabase),
       listProfileNameChangeRequests(supabase),
     ]);
     setBusy(false);
 
-    if (membersResult.error || sportsResult.error || contactsResult.error || nameRequestsResult.error) {
-      setMessage(membersResult.error?.message ?? sportsResult.error?.message ?? contactsResult.error?.message ?? nameRequestsResult.error?.message ?? "Adminbereich konnte nicht geladen werden.");
+    if (membersResult.error || sportsResult.error || contactsResult.error || profilesResult.error || nameRequestsResult.error) {
+      setMessage(
+        membersResult.error?.message ??
+          sportsResult.error?.message ??
+          contactsResult.error?.message ??
+          profilesResult.error?.message ??
+          nameRequestsResult.error?.message ??
+          "Adminbereich konnte nicht geladen werden.",
+      );
       return;
     }
 
@@ -125,9 +169,14 @@ export default function AdminScreen() {
     setMembers(membersResult.data);
     setSports(sportsResult.data);
     setSportContacts(contactsResult.data);
+    setSportProfiles(profilesResult.data);
     setNameRequests(nameRequestsResult.data);
     setContactSportId((current) => current ?? sportsResult.data[0]?.id ?? null);
     setContactUserId((current) => current ?? membersResult.data[0]?.userId ?? null);
+    setProfileDraft((current) => ({
+      ...current,
+      sportId: current.sportId || sportsResult.data[0]?.id || "",
+    }));
   }
 
   useEffect(() => {
@@ -237,6 +286,72 @@ export default function AdminScreen() {
     await load();
   }
 
+  function editProfile(profile: Row<"sport_profiles">) {
+    setEditingProfileId(profile.id);
+    setProfileDraft({
+      sportId: profile.sport_id,
+      name: profile.name,
+      locationName: profile.location_name ?? "",
+      latitude: profile.latitude?.toString() ?? "",
+      longitude: profile.longitude?.toString() ?? "",
+      venueGroupKey: profile.venue_group_key ?? "",
+      locationType: profile.location_type,
+      minimumGroupSize: String(profile.minimum_group_size),
+      maximumGroupSize: profile.maximum_group_size?.toString() ?? "",
+      apRequired: profile.ap_required,
+      reservationRequired: Boolean(profile.reservation_required),
+      lightingAvailable: Boolean(profile.lighting_available),
+    });
+  }
+
+  function resetProfileDraft() {
+    setEditingProfileId(null);
+    setProfileDraft({ ...emptyProfileDraft, sportId: sports[0]?.id ?? "" });
+  }
+
+  async function saveProfile() {
+    if (!user) return;
+    const result = await upsertSportProfile(supabase, {
+      profileId: editingProfileId,
+      sportId: profileDraft.sportId,
+      name: profileDraft.name,
+      locationName: profileDraft.locationName,
+      latitude: parseOptionalNumber(profileDraft.latitude),
+      longitude: parseOptionalNumber(profileDraft.longitude),
+      venueGroupKey: profileDraft.venueGroupKey,
+      locationType: profileDraft.locationType,
+      isIndoor: profileDraft.locationType === "indoor",
+      minimumGroupSize: Math.max(1, Number(profileDraft.minimumGroupSize) || 1),
+      maximumGroupSize: parseOptionalNumber(profileDraft.maximumGroupSize),
+      apRequired: profileDraft.apRequired,
+      reservationRequired: profileDraft.reservationRequired,
+      lightingAvailable: profileDraft.lightingAvailable,
+      weatherRules: {
+        rainSensitive: profileDraft.locationType !== "indoor",
+        thunderstormUnsafe: profileDraft.locationType !== "indoor",
+        windSensitive: profileDraft.locationType === "water" || profileDraft.locationType === "field",
+      },
+      createdBy: user.id,
+    });
+
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+
+    resetProfileDraft();
+    await load();
+  }
+
+  async function toggleProfileActive(profile: Row<"sport_profiles">) {
+    const result = await setSportProfileActive(supabase, { profileId: profile.id, isActive: !profile.is_active });
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    await load();
+  }
+
   async function deleteSport(sport: Row<"sports">) {
     const result = await deleteMccSport(supabase, sport.id);
     if (result.error) {
@@ -273,6 +388,7 @@ export default function AdminScreen() {
             <View style={styles.adminGrid}>
               <AdminMenuCard title="Sport-APs" body="Ansprechpartner pro Sportart verwalten" onPress={() => setActiveSection("contacts")} />
               <AdminMenuCard title="Sportarten" body="Anlegen, ändern und löschen" onPress={() => setActiveSection("sports")} />
+              <AdminMenuCard title="Sportprofile" body="Orte, Wetter und Gruppengrößen pflegen" onPress={() => setActiveSection("profiles")} />
               <AdminMenuCard title="Mitglieder" body="Rechte und Deaktivierung" onPress={() => setActiveSection("members")} />
               <AdminMenuCard title="Namensanfragen" body={`${nameRequests.length} offene Freigaben`} onPress={() => setActiveSection("nameRequests")} />
             </View>
@@ -398,6 +514,87 @@ export default function AdminScreen() {
                   </View>
                 </View>
               ))}
+            </View>
+          ) : null}
+
+          {isAdmin && activeSection === "profiles" ? (
+            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Sportprofile verwalten</Text>
+              <PickerGroup
+                label="Sportart"
+                items={sports.map((sport) => ({ id: sport.id, label: sport.name }))}
+                selectedId={profileDraft.sportId || sports[0]?.id || null}
+                onSelect={(sportId) => setProfileDraft((draft) => ({ ...draft, sportId }))}
+              />
+              <View style={styles.formGrid}>
+                <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Profilname, z. B. Beachvolleyball im Stadtpark" />
+                <AdminInput value={profileDraft.locationName} onChangeText={(locationName) => setProfileDraft((draft) => ({ ...draft, locationName }))} placeholder="Ort" />
+                <AdminInput value={profileDraft.venueGroupKey} onChangeText={(venueGroupKey) => setProfileDraft((draft) => ({ ...draft, venueGroupKey }))} placeholder="Venue-Gruppe, z. B. seepark-freiburg" />
+                <AdminInput value={profileDraft.latitude} onChangeText={(latitude) => setProfileDraft((draft) => ({ ...draft, latitude }))} placeholder="Latitude" keyboardType="decimal-pad" inputMode="decimal" />
+                <AdminInput value={profileDraft.longitude} onChangeText={(longitude) => setProfileDraft((draft) => ({ ...draft, longitude }))} placeholder="Longitude" keyboardType="decimal-pad" inputMode="decimal" />
+                <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize }))} placeholder="Mindestanzahl" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize }))} placeholder="Maximalanzahl optional" keyboardType="number-pad" inputMode="numeric" />
+              </View>
+              <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
+              <View style={styles.roleRow}>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.apRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apRequired: !draft.apRequired }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.apRequired ? theme.inverse : theme.text }]}>AP nötig</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.reservationRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, reservationRequired: !draft.reservationRequired }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.reservationRequired ? theme.inverse : theme.text }]}>Reservierung</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.lightingAvailable ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, lightingAvailable: !draft.lightingAvailable }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.lightingAvailable ? theme.inverse : theme.text }]}>Licht</Text>
+                </Pressable>
+              </View>
+              <View style={styles.roleRow}>
+                <Pressable
+                  style={[styles.primaryButton, { backgroundColor: theme.button }]}
+                  onPress={() =>
+                    confirmAdminAction(
+                      editingProfileId ? "Sportprofil speichern?" : "Sportprofil anlegen?",
+                      editingProfileId ? `${profileDraft.name} wird geändert.` : `${profileDraft.name || "Neues Profil"} wird hinzugefügt.`,
+                      () => void saveProfile(),
+                    )
+                  }
+                >
+                  <Text style={[styles.primaryText, { color: theme.inverse }]}>{editingProfileId ? "Speichern" : "Anlegen"}</Text>
+                </Pressable>
+                {editingProfileId ? (
+                  <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={resetProfileDraft}>
+                    <Text style={[styles.roleText, { color: theme.text }]}>Abbrechen</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {sportProfiles.map((profile) => {
+                const sport = sports.find((entry) => entry.id === profile.sport_id);
+                return (
+                  <View key={profile.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
+                    <View>
+                      <Text style={[styles.name, { color: theme.text }]}>{profile.name}</Text>
+                      <Text style={[styles.muted, { color: theme.muted }]}>
+                        {sport?.name ?? "Sportart"} · {profile.location_name ?? "Ort offen"} · min. {profile.minimum_group_size}
+                        {profile.maximum_group_size ? ` · max. ${profile.maximum_group_size}` : ""}
+                      </Text>
+                      <Text style={[styles.muted, { color: profile.is_active ? theme.accent : theme.muted }]}>
+                        {profile.is_active ? "aktiv" : "inaktiv"} · {locationLabel(profile.location_type)}
+                        {profile.venue_group_key ? ` · ${profile.venue_group_key}` : ""}
+                      </Text>
+                    </View>
+                    <View style={styles.roleRow}>
+                      <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => editProfile(profile)}>
+                        <Text style={[styles.roleText, { color: theme.text }]}>Bearbeiten</Text>
+                      </Pressable>
+                      <Pressable style={[styles.roleButton, profile.is_active ? styles.dangerButton : { backgroundColor: theme.surface }]} onPress={() => void toggleProfileActive(profile)}>
+                        <Text style={profile.is_active ? styles.dangerText : [styles.roleText, { color: theme.text }]}>
+                          {profile.is_active ? "Deaktivieren" : "Aktivieren"}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           ) : null}
 
@@ -557,13 +754,21 @@ function PickerGroup({
 function sectionTitle(section: AdminSection): string {
   if (section === "contacts") return "Sport-APs";
   if (section === "sports") return "Sportarten";
+  if (section === "profiles") return "Sportprofile";
   if (section === "members") return "Mitglieder";
   if (section === "nameRequests") return "Namensanfragen";
   return "Club steuern";
 }
 
 function isAdminSection(value: string): value is AdminSection {
-  return value === "overview" || value === "contacts" || value === "sports" || value === "members" || value === "nameRequests";
+  return value === "overview" || value === "contacts" || value === "sports" || value === "profiles" || value === "members" || value === "nameRequests";
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function roleLabel(role: ClubMemberRole): string {

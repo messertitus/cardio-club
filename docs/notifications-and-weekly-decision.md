@@ -2,7 +2,7 @@
 
 ## Weekly Decision
 
-The fair sport-selection algorithm stays in TypeScript (`src/lib/fairSportSelection.ts`).
+The Fairness-First Constellation algorithm stays in TypeScript (`src/lib/fairConstellationSelection.ts`).
 
 For the MVP test phase:
 
@@ -14,8 +14,11 @@ For a fully automatic Wednesday decision, run a small server job or Supabase Edg
 
 1. Load the current weekly event.
 2. Call the existing TypeScript decision service.
-3. Persist `selected_sport_id`, optional `secondary_sport_id`, `decision_reason`, and `status = decided`.
-4. Send notifications to stored push subscriptions.
+3. Load concrete `sport_profiles`, No-Gos, `going`/`maybe` attendance, history, and weather data.
+4. Persist `decision_type`, `decision_scorecard`, `weather_snapshot`, compatibility `selected_sport_id`/`secondary_sport_id`, `decision_reason`, `event_activities`, and `status = decided`.
+5. Send notifications to stored push subscriptions.
+
+Votes without an explicit `going` or `maybe` attendance row should not influence the decision. After the event, an admin/AP should use `review_event_attendance` to store actual attendance, which feeds future reliability weighting.
 
 ## Web Push
 
