@@ -1,13 +1,16 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Text } from "react-native";
+import { SearchField } from "../../../src/components/FormControls";
 import { Button, Card, EmptyState, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
+import { excludeNonAttendingEntries, excludeNonAttendingVotes } from "../../../src/lib/votingEligibility";
 import type { VoteRank } from "../../../src/lib/votingRules";
 import { supabase } from "../../../src/lib/supabase";
 import {
   getEventDecisionPreview,
+  listAttendance,
   listEventNoGos,
   listEventProposals,
   listEventVotes,
@@ -16,7 +19,9 @@ import {
   removeSportNoGo,
   removeVote,
   setSportNoGo,
+  updateAttendance,
   voteForSport,
+  type AttendanceStatus,
   type EventDecisionPreview,
   type Row,
 } from "../../../src/services";
@@ -29,8 +34,10 @@ export default function VoteOnSportsScreen() {
   const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);
   const [votes, setVotes] = useState<Row<"sport_votes">[]>([]);
   const [noGos, setNoGos] = useState<Row<"sport_no_gos">[]>([]);
+  const [attendance, setAttendance] = useState<Row<"attendance">[]>([]);
   const [preview, setPreview] = useState<EventDecisionPreview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [proposalSearch, setProposalSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const sportsById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport])), [sports]);
@@ -45,6 +52,20 @@ export default function VoteOnSportsScreen() {
   );
   const myVoteBySport = useMemo(() => new Map(myVotes.map((vote) => [vote.sport_id, vote])), [myVotes]);
   const usedRankBySport = useMemo(() => new Map(myVotes.map((vote) => [vote.vote_rank, vote.sport_id])), [myVotes]);
+  const myAttendance = useMemo(() => attendance.find((entry) => entry.user_id === user?.id) ?? null, [attendance, user?.id]);
+  const canVote = myAttendance?.status === "going" || myAttendance?.status === "maybe";
+  const filteredProposals = useMemo(() => {
+    const query = proposalSearch.trim().toLowerCase();
+    if (!query) return proposals;
+    return proposals.filter((proposal) => {
+      const sport = sportsById.get(proposal.sport_id);
+      const profileText = sportProfiles
+        .filter((profile) => profile.sport_id === proposal.sport_id)
+        .map((profile) => [profile.name, profile.location_name, profile.location_city, profile.venue_group_key].filter(Boolean).join(" "))
+        .join(" ");
+      return [sport?.name, sport?.category, sport?.intensity_level, profileText].filter(Boolean).join(" ").toLowerCase().includes(query);
+    });
+  }, [proposalSearch, proposals, sportProfiles, sportsById]);
 
   useEffect(() => {
     load();
@@ -52,10 +73,11 @@ export default function VoteOnSportsScreen() {
 
   async function load() {
     setLoading(true);
-    const [sportsResult, proposalsResult, votesResult, previewResult] = await Promise.all([
+    const [sportsResult, proposalsResult, votesResult, attendanceResult, previewResult] = await Promise.all([
       listSports(supabase),
       listEventProposals(supabase, eventId),
       listEventVotes(supabase, eventId),
+      listAttendance(supabase, eventId),
       getEventDecisionPreview(supabase, { eventId }),
     ]);
     const proposedSportIds = proposalsResult.data?.map((proposal) => proposal.sport_id) ?? [];
@@ -66,14 +88,16 @@ export default function VoteOnSportsScreen() {
     setSports(sportsResult.data ?? []);
     setProposals(proposalsResult.data ?? []);
     setSportProfiles(profilesResult.data ?? []);
-    setVotes(votesResult.data ?? []);
-    setNoGos(noGosResult.data ?? []);
+    setAttendance(attendanceResult.data ?? []);
+    setVotes(excludeNonAttendingVotes(votesResult.data ?? [], attendanceResult.data ?? []));
+    setNoGos(excludeNonAttendingEntries(noGosResult.data ?? [], attendanceResult.data ?? []));
     setPreview(previewResult.data);
     setError(
       sportsResult.error?.message ??
         proposalsResult.error?.message ??
         profilesResult.error?.message ??
         votesResult.error?.message ??
+        attendanceResult.error?.message ??
         noGosResult.error?.message ??
         previewResult.error?.message ??
         null,
@@ -84,6 +108,11 @@ export default function VoteOnSportsScreen() {
   async function setRankedVote(sportId: string, rank: VoteRank) {
     if (!user) {
       router.replace("/auth");
+      return;
+    }
+
+    if (!canVote) {
+      setError("Bitte setze zuerst deine Teilnahme auf Dabei oder Vielleicht.");
       return;
     }
 
@@ -109,6 +138,11 @@ export default function VoteOnSportsScreen() {
   async function toggleNoGo(sportId: string) {
     if (!user) {
       router.replace("/auth");
+      return;
+    }
+
+    if (!canVote) {
+      setError("No-Go ist erst möglich, wenn du Dabei oder Vielleicht gesetzt hast.");
       return;
     }
 
@@ -152,6 +186,21 @@ export default function VoteOnSportsScreen() {
     await load();
   }
 
+  async function chooseAttendance(status: AttendanceStatus) {
+    if (!user) {
+      router.replace("/auth");
+      return;
+    }
+
+    const result = await updateAttendance(supabase, { eventId, userId: user.id, status });
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    await load();
+  }
+
   function countVotes(sportId: string) {
     return votes
       .filter((vote) => vote.sport_id === sportId)
@@ -174,6 +223,16 @@ export default function VoteOnSportsScreen() {
       <ErrorText>{error}</ErrorText>
       {loading ? <LoadingState /> : null}
 
+      <Card>
+        <Pill>Schritt 1</Pill>
+        <Text style={ui.cardTitle}>Teilnahme zuerst</Text>
+        <Text style={ui.body}>Nur Dabei und Vielleicht fließen in die Entscheidung ein. Nicht dabei wird ignoriert.</Text>
+        <Text style={ui.body}>Dein Status: {attendanceLabel(myAttendance?.status)}</Text>
+        <Button label="Ich bin dabei" variant={myAttendance?.status === "going" ? "primary" : "secondary"} onPress={() => chooseAttendance("going")} />
+        <Button label="Vielleicht" variant={myAttendance?.status === "maybe" ? "primary" : "secondary"} onPress={() => chooseAttendance("maybe")} />
+        <Button label="Nicht dabei" variant={myAttendance?.status === "not_going" ? "primary" : "ghost"} onPress={() => chooseAttendance("not_going")} />
+      </Card>
+
       {previewPresentation ? (
         <Card>
           <Pill>Vorschau</Pill>
@@ -187,6 +246,7 @@ export default function VoteOnSportsScreen() {
       <Card>
         <Text style={ui.cardTitle}>Deine Stimmen</Text>
         <Text style={ui.body}>Maximal drei Stimmen pro Woche. Dieselbe Sportart kann nicht doppelt gewählt werden.</Text>
+        {!canVote ? <Text style={ui.body}>Abstimmen ist gesperrt, bis du Dabei oder Vielleicht gewählt hast.</Text> : null}
         {myVotes.length === 0 ? <Text style={ui.body}>Du hast noch nicht abgestimmt.</Text> : null}
         {myVotes.map((vote) => (
           <Text key={vote.id} style={ui.body}>
@@ -196,7 +256,9 @@ export default function VoteOnSportsScreen() {
       </Card>
 
       {!loading && proposals.length === 0 ? <EmptyState title="Noch keine Vorschläge" body="Schlage zuerst eine Sportart vor." /> : null}
-      {proposals.map((proposal) => {
+      {proposals.length > 0 ? <SearchField value={proposalSearch} onChangeText={setProposalSearch} placeholder="Sportart oder Standort suchen" /> : null}
+      {!loading && proposals.length > 0 && filteredProposals.length === 0 ? <Text style={ui.body}>Keine Vorschläge für diese Suche.</Text> : null}
+      {filteredProposals.map((proposal) => {
         const sport = sportsById.get(proposal.sport_id);
         const myVote = myVoteBySport.get(proposal.sport_id);
         const myNoGo = noGos.some((entry) => entry.user_id === user?.id && entry.sport_id === proposal.sport_id);
@@ -218,7 +280,7 @@ export default function VoteOnSportsScreen() {
                   key={rank}
                   label={rankLabel(typedRank)}
                   variant={myVote?.vote_rank === typedRank ? "primary" : "secondary"}
-                  disabled={Boolean(rankUsedByOtherSport || myNoGo)}
+                  disabled={Boolean(!canVote || rankUsedByOtherSport || myNoGo)}
                   onPress={() => setRankedVote(proposal.sport_id, typedRank)}
                 />
               );
@@ -227,6 +289,7 @@ export default function VoteOnSportsScreen() {
             <Button
               label={myNoGo ? "No-Go entfernen" : "Als No-Go markieren"}
               variant="ghost"
+              disabled={!canVote}
               onPress={() => toggleNoGo(proposal.sport_id)}
             />
           </Card>
@@ -234,6 +297,13 @@ export default function VoteOnSportsScreen() {
       })}
     </Screen>
   );
+}
+
+function attendanceLabel(status?: AttendanceStatus): string {
+  if (status === "going") return "Dabei";
+  if (status === "maybe") return "Vielleicht";
+  if (status === "not_going") return "Nicht dabei";
+  return "Noch offen";
 }
 
 function profileSummary(profiles: Row<"sport_profiles">[], sportId: string): string {

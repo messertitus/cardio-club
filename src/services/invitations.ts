@@ -7,6 +7,12 @@ export type InvitationCodeWithUsage = Row<"invitation_codes"> & {
   usedByPhone: string | null;
 };
 
+export type InvitationTreeEntry = Row<"invitation_codes"> & {
+  createdByName: string | null;
+  usedByName: string | null;
+  usedByCity: string | null;
+};
+
 export async function validateInvitationCode(
   supabase: AppSupabaseClient,
   code: string,
@@ -89,6 +95,42 @@ export async function listInvitationCodes(
         usedByPhone: profile?.phone ?? null,
       };
     }),
+  );
+}
+
+export async function listInvitationTree(supabase: AppSupabaseClient): Promise<ServiceResult<InvitationTreeEntry[]>> {
+  const { data, error } = await supabase
+    .from("invitation_codes")
+    .select()
+    .order("created_at", { ascending: true });
+
+  if (error || !data) {
+    return fail("Einladungsbaum konnte nicht geladen werden.", error);
+  }
+
+  const profileIds = [
+    ...new Set(
+      data
+        .flatMap((code) => [code.created_by, code.used_by])
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const profilesResult = profileIds.length
+    ? await supabase.from("profiles").select("id, display_name, city").in("id", profileIds)
+    : { data: [] as Array<Pick<Row<"profiles">, "id" | "display_name" | "city">>, error: null };
+
+  if (profilesResult.error || !profilesResult.data) {
+    return fail("Einladungsbaum konnte nicht zugeordnet werden.", profilesResult.error);
+  }
+
+  const profiles = new Map(profilesResult.data.map((profile) => [profile.id, profile]));
+  return ok(
+    data.map((code) => ({
+      ...code,
+      createdByName: code.created_by ? profiles.get(code.created_by)?.display_name ?? "Mitglied" : null,
+      usedByName: code.used_by ? profiles.get(code.used_by)?.display_name ?? "Mitglied" : null,
+      usedByCity: code.used_by ? profiles.get(code.used_by)?.city ?? null : null,
+    })),
   );
 }
 

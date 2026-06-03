@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Text } from "react-native";
+import { SearchField } from "../../../src/components/FormControls";
 import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
@@ -13,9 +14,21 @@ export default function ProposeSportScreen() {
   const [proposals, setProposals] = useState<Row<"sport_proposals">[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingSportId, setSavingSportId] = useState<string | null>(null);
+  const [sportSearch, setSportSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const proposedSportIds = useMemo(() => new Set(proposals.map((proposal) => proposal.sport_id)), [proposals]);
+  const filteredSports = useMemo(() => {
+    const query = sportSearch.trim().toLowerCase();
+    if (!query) return sports;
+    return sports.filter((sport) =>
+      [sport.name, sport.category, sport.intensity_level, sport.combinable_tags?.join(" ")]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [sportSearch, sports]);
 
   useEffect(() => {
     load();
@@ -59,7 +72,9 @@ export default function ProposeSportScreen() {
     <Screen title="Sportart vorschlagen" subtitle="Nur vorgeschlagene Sportarten können diese Woche gewinnen.">
       <ErrorText>{error}</ErrorText>
       {loading ? <LoadingState /> : null}
-      {sports.map((sport) => {
+      <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart suchen" />
+      {!loading && filteredSports.length === 0 ? <Text style={ui.body}>Keine Sportarten für diese Suche.</Text> : null}
+      {filteredSports.map((sport) => {
         const proposed = proposedSportIds.has(sport.id);
 
         return (

@@ -15,8 +15,9 @@ For a fully automatic Wednesday decision, run a small server job or Supabase Edg
 1. Load the current weekly event.
 2. Call the existing TypeScript decision service.
 3. Load concrete `sport_profiles`, No-Gos, `going`/`maybe` attendance, history, and weather data.
-4. Persist `decision_type`, `decision_scorecard`, `weather_snapshot`, compatibility `selected_sport_id`/`secondary_sport_id`, `decision_reason`, `event_activities`, and `status = decided`.
-5. Send notifications to stored push subscriptions.
+4. Build Single, Multi-Sport, and Twin candidates from sport profiles, then rank them with fairness-first ordering: fairness and minority protection can overrule close raw totals, shared events stay preferred until Twin is clearly fairer or stronger.
+5. Persist `decision_type`, `decision_scorecard`, `weather_snapshot`, compatibility `selected_sport_id`/`secondary_sport_id`, `decision_reason`, `event_activities`, and `status = decided`.
+6. Send notifications to stored push subscriptions.
 
 Votes without an explicit `going` or `maybe` attendance row should not influence the decision. After the event, an admin/AP should use `review_event_attendance` to store actual attendance, which feeds future reliability weighting.
 

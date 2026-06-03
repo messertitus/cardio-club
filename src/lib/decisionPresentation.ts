@@ -14,6 +14,9 @@ export type DecisionPresentation = {
     profileName: string;
     locationName?: string | null;
     participantCount: number;
+    activityContactId?: string | null;
+    weatherNotes: string[];
+    practicalityNotes: string[];
   }>;
   scoreRows: Array<{
     id: string;
@@ -54,6 +57,9 @@ export function buildDecisionPresentation(
       profileName: activity.profileName,
       locationName: activity.locationName,
       participantCount: activity.participantCount,
+      activityContactId: activity.activityContactId,
+      weatherNotes: activity.weatherNotes ?? [],
+      practicalityNotes: activity.practicalityNotes ?? [],
     })),
     scoreRows: decision.scores.map((score) => mapScoreRow(score, sportNames)),
   };

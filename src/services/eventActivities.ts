@@ -35,6 +35,17 @@ export async function replaceEventActivitiesFromDecision(
     return ok([]);
   }
 
+  const sportIds = [...new Set(input.decision.activities.map((activity) => activity.sportId))];
+  const sportsResult = sportIds.length
+    ? await supabase.from("sports").select("id, name").in("id", sportIds)
+    : { data: [] as Array<Pick<Row<"sports">, "id" | "name">>, error: null };
+
+  if (sportsResult.error || !sportsResult.data) {
+    return { data: null, error: fromPostgrestError(sportsResult.error, "Sportarten der Event-Aktivitäten konnten nicht geladen werden.") };
+  }
+
+  const sportNames = new Map(sportsResult.data.map((sport) => [sport.id, sport.name]));
+
   const { data, error } = await supabase
     .from("event_activities")
     .insert(
@@ -44,7 +55,7 @@ export async function replaceEventActivitiesFromDecision(
         sport_profile_id: activity.profileId,
         role: activity.role,
         activity_type: input.decision.mode,
-        title: activity.profileName,
+        title: activityTitle(sportNames.get(activity.sportId) ?? "Sportart", activity.profileName, activity.locationName),
         location: activity.locationName ?? null,
         starts_at: input.startsAt ?? null,
         activity_contact_id: activity.activityContactId ?? null,
@@ -58,4 +69,23 @@ export async function replaceEventActivitiesFromDecision(
   }
 
   return ok(data);
+}
+
+function activityTitle(sportName: string, profileName: string, locationName?: string | null): string {
+  if (profileName.toLowerCase().includes(sportName.toLowerCase())) {
+    return profileName;
+  }
+
+  if (locationName) {
+    return `${sportName} ${locationPreposition(locationName)} ${locationName}`;
+  }
+
+  return `${sportName} · ${profileName}`;
+}
+
+function locationPreposition(location: string): string {
+  const lower = location.toLowerCase();
+  if (lower.includes("see") || lower.includes("rhein") || lower.includes("ufer")) return "am";
+  if (lower.includes("park") || lower.includes("halle") || lower.includes("platz") || lower.includes("schänzle")) return "im";
+  return "in";
 }

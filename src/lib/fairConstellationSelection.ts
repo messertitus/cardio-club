@@ -16,11 +16,9 @@ export type AbstractSport = {
 export type WeatherRules = {
   requiresDry?: boolean;
   rainSensitive?: boolean;
-  windSensitive?: boolean;
   heatSensitive?: boolean;
   coldSensitive?: boolean;
   thunderstormUnsafe?: boolean;
-  maxWindKmh?: number;
   maxPrecipitationMm?: number;
   minTemperatureC?: number;
   maxTemperatureC?: number;
@@ -40,9 +38,16 @@ export type SportProfile = {
   maximumGroupSize?: number | null;
   requiredEquipment?: string[];
   availableEquipment?: string[];
+  costNote?: string | null;
+  openingNotes?: string | null;
   lightingAvailable?: boolean | null;
+  transitNotes?: string | null;
+  amenityNotes?: string | null;
   reservationRequired?: boolean | null;
+  safetyNotes?: string | null;
+  locationRules?: string | null;
   apRequired?: boolean | null;
+  apContactId?: string | null;
   weatherRules?: WeatherRules | null;
   isActive?: boolean;
 };
@@ -115,6 +120,9 @@ export type FairConstellationOptions = {
   minSecondaryVoteScore: number;
   strongSecondaryVoteRatio: number;
   twinScoreRatio: number;
+  fairnessFirstMargin: number;
+  fairnessOverrideWindow: number;
+  twinFairnessMargin: number;
   socialRadiusKm: number;
   sameSpotRadiusKm: number;
   previousPrimaryPenalty: number;
@@ -145,6 +153,8 @@ export type CandidateActivity = {
   assignedUserIds: string[];
   participantCount: number;
   activityContactId?: string | null;
+  weatherNotes?: string[];
+  practicalityNotes?: string[];
 };
 
 export type CandidateScore = {
@@ -197,7 +207,8 @@ type ProfileEvaluation = {
   weatherScore: number;
   practicalityScore: number;
   excluded?: string;
-  reasons: string[];
+  weatherReasons: string[];
+  practicalityReasons: string[];
 };
 
 const DEFAULT_OPTIONS: FairConstellationOptions = {
@@ -210,6 +221,9 @@ const DEFAULT_OPTIONS: FairConstellationOptions = {
   minSecondaryVoteScore: 1.2,
   strongSecondaryVoteRatio: 0.32,
   twinScoreRatio: 0.82,
+  fairnessFirstMargin: 0.45,
+  fairnessOverrideWindow: 2.2,
+  twinFairnessMargin: 0.7,
   socialRadiusKm: 0.75,
   sameSpotRadiusKm: 0.12,
   previousPrimaryPenalty: 0.85,
@@ -340,7 +354,7 @@ export function selectFairConstellation(input: FairConstellationInput): FairCons
     }
   }
 
-  const scores = candidates.sort(compareCandidates);
+  const scores = candidates.sort((a, b) => compareCandidates(a, b, options));
   const winner = scores[0];
 
   if (!winner) {
@@ -405,14 +419,14 @@ function evaluateProfiles(
   return profiles.map((profile) => {
     const weather = scoreWeather(profile, weatherSnapshot[profile.id]);
     const practicality = scoreBasePracticality(profile);
-    const reasons = [...weather.reasons, ...practicality.reasons];
 
     return {
       profile,
       weatherScore: weather.score,
       practicalityScore: practicality.score,
       excluded: weather.excluded,
-      reasons,
+      weatherReasons: weather.reasons,
+      practicalityReasons: practicality.reasons,
     };
   });
 }
@@ -436,15 +450,10 @@ function scoreWeather(
   const weatherCode = weather.weatherCode ?? 0;
   const precipitation = weather.precipitationMm ?? 0;
   const precipitationProbability = weather.precipitationProbability ?? 0;
-  const wind = Math.max(weather.windSpeedKmh ?? 0, weather.windGustsKmh ?? 0);
   const temperature = weather.temperatureC;
 
   if ((rules.thunderstormUnsafe ?? true) && weatherCode >= 95) {
     return { score: -5, excluded: "Gefährliches Gewitterwetter schließt dieses Outdoor-Profil aus.", reasons };
-  }
-
-  if (wind >= (rules.maxWindKmh ?? 72)) {
-    return { score: -5, excluded: "Gefährlicher Wind schließt dieses Profil aus.", reasons };
   }
 
   let score = 0.4;
@@ -457,11 +466,6 @@ function scoreWeather(
   } else {
     score += 0.35;
     reasons.push("Das Wetter passt zum Outdoor-Profil.");
-  }
-
-  if (rules.windSensitive && wind > 35) {
-    score -= 0.35;
-    reasons.push("Wind ist für dieses Profil störend.");
   }
 
   if (rules.heatSensitive && typeof temperature === "number" && temperature > (rules.maxTemperatureC ?? 30)) {
@@ -480,10 +484,42 @@ function scoreWeather(
 function scoreBasePracticality(profile: SportProfile): { score: number; reasons: string[] } {
   const reasons: string[] = [];
   let score = 0.35;
+  const requiredEquipment = normalizeList(profile.requiredEquipment);
+  const availableEquipment = new Set(normalizeList(profile.availableEquipment));
 
   if (profile.lightingAvailable) {
     score += 0.12;
     reasons.push("Beleuchtung ist vorhanden.");
+  }
+
+  if (profile.openingNotes) {
+    score += 0.08;
+    reasons.push("Öffnungszeiten sind für dieses Profil dokumentiert.");
+  }
+
+  if (profile.transitNotes) {
+    score += 0.08;
+    reasons.push("Anreise, ÖPNV oder Parken sind dokumentiert.");
+  }
+
+  if (profile.amenityNotes) {
+    score += 0.08;
+    reasons.push("Infrastruktur wie Wasser, Toiletten oder Umkleiden ist dokumentiert.");
+  }
+
+  if (profile.locationRules) {
+    score += 0.05;
+    reasons.push("Standortregeln sind hinterlegt.");
+  }
+
+  if (profile.safetyNotes) {
+    score += 0.03;
+    reasons.push("Sicherheitsinformationen sind hinterlegt.");
+  }
+
+  if (profile.costNote) {
+    score -= 0.04;
+    reasons.push("Kosten müssen berücksichtigt werden.");
   }
 
   if (profile.reservationRequired) {
@@ -491,9 +527,31 @@ function scoreBasePracticality(profile: SportProfile): { score: number; reasons:
     reasons.push("Reservierung muss geprüft werden.");
   }
 
-  if (profile.apRequired) {
-    score -= 0.08;
-    reasons.push("AP vor Ort wird benötigt.");
+  if (profile.apRequired && profile.apContactId) {
+    score += 0.12;
+    reasons.push("Ansprechpartner ist für dieses Profil hinterlegt.");
+  } else if (profile.apRequired) {
+    score -= 0.18;
+    reasons.push("Ansprechpartner vor Ort wird benötigt, ist aber noch nicht profilbezogen hinterlegt.");
+  } else if (profile.apContactId) {
+    score += 0.06;
+    reasons.push("Profil-AP ist hinterlegt.");
+  }
+
+  if (requiredEquipment.length > 0) {
+    const missingEquipment = requiredEquipment.filter((item) => !availableEquipment.has(item));
+    if (missingEquipment.length === 0) {
+      score += 0.14;
+      reasons.push("Noetige Ausstattung ist als verfuegbar markiert.");
+    } else {
+      score -= Math.min(0.4, 0.12 * missingEquipment.length);
+      reasons.push(`Ausstattung offen: ${missingEquipment.slice(0, 3).join(", ")}.`);
+    }
+  }
+
+  if (!profile.isIndoor && profile.locationType !== "indoor" && !hasCoordinates(profile)) {
+    score -= 0.12;
+    reasons.push("Koordinaten fehlen, daher sind Wetter und Naehe weniger belastbar.");
   }
 
   return { score: round(score), reasons };
@@ -544,6 +602,9 @@ function buildCandidate({
       role: index === 0 ? "primary" : "secondary",
       assignedUserIds,
       participantCount: assignedUserIds.length,
+      activityContactId: profile.apContactId ?? null,
+      weatherNotes: profileEvaluations[index].weatherReasons,
+      practicalityNotes: profileEvaluations[index].practicalityReasons,
     };
   });
 
@@ -843,10 +904,57 @@ function proximityScore(proximity: ProximityLevel): number {
   return -0.1;
 }
 
-function compareCandidates(a: CandidateScore, b: CandidateScore): number {
+function compareCandidates(a: CandidateScore, b: CandidateScore, options: FairConstellationOptions): number {
+  const fairnessComparison = compareFairnessFirst(a, b, options);
+  if (fairnessComparison !== 0) return fairnessComparison;
+
+  const togethernessComparison = compareTogethernessPreference(a, b, options);
+  if (togethernessComparison !== 0) return togethernessComparison;
+
   if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
   if (typePriority(b.mode) !== typePriority(a.mode)) return typePriority(b.mode) - typePriority(a.mode);
   return a.id.localeCompare(b.id);
+}
+
+function compareFairnessFirst(a: CandidateScore, b: CandidateScore, options: FairConstellationOptions): number {
+  const aFairness = fairnessPriorityScore(a);
+  const bFairness = fairnessPriorityScore(b);
+  const fairnessGap = aFairness - bFairness;
+  const scoreGap = a.finalScore - b.finalScore;
+
+  if (Math.abs(fairnessGap) >= options.fairnessFirstMargin && Math.abs(scoreGap) <= options.fairnessOverrideWindow) {
+    return fairnessGap > 0 ? -1 : 1;
+  }
+
+  return 0;
+}
+
+function compareTogethernessPreference(a: CandidateScore, b: CandidateScore, options: FairConstellationOptions): number {
+  if (a.mode === b.mode) return 0;
+
+  const aIsTwin = a.mode === "twin";
+  const bIsTwin = b.mode === "twin";
+  if (aIsTwin !== bIsTwin) {
+    const twin = aIsTwin ? a : b;
+    const shared = aIsTwin ? b : a;
+    const twinFairnessGap = fairnessPriorityScore(twin) - fairnessPriorityScore(shared);
+    const twinScoreGap = twin.finalScore - shared.finalScore;
+    const twinCanWin = twinFairnessGap >= options.twinFairnessMargin || twinScoreGap >= options.twinScoreRatio;
+
+    if (!twinCanWin) {
+      return aIsTwin ? 1 : -1;
+    }
+  }
+
+  if (Math.abs(a.finalScore - b.finalScore) <= 0.35 && Math.abs(fairnessPriorityScore(a) - fairnessPriorityScore(b)) <= 0.35) {
+    return typePriority(a.mode) > typePriority(b.mode) ? -1 : 1;
+  }
+
+  return 0;
+}
+
+function fairnessPriorityScore(candidate: CandidateScore): number {
+  return round(candidate.scoreBreakdown.fairness + candidate.scoreBreakdown.minorityProtection);
 }
 
 function typePriority(mode: ConstellationMode): number {
@@ -1057,6 +1165,12 @@ function groupBy<T>(items: T[], keyForItem: (item: T) => string): Map<string, T[
     groups.set(key, group);
   }
   return groups;
+}
+
+function normalizeList(values: string[] | undefined): string[] {
+  return (values ?? [])
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 function hasCoordinates(profile: SportProfile): boolean {

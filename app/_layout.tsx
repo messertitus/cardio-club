@@ -29,7 +29,7 @@ function RootStack() {
       >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="profile" options={{ title: "Profil" }} />
-          <Stack.Screen name="ideas" options={{ title: "Sportideen" }} />
+          <Stack.Screen name="ideas" options={{ title: "Sportarten und Standorte" }} />
           <Stack.Screen name="chat" options={{ title: "Chat" }} />
           <Stack.Screen name="members" options={{ title: "Mitglieder" }} />
           <Stack.Screen name="menu" options={{ title: "Menü" }} />

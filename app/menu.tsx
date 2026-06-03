@@ -10,7 +10,7 @@ import { ThemeToggle } from "../src/components/ThemeToggle";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
-import { isCurrentUserAdmin, listProfileNameChangeRequests, listSportIdeas } from "../src/services";
+import { isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas } from "../src/services";
 
 const darkLogo = require("../assets/mcc-logo-white-symbol-transparent.png");
 const lightLogo = require("../assets/mcc-logo-color-symbol.png");
@@ -20,7 +20,7 @@ type AdminNotification = {
   id: string;
   title: string;
   body: string;
-  href: "/ideas" | "/admin?section=nameRequests";
+  href: string;
 };
 
 export default function MenuScreen() {
@@ -47,14 +47,14 @@ export default function MenuScreen() {
         return;
       }
 
-      const [ideasResult, namesResult] = await Promise.all([listSportIdeas(supabase), listProfileNameChangeRequests(supabase)]);
+      const [ideasResult, namesResult, directChatsResult] = await Promise.all([listSportIdeas(supabase), listProfileNameChangeRequests(supabase), listDirectChats(supabase)]);
       const pendingIdeas: AdminNotification[] =
         ideasResult.data
           ?.filter((idea) => idea.status === "pending")
           .map((idea) => ({
             id: `sport-idea:${idea.id}`,
             title: "Sportidee",
-            body: idea.name,
+            body: idea.name ?? idea.profile_name ?? "Entwurf ohne Namen",
             href: "/ideas",
           })) ?? [];
       const pendingNames: AdminNotification[] =
@@ -64,8 +64,17 @@ export default function MenuScreen() {
           body: request.requested_display_name,
           href: "/admin?section=nameRequests",
         })) ?? [];
+      const openDirectChats: AdminNotification[] =
+        directChatsResult.data
+          ?.filter((chat) => chat.status === "open" && chat.admin_id === user.id)
+          .map((chat) => ({
+            id: `direct-chat:${chat.id}:${chat.last_message_at}`,
+            title: "Admin-Direktchat",
+            body: chat.requesterName,
+            href: `/chat?directChatId=${chat.id}`,
+          })) ?? [];
 
-      setNotifications([...pendingIdeas, ...pendingNames]);
+      setNotifications([...openDirectChats, ...pendingIdeas, ...pendingNames]);
     }
 
     void loadAdminState();
@@ -77,7 +86,7 @@ export default function MenuScreen() {
     setReadNotifications(nextRead);
     setNotificationsOpen(false);
     await saveReadNotifications(user.id, nextRead);
-    router.push(notification.href);
+    router.push(notification.href as never);
   }
 
   async function markNotificationUnread(notification: AdminNotification) {
@@ -130,7 +139,7 @@ export default function MenuScreen() {
           </Reveal>
 
           <View style={styles.grid}>
-            <MenuItem index={1} title="Sportideen" body="Neue Aktivität vorschlagen" onPress={() => router.push("/ideas")} />
+            <MenuItem index={1} title="Sportarten und Standorte" body="Neue Aktivität vorschlagen" onPress={() => router.push("/ideas")} />
             <MenuItem index={2} title="PIN" body="App-PIN ändern" onPress={() => router.push("/pin")} />
             <MenuItem index={3} title="Push" body="Benachrichtigungen verwalten" onPress={() => router.push("/push")} />
             <MenuItem index={4} title="Profil" body="Name, Stadt und Telefonnummer" onPress={() => router.push("/profile")} />
@@ -228,20 +237,6 @@ function NotificationPreviewPanel({
       })}
     </View>
   );
-}
-
-async function loadReadNotificationIds(userId: string): Promise<Set<string>> {
-  const value = await AsyncStorage.getItem(readNotificationsKey(userId));
-  if (!value) return new Set();
-  try {
-    return new Set(JSON.parse(value) as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-async function saveReadNotificationIds(userId: string, ids: Set<string>): Promise<void> {
-  await AsyncStorage.setItem(readNotificationsKey(userId), JSON.stringify([...ids]));
 }
 
 async function loadReadNotifications(userId: string): Promise<Record<string, number>> {

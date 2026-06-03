@@ -1,5 +1,5 @@
 import { buildDecisionPresentation } from "../lib/decisionPresentation";
-import { excludeNonAttendingVotes } from "../lib/votingEligibility";
+import { excludeNonAttendingEntries, excludeNonAttendingVotes } from "../lib/votingEligibility";
 import type { VoteRank } from "../lib/votingRules";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import { listAttendance, updateAttendance } from "./attendance";
@@ -84,6 +84,7 @@ export async function getMccEventState(
   if (sportProfiles.error) return { data: null, error: sportProfiles.error };
 
   const visibleVotes = excludeNonAttendingVotes(votes.data, attendance.data);
+  const visibleNoGos = excludeNonAttendingEntries(noGos.data, attendance.data);
   const decision = decisionPreview.error ? emptyDecision(decisionPreview.error.message) : decisionPreview.data;
   const names = new Map(sports.data.map((sport) => [sport.id, sport.name]));
 
@@ -94,12 +95,12 @@ export async function getMccEventState(
     proposals: proposals.data,
     sportProfiles: sportProfiles.data,
     votes: visibleVotes,
-    noGos: noGos.data,
+    noGos: visibleNoGos,
     attendance: attendance.data,
     eventActivities: eventActivities.data,
     myAttendance: attendance.data.find((row) => row.user_id === userId) ?? null,
     myVotes: visibleVotes.filter((row) => row.user_id === userId).sort((a, b) => a.vote_rank - b.vote_rank),
-    myNoGos: noGos.data.filter((row) => row.user_id === userId),
+    myNoGos: visibleNoGos.filter((row) => row.user_id === userId),
     decision,
     decisionText: buildDecisionPresentation(decision, names),
   });

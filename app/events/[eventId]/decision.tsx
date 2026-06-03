@@ -98,6 +98,9 @@ export default function DecisionResultScreen() {
                 <Text key={activity.profileId} style={ui.body}>
                   {activity.sportName}: {activity.profileName}
                   {activity.locationName ? ` · ${activity.locationName}` : ""} · {activity.participantCount} Personen
+                  {activity.activityContactId ? " · AP hinterlegt" : ""}
+                  {(activity.weatherNotes ?? []).length > 0 ? `\nWetter: ${(activity.weatherNotes ?? []).slice(0, 2).join(" ")}` : ""}
+                  {(activity.practicalityNotes ?? []).length > 0 ? `\nMachbarkeit: ${(activity.practicalityNotes ?? []).slice(0, 2).join(" ")}` : ""}
                 </Text>
               ))}
             </Card>
@@ -113,20 +116,11 @@ export default function DecisionResultScreen() {
             />
             {showScoreBreakdown
               ? presentation.scoreRows.map((score) => (
-                  <Card key={score.id}>
-                    <Text style={ui.cardTitle}>{score.label}</Text>
-                    <Text style={ui.body}>Typ: {score.eventTyp}</Text>
-                    <Text style={ui.body}>Teilnahme: {score.teilnahme}</Text>
-                    <Text style={ui.body}>Stimmen: {score.stimmen}</Text>
-                    <Text style={ui.body}>Fairness-Ausgleich: {score.fairnessAusgleich}</Text>
-                    <Text style={ui.body}>Minderheitenschutz: {score.minderheitenschutz}</Text>
-                    <Text style={ui.body}>Togetherness: {score.togetherness}</Text>
-                    <Text style={ui.body}>Wetter: {score.wetter}</Text>
-                    <Text style={ui.body}>Machbarkeit: {score.machbarkeit}</Text>
-                    <Text style={ui.body}>Rotation: {score.rotation}</Text>
-                    <Text style={ui.body}>Verlässlichkeit: {score.verlaesslichkeit}</Text>
-                    <Text style={ui.body}>Gesamt: {score.gesamt}</Text>
-                  </Card>
+                  <Text key={score.id} style={ui.body}>
+                    {score.label} · {score.eventTyp}
+                    {"\n"}Teilnahme {score.teilnahme} · Stimmen {score.stimmen} · Fairness {score.fairnessAusgleich} · Minderheit {score.minderheitenschutz}
+                    {"\n"}Togetherness {score.togetherness} · Wetter {score.wetter} · Machbarkeit {score.machbarkeit} · Rotation {score.rotation} · Verlässlichkeit {score.verlaesslichkeit} · Gesamt {score.gesamt}
+                  </Text>
                 ))
               : null}
           </Card>
@@ -134,6 +128,7 @@ export default function DecisionResultScreen() {
           <Button label="Entscheidung festlegen" onPress={finalize} disabled={saving || decision.mode === "none"} />
           <Text style={ui.muted}>Nur Admins können die wöchentliche Entscheidung endgültig festlegen.</Text>
           <Button label="Teilnahme öffnen" variant="secondary" onPress={() => router.push(`/events/${eventId}/attendance`)} />
+          <Button label="Ergebnisse" variant="secondary" onPress={() => router.push({ pathname: "/events/[eventId]/results", params: { eventId } })} />
         </>
       ) : null}
     </Screen>

@@ -8,7 +8,7 @@ This schema models the current Messers Cardio Club app as one bootstrapped club 
 - `clubs`: Internal club scope for MCC membership, weekly events, chat, and RLS. The current app bootstraps one MCC club instead of offering a broad multi-club product.
 - `club_members`: Membership and role assignment for a club. Active product roles are `admin`, `mod`, and `member`; older migrations may still contain the original `owner` enum value.
 - `sports`: Shared abstract sport catalog. A sport represents the activity family, such as Beachvolleyball or Cycling, not a concrete venue.
-- `sport_profiles`: Concrete sport variants with venue, coordinates, location type, weather rules, group-size limits, equipment, practical notes, and AP requirements.
+- `sport_profiles`: Concrete sport variants with venue, coordinates, location type, weather rules, group-size limits, equipment, costs, opening/transit/amenity notes, safety notes, location rules, AP requirements, and optional profile AP/contact.
 - `weekly_events`: One planned club event per week. Stores compatibility selected/secondary sports, decision type, scorecard, weather snapshot, event status, time, location, notes, and decision reason.
 - `sport_proposals`: Candidate sports proposed for a weekly event.
 - `sport_votes`: Member votes for proposed sports. Each member can vote for up to three sports per event using ranked choices: first choice `1.0`, second choice `0.6`, third choice `0.3`.
@@ -55,5 +55,7 @@ The Fairness-First Constellation algorithm should use `sport_votes`, `sport_no_g
 - Treat votes as abstract sport preferences, then choose concrete `sport_profiles`.
 - Treat No-Go as personal non-acceptance, separate from ranked voting.
 - Apply weather and safety rules to profiles; dangerous weather excludes profiles, poor weather penalizes them.
+- Evaluate profile practicality from documented equipment, reservation, lighting, transit/parking, amenities, costs, location rules, safety notes, coordinates, and whether an AP is required or already assigned.
 - Score Single, Multi-Sport, and Twin candidates across participation, preference, fairness, minority protection, togetherness, weather, practicality, rotation, and reliability.
+- Use fairness-first candidate ordering: a fairer constellation can beat a close popularity/practicality total, while Twin wins only with a real fairness or score advantage over a shared event.
 - Persist the chosen constellation in `event_activities` and mirror the first two sports into `weekly_events`.

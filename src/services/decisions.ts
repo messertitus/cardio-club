@@ -257,7 +257,12 @@ async function withActivityContacts(
 ): Promise<FairConstellationDecision> {
   const activityContactIds = await Promise.all(
     decision.activities.map(async (activity) => {
-      return (await selectPrimarySportContact(supabase, activity.sportId)) ?? activity.assignedUserIds[0] ?? (await selectActivityContact(supabase, eventId, activity.sportId));
+      return (
+        activity.activityContactId ??
+        (await selectProfileContact(supabase, activity.profileId)) ??
+        activity.assignedUserIds[0] ??
+        (await selectActivityContact(supabase, eventId, activity.sportId))
+      );
     }),
   );
 
@@ -288,19 +293,16 @@ async function selectActivityContact(
   return selectedVoters[0]?.user_id ?? attendance.data.find((row) => row.status === "going")?.user_id ?? null;
 }
 
-async function selectPrimarySportContact(supabase: AppSupabaseClient, sportId: string): Promise<string | null> {
+async function selectProfileContact(supabase: AppSupabaseClient, profileId: string): Promise<string | null> {
   const { data, error } = await supabase
-    .from("sport_contacts")
-    .select("user_id, is_primary, created_at")
-    .eq("sport_id", sportId)
-    .order("is_primary", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
+    .from("sport_profiles")
+    .select("ap_contact_id")
+    .eq("id", profileId)
     .maybeSingle();
 
   if (error || !data) return null;
 
-  return data.user_id;
+  return data.ap_contact_id;
 }
 
 async function fetchEvent(

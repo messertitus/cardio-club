@@ -8,12 +8,15 @@ export type SportProfileAdminInput = {
   sportId: string;
   name: string;
   locationName?: string | null;
+  mapUrl?: string | null;
+  postalCode?: string | null;
+  locationCity?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   venueGroupKey?: string | null;
   locationType: SportLocationType;
   isIndoor?: boolean;
-  minimumGroupSize?: number;
+  minimumGroupSize?: number | null;
   maximumGroupSize?: number | null;
   requiredEquipment?: string[];
   availableEquipment?: string[];
@@ -24,7 +27,9 @@ export type SportProfileAdminInput = {
   amenityNotes?: string | null;
   reservationRequired?: boolean | null;
   safetyNotes?: string | null;
+  locationRules?: string | null;
   apRequired?: boolean;
+  apContactId?: string | null;
   weatherRules?: WeatherRules;
   isActive?: boolean;
   createdBy?: string | null;
@@ -73,6 +78,20 @@ export async function upsertSportProfile(
   if (!input.name.trim()) {
     return fail("Bitte gib einen Profilnamen ein.");
   }
+  if (!input.sportId) {
+    return fail("Bitte wähle die zugehörige Sportart aus.");
+  }
+  if (!input.locationName?.trim() && !input.locationCity?.trim() && !input.mapUrl?.trim()) {
+    return fail("Bitte hinterlege einen Standort oder eine Stadt.");
+  }
+  if (!input.minimumGroupSize || input.minimumGroupSize < 1) {
+    return fail("Bitte gib die Mindestanzahl an.");
+  }
+  if (input.maximumGroupSize && input.maximumGroupSize < input.minimumGroupSize) {
+    return fail("Die Maximalanzahl muss größer oder gleich der Mindestanzahl sein.");
+  }
+
+  const apContactId = input.apContactId ?? input.createdBy ?? null;
 
   const { data, error } = await supabase
     .from("sport_profiles")
@@ -82,12 +101,15 @@ export async function upsertSportProfile(
         sport_id: input.sportId,
         name: input.name.trim(),
         location_name: input.locationName?.trim() || null,
+        map_url: input.mapUrl?.trim() || null,
+        postal_code: input.postalCode?.trim() || null,
+        location_city: input.locationCity?.trim() || null,
         latitude: input.latitude ?? null,
         longitude: input.longitude ?? null,
-        venue_group_key: input.venueGroupKey?.trim() || null,
+        venue_group_key: input.venueGroupKey?.trim() || deriveVenueGroupKey(input.locationName ?? input.locationCity ?? null),
         location_type: input.locationType,
         is_indoor: input.isIndoor ?? input.locationType === "indoor",
-        minimum_group_size: input.minimumGroupSize ?? 1,
+        minimum_group_size: input.minimumGroupSize,
         maximum_group_size: input.maximumGroupSize ?? null,
         required_equipment: input.requiredEquipment ?? [],
         available_equipment: input.availableEquipment ?? [],
@@ -98,7 +120,9 @@ export async function upsertSportProfile(
         amenity_notes: input.amenityNotes?.trim() || null,
         reservation_required: input.reservationRequired ?? null,
         safety_notes: input.safetyNotes?.trim() || null,
+        location_rules: input.locationRules?.trim() || null,
         ap_required: input.apRequired ?? false,
+        ap_contact_id: apContactId,
         weather_rules: input.weatherRules ?? {},
         is_active: input.isActive ?? true,
         created_by: input.createdBy ?? null,
@@ -113,6 +137,19 @@ export async function upsertSportProfile(
   }
 
   return ok(data);
+}
+
+export async function deleteSportProfile(
+  supabase: AppSupabaseClient,
+  profileId: string,
+): Promise<ServiceResult<{ deleted: true }>> {
+  const { error } = await supabase.from("sport_profiles").delete().eq("id", profileId);
+
+  if (error) {
+    return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht geloescht werden.") };
+  }
+
+  return ok({ deleted: true });
 }
 
 export async function setSportProfileActive(
@@ -148,9 +185,16 @@ export function mapSportProfile(row: Row<"sport_profiles">): SportProfile {
     maximumGroupSize: row.maximum_group_size,
     requiredEquipment: row.required_equipment,
     availableEquipment: row.available_equipment,
+    costNote: row.cost_note,
+    openingNotes: row.opening_notes,
     lightingAvailable: row.lighting_available,
+    transitNotes: row.transit_notes,
+    amenityNotes: row.amenity_notes,
     reservationRequired: row.reservation_required,
+    safetyNotes: row.safety_notes,
+    locationRules: row.location_rules,
     apRequired: row.ap_required,
+    apContactId: row.ap_contact_id,
     weatherRules: isWeatherRules(row.weather_rules) ? row.weather_rules : {},
     isActive: row.is_active,
   };
@@ -158,4 +202,17 @@ export function mapSportProfile(row: Row<"sport_profiles">): SportProfile {
 
 function isWeatherRules(value: unknown): value is WeatherRules {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function deriveVenueGroupKey(value: string | null): string | null {
+  const normalized = value
+    ?.trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+
+  return normalized || null;
 }

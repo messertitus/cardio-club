@@ -162,6 +162,73 @@ describe("selectFairConstellation", () => {
     expect(result.scoreBreakdown?.fairness).toBeGreaterThan(0);
   });
 
+  it("turns repeated minority neglect into a fair multi-sport constellation when locations fit", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [
+          ...votesFor("volleyball", ["u1", "u2", "u3", "u4", "u5"]),
+          ...votesFor("boxing", ["u6", "u7"]),
+        ],
+        preferenceHistory: [...ignoredHistory("u6", "boxing", 4), ...ignoredHistory("u7", "boxing", 4)],
+      }),
+    );
+
+    expect(result.mode).toBe("multi_sport");
+    expect(result.activities.map((activity) => activity.sportId)).toContain("boxing");
+    expect(result.scoreBreakdown?.fairness).toBeGreaterThan(0);
+  });
+
+  it("prefers a richer sport profile when equipment, AP and site data make it more practical", () => {
+    const documentedProfile: SportProfile = {
+      ...profile("volleyball-ready", "volleyball", "Ready beach court", 48, 7.81, "ready", "field", 4),
+      requiredEquipment: ["ball", "net"],
+      availableEquipment: ["ball", "net"],
+      openingNotes: "Open until late",
+      transitNotes: "Transit and parking documented",
+      amenityNotes: "Water and changing rooms nearby",
+      locationRules: "Use court only after booking",
+      safetyNotes: "Check sand before play",
+      apRequired: true,
+      apContactId: "ap1",
+    };
+
+    const result = selectFairConstellation(
+      input({
+        sportProfiles: [
+          profile("volleyball-bare", "volleyball", "Bare beach court", 48, 7.8, "bare", "field", 4),
+          documentedProfile,
+        ],
+        votes: votesFor("volleyball", ["u1", "u2", "u3", "u4"]),
+      }),
+    );
+
+    expect(result.selectedProfileId).toBe("volleyball-ready");
+    expect(result.activities[0]?.activityContactId).toBe("ap1");
+    expect(result.activities[0]?.practicalityNotes?.join(" ")).toContain("Ausstattung");
+  });
+
+  it("penalizes rainy outdoor profiles while keeping indoor profiles stable", () => {
+    const result = selectFairConstellation(
+      input({
+        sportProfiles: [
+          {
+            ...profile("volleyball-rain-court", "volleyball", "Rainy outdoor court", 48, 7.8, "rain", "field", 4),
+            weatherRules: { requiresDry: true, rainSensitive: true, thunderstormUnsafe: true },
+          },
+          profile("volleyball-indoor", "volleyball", "Indoor court", 48, 7.8, "hall", "indoor", 4),
+        ],
+        votes: votesFor("volleyball", ["u1", "u2", "u3", "u4"]),
+        weatherSnapshot: {
+          "volleyball-rain-court": { weatherCode: 61, precipitationMm: 4, precipitationProbability: 90 },
+          "volleyball-indoor": { weatherCode: 61, precipitationMm: 4, precipitationProbability: 90 },
+        },
+      }),
+    );
+
+    expect(result.selectedProfileId).toBe("volleyball-indoor");
+    expect(result.activities[0]?.weatherNotes?.join(" ")).toContain("Indoor");
+  });
+
   it("reduces repeated no-show influence without removing the vote entirely", () => {
     const result = selectFairConstellation(
       input({
