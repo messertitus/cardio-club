@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { Text } from "react-native";
 import { Button, Card, ErrorText, Field, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { supabase } from "../../../src/lib/supabase";
-import { createWeeklyEvent, getCurrentWeeklyEvent, type Row } from "../../../src/services";
+import { createWeeklyEvent, getCurrentWeeklyEvent, listEventActivities, listSports, type Row } from "../../../src/services";
 
 export default function CurrentWeeklyEventScreen() {
   const { clubId } = useLocalSearchParams<{ clubId: string }>();
   const [event, setEvent] = useState<Row<"weekly_events"> | null>(null);
+  const [eventActivities, setEventActivities] = useState<Row<"event_activities">[]>([]);
+  const [sports, setSports] = useState<Row<"sports">[]>([]);
   const [location, setLocation] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [notes, setNotes] = useState("");
@@ -21,9 +23,14 @@ export default function CurrentWeeklyEventScreen() {
 
   async function load() {
     setLoading(true);
-    const result = await getCurrentWeeklyEvent(supabase, { clubId });
-    setEvent(result.data);
-    setError(result.error?.message ?? null);
+    const eventResult = await getCurrentWeeklyEvent(supabase, { clubId });
+    const [activitiesResult, sportsResult] = eventResult.data
+      ? await Promise.all([listEventActivities(supabase, eventResult.data.id), listSports(supabase)])
+      : [{ data: [] as Row<"event_activities">[], error: null }, await listSports(supabase)];
+    setEvent(eventResult.data);
+    setEventActivities(activitiesResult.data ?? []);
+    setSports(sportsResult.data ?? []);
+    setError(eventResult.error?.message ?? activitiesResult.error?.message ?? sportsResult.error?.message ?? null);
     setLoading(false);
   }
 
@@ -61,12 +68,24 @@ export default function CurrentWeeklyEventScreen() {
         <>
           <Card>
             <Pill>{event.status}</Pill>
-            <Text style={ui.cardTitle}>{event.selected_sport_id ? "Sportart entschieden" : "Noch offen"}</Text>
+            <Text style={ui.cardTitle}>{event.decision_type ? eventTypeLabel(event.decision_type) : event.selected_sport_id ? "Sportart entschieden" : "Noch offen"}</Text>
             <Text style={ui.body}>Woche ab {event.week_start_date}</Text>
             {event.location ? <Text style={ui.body}>Ort: {event.location}</Text> : null}
             {event.starts_at ? <Text style={ui.body}>Zeit: {new Date(event.starts_at).toLocaleString("de-DE")}</Text> : null}
             {event.notes ? <Text style={ui.body}>{event.notes}</Text> : null}
-          </Card>
+            {eventActivities.length > 0 ? (
+              <>
+                <Text style={ui.body}>Aktivitäten:</Text>
+                {eventActivities.map((activity) => (
+                  <Text key={activity.id} style={ui.body}>
+                    {activity.title || sportName(sports, activity.sport_id)}
+                    {activity.location ? ` · ${activity.location}` : ""}
+                    {(activity.assigned_user_ids ?? []).length > 0 ? ` · ${(activity.assigned_user_ids ?? []).length} Personen` : ""}
+                  </Text>
+                ))}
+              </>
+            ) : null}
+            </Card>
           <Button label="Sportart vorschlagen" onPress={() => router.push(`/events/${event.id}/propose`)} />
           <Button label="Abstimmen" variant="secondary" onPress={() => router.push(`/events/${event.id}/vote`)} />
           <Button label="Entscheidung anzeigen" variant="secondary" onPress={() => router.push(`/events/${event.id}/decision`)} />
@@ -83,4 +102,15 @@ export default function CurrentWeeklyEventScreen() {
       )}
     </Screen>
   );
+}
+
+function eventTypeLabel(type: Row<"weekly_events">["decision_type"]): string {
+  if (type === "multi_sport") return "Multi-Sport Event";
+  if (type === "twin") return "Twin Event";
+  if (type === "single") return "Single Event";
+  return "Noch offen";
+}
+
+function sportName(sports: Row<"sports">[], sportId: string): string {
+  return sports.find((sport) => sport.id === sportId)?.name ?? "Sportart";
 }

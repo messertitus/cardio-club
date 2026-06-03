@@ -1,4 +1,4 @@
-import type { ClubMemberRole, Row, SportIntensityLevel, SportLocationType } from "./database.types";
+import type { ClubMemberRole, Row, SportIntensityLevel } from "./database.types";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -6,10 +6,8 @@ export type MccSportAdminInput = {
   sportId?: string | null;
   name: string;
   description?: string | null;
-  locationDescription?: string | null;
   category: string;
   intensityLevel: SportIntensityLevel;
-  locationType: SportLocationType;
   combinableTags: string[];
 };
 
@@ -33,6 +31,27 @@ export async function updateMccMemberRole(
   }
 
   return ok({ saved: true });
+}
+
+export async function updateMccMemberDisplayName(
+  supabase: AppSupabaseClient,
+  input: { userId: string; displayName: string },
+): Promise<ServiceResult<Row<"profiles">>> {
+  const displayName = input.displayName.trim();
+  if (displayName.length < 2) {
+    return fail("Bitte gib einen Namen mit mindestens 2 Zeichen ein.");
+  }
+
+  const { data, error } = await supabase.rpc("admin_update_profile_display_name", {
+    target_user_id: input.userId,
+    next_display_name: displayName,
+  });
+
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Name konnte nicht gespeichert werden.") };
+  }
+
+  return ok(data);
 }
 
 export async function setMccActivityContact(
@@ -161,10 +180,10 @@ export async function upsertMccSport(supabase: AppSupabaseClient, input: MccSpor
     sport_name: input.name.trim(),
     sport_category: input.category.trim() || "cardio",
     sport_intensity: input.intensityLevel,
-    sport_location_type: input.locationType,
+    sport_location_type: "flexible",
     sport_tags: input.combinableTags.map((tag) => tag.trim()).filter(Boolean),
     sport_description: input.description?.trim() || null,
-    sport_location_description: input.locationDescription?.trim() || null,
+    sport_location_description: null,
   });
 
   if (error || !data) {

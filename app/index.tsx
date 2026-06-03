@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Animated, Image, KeyboardAvoidingView, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
+import { SearchField } from "../src/components/FormControls";
 import { MotionPressable, Reveal } from "../src/components/Motion";
 import { ThemeToggle } from "../src/components/ThemeToggle";
 import { LoadingState, Screen } from "../src/components/ui";
@@ -12,10 +13,13 @@ import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import type { VoteRank } from "../src/lib/votingRules";
 import {
+  clearMccNoGo,
   clearMccVote,
   getMccEventState,
   getMyProfile,
+  proposeSport,
   saveMccAttendance,
+  saveMccNoGo,
   saveMccVoteRank,
   updateProfileCity,
   type AttendanceStatus,
@@ -37,6 +41,40 @@ const attendanceOptions: Array<{ status: AttendanceStatus; title: string; body: 
 
 type FlowStep = "attendance" | "sports" | "overview";
 
+function normalizeEventState(input: Partial<MccEventState>): MccEventState {
+  if (!input.clubId || !input.event) {
+    throw new Error("Invalid cached event state");
+  }
+
+  return {
+    ...(input as MccEventState),
+    sports: Array.isArray(input.sports) ? input.sports : [],
+    proposals: Array.isArray(input.proposals) ? input.proposals : [],
+    sportProfiles: Array.isArray(input.sportProfiles) ? input.sportProfiles : [],
+    votes: Array.isArray(input.votes) ? input.votes : [],
+    noGos: Array.isArray(input.noGos) ? input.noGos : [],
+    attendance: Array.isArray(input.attendance) ? input.attendance : [],
+    eventActivities: Array.isArray(input.eventActivities) ? input.eventActivities : [],
+    myAttendance: input.myAttendance ?? null,
+    myVotes: Array.isArray(input.myVotes) ? input.myVotes : [],
+    myNoGos: Array.isArray(input.myNoGos) ? input.myNoGos : [],
+    decision: input.decision ?? {
+      mode: "none",
+      activities: [],
+      scores: [],
+      excludedProfiles: [],
+      reason: "Cache wurde für die neue Eventlogik ergänzt.",
+    },
+    decisionText: input.decisionText ?? {
+      selectedSportName: "Entscheidung steht",
+      resultLabels: [],
+      simpleExplanation: "Die aktuellen Eventdaten werden neu geladen.",
+      activityRows: [],
+      scoreRows: [],
+    },
+  };
+}
+
 export default function HomeScreen() {
   const { loading, user } = useAuth();
   const { mode, theme } = useTheme();
@@ -47,6 +85,7 @@ export default function HomeScreen() {
   const [needsCity, setNeedsCity] = useState(false);
   const [postalCode, setPostalCode] = useState("");
   const [city, setCity] = useState("");
+  const [sportSearch, setSportSearch] = useState("");
   const [cityBusy, setCityBusy] = useState(false);
   const [citySkipped, setCitySkipped] = useState(false);
 
@@ -56,7 +95,8 @@ export default function HomeScreen() {
     const cached = await AsyncStorage.getItem(cacheKey);
     if (cached && !state) {
       try {
-        setState(JSON.parse(cached) as MccEventState);
+        const cachedState = normalizeEventState(JSON.parse(cached) as Partial<MccEventState>);
+        setState(cachedState);
       } catch {
         await AsyncStorage.removeItem(cacheKey);
       }
@@ -93,11 +133,18 @@ export default function HomeScreen() {
     void loadProfileCity();
   }, [citySkipped, user]);
 
-  const proposedSports = useMemo(() => {
+  const selectableSports = useMemo(() => {
     if (!state) return [];
-    const proposedIds = new Set(state.proposals.map((proposal) => proposal.sport_id));
-    return state.sports.filter((sport) => proposedIds.has(sport.id));
-  }, [state]);
+    const query = sportSearch.trim().toLowerCase();
+    return state.sports.filter((sport) => {
+      if (!query) return true;
+      const profileText = state.sportProfiles
+        .filter((profile) => profile.sport_id === sport.id)
+        .map((profile) => [profile.name, profile.location_name, profile.venue_group_key].filter(Boolean).join(" "))
+        .join(" ");
+      return [sport.name, sport.category, sport.combinable_tags?.join(" "), profileText].filter(Boolean).join(" ").toLowerCase().includes(query);
+    });
+  }, [sportSearch, state]);
 
   const isDecided = state?.event.status === "decided" || state?.event.status === "completed";
   const naturalStep: FlowStep = isDecided
@@ -110,9 +157,8 @@ export default function HomeScreen() {
           ? "sports"
           : "overview";
   const activeStep = manualStep ?? naturalStep;
-  const selectedSport = state?.sports.find((sport) => sport.id === state.event.selected_sport_id);
-  const secondarySport = state?.sports.find((sport) => sport.id === state.event.secondary_sport_id);
-  const decisionSportName = isDecided ? (selectedSport?.name ?? "Entscheidung steht") : "???";
+  const decisionSportName = isDecided ? (state?.decisionText.selectedSportName ?? "Entscheidung steht") : "???";
+  const secondaryDecisionName = isDecided ? state?.decisionText.secondarySportName : undefined;
   const eventDate = state?.event.starts_at ? new Date(state.event.starts_at) : null;
   const brandLogo = mode === "dark" ? darkLogo : lightLogo;
 
@@ -125,6 +171,9 @@ export default function HomeScreen() {
       user_id: user.id,
       status,
       subgroup_id: null,
+      actual_status: null,
+      checked_by: null,
+      checked_at: null,
       created_at: state.myAttendance?.created_at ?? new Date().toISOString(),
     };
 
@@ -155,7 +204,8 @@ export default function HomeScreen() {
   }
 
   async function chooseSport(sportId: string) {
-    if (!user || !state || state.myAttendance?.status === "not_going" || isDecided) return;
+    if (!user || !state || !canInfluenceDecision(state.myAttendance?.status) || isDecided) return;
+    if (state.myNoGos.some((noGo) => noGo.sport_id === sportId)) return;
 
     const existing = state.myVotes.find((vote) => vote.sport_id === sportId);
     if (existing) {
@@ -202,13 +252,44 @@ export default function HomeScreen() {
       ],
     });
 
+    if (!state.proposals.some((proposal) => proposal.sport_id === sportId)) {
+      const proposalResult = await proposeSport(supabase, { eventId: state.event.id, sportId, proposedBy: user.id, note: null });
+      if (proposalResult.error) {
+        setNotice(proposalResult.error.message);
+        void load();
+        return;
+      }
+    }
+
     const result = await saveMccVoteRank(supabase, { eventId: state.event.id, userId: user.id, sportId, rank });
     if (result.error) setNotice(result.error.message);
     void load();
   }
 
+  async function toggleNoGo(sportId: string) {
+    if (!user || !state || !canInfluenceDecision(state.myAttendance?.status) || isDecided) return;
+    const existing = state.myNoGos.find((noGo) => noGo.sport_id === sportId);
+    setNotice(null);
+
+    if (existing) {
+      const result = await clearMccNoGo(supabase, { eventId: state.event.id, userId: user.id, sportId });
+      if (result.error) setNotice(result.error.message);
+      void load();
+      return;
+    }
+
+    const existingVote = state.myVotes.find((vote) => vote.sport_id === sportId);
+    if (existingVote) {
+      await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId });
+    }
+
+    const result = await saveMccNoGo(supabase, { eventId: state.event.id, userId: user.id, sportId });
+    if (result.error) setNotice(result.error.message);
+    void load();
+  }
+
   async function setRank(sportId: string, rank: VoteRank) {
-    if (!user || !state || state.myAttendance?.status === "not_going" || isDecided) return;
+    if (!user || !state || !canInfluenceDecision(state.myAttendance?.status) || isDecided) return;
     const replaced = state.myVotes.find((vote) => vote.vote_rank === rank && vote.sport_id !== sportId);
 
     if (replaced) {
@@ -341,17 +422,21 @@ export default function HomeScreen() {
               <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
                 <Text style={[styles.panelKicker, { color: theme.accent }]}>Schritt 2</Text>
                 <Text style={[styles.panelTitle, { color: theme.text }]}>Wähle deinen Mix</Text>
+                <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart oder Standort suchen" />
                 <View style={styles.voteStack}>
-                  {proposedSports.map((sport) => {
+                  {selectableSports.map((sport) => {
                     const vote = state.myVotes.find((row) => row.sport_id === sport.id);
+                    const noGo = state.myNoGos.some((row) => row.sport_id === sport.id);
+                    const profileHint = profileSummary(state, sport.id);
                     return (
-                      <Reveal key={sport.id} index={proposedSports.indexOf(sport)}>
+                      <Reveal key={sport.id} index={selectableSports.indexOf(sport)}>
                       <MotionPressable
                         key={sport.id}
                         style={[
                           styles.sportCard,
                           { borderColor: theme.border, backgroundColor: theme.softSurface },
                           vote && { borderColor: theme.accent, backgroundColor: theme.button },
+                          noGo && { borderColor: "#ff8d7a", backgroundColor: "rgba(255,126,106,0.14)" },
                         ]}
                         pressedStyle={styles.pressed}
                         onPress={() => chooseSport(sport.id)}
@@ -359,10 +444,15 @@ export default function HomeScreen() {
                         <View style={styles.sportTextWrap}>
                           <Text style={[styles.sportName, { color: vote ? theme.inverse : theme.text }]}>{sport.name}</Text>
                           <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>
-                            {sport.location_type} · {sport.intensity_level}
+                            {sport.category} · {sport.intensity_level}
                           </Text>
+                          {profileHint ? <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>{profileHint}</Text> : null}
                         </View>
-                        {vote ? (
+                        {noGo ? (
+                          <Pressable style={styles.noGoButton} onPress={() => toggleNoGo(sport.id)}>
+                            <Text style={styles.noGoButtonText}>No-Go</Text>
+                          </Pressable>
+                        ) : vote ? (
                           <View style={styles.rankPicker}>
                             {voteRanks.map((rank) => (
                               <Pressable
@@ -377,11 +467,17 @@ export default function HomeScreen() {
                         ) : (
                           <Text style={[styles.addMark, { color: theme.accent }]}>+</Text>
                         )}
+                        {!vote && !noGo ? (
+                          <Pressable style={styles.noGoGhost} onPress={() => toggleNoGo(sport.id)}>
+                            <Text style={[styles.noGoGhostText, { color: noGo ? "#ff8d7a" : theme.muted }]}>No-Go</Text>
+                          </Pressable>
+                        ) : null}
                       </MotionPressable>
                       </Reveal>
                     );
                   })}
                 </View>
+                {selectableSports.length === 0 ? <Text style={[styles.body, { color: theme.muted }]}>Keine Sportarten für diese Suche.</Text> : null}
                 <PrimaryButton label="Weiter zum Überblick" onPress={() => state.myVotes.length > 0 && setManualStep("overview")} disabled={state.myVotes.length === 0} />
               </View>
             ) : null}
@@ -393,7 +489,7 @@ export default function HomeScreen() {
                 {!isDecided ? <Text style={[styles.body, { color: theme.muted }]}>Sportart folgt am Mittwoch nach der Auswertung.</Text> : null}
                 {isDecided ? (
                   <>
-                    {secondarySport ? <Text style={[styles.secondarySport, { color: theme.accent }]}>+ {secondarySport.name}</Text> : null}
+                    {secondaryDecisionName ? <Text style={[styles.secondarySport, { color: theme.accent }]}>+ {secondaryDecisionName}</Text> : null}
                     <View style={styles.pillRow}>
                       {state.decisionText.resultLabels.map((label) => (
                         <View key={label} style={[styles.pill, { backgroundColor: theme.softSurface }]}>
@@ -402,6 +498,9 @@ export default function HomeScreen() {
                       ))}
                     </View>
                     <Text style={[styles.body, { color: theme.muted }]}>{state.event.decision_reason ?? state.decisionText.simpleExplanation}</Text>
+                    {homeActivityLines(state).map((line) => (
+                      <Text key={line} style={[styles.body, { color: theme.text }]}>{line}</Text>
+                    ))}
                   </>
                 ) : (
                   <Text style={[styles.body, { color: theme.muted }]}>
@@ -415,7 +514,10 @@ export default function HomeScreen() {
                     value={
                       state.myAttendance?.status === "not_going"
                         ? "Nicht relevant"
-                        : state.myVotes.map((vote) => `${vote.vote_rank}. ${sportName(state, vote.sport_id)}`).join(" · ")
+                        : [
+                            state.myVotes.map((vote) => `${vote.vote_rank}. ${sportName(state, vote.sport_id)}`).join(" · "),
+                            state.myNoGos.length > 0 ? `No-Go: ${state.myNoGos.map((noGo) => sportName(state, noGo.sport_id)).join(", ")}` : "",
+                          ].filter(Boolean).join(" · ")
                     }
                   />
                   <Detail label="Zeit" value={eventDate ? eventDate.toLocaleString("de-DE", { weekday: "long", hour: "2-digit", minute: "2-digit" }) : "Noch offen"} />
@@ -423,7 +525,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.actionRow}>
                   <SecondaryButton label="Teilnahme ändern" onPress={() => setManualStep("attendance")} />
-                  {state.myAttendance?.status !== "not_going" ? <SecondaryButton label="Sport ändern" onPress={() => setManualStep("sports")} /> : null}
+                  {canInfluenceDecision(state.myAttendance?.status) ? <SecondaryButton label="Sport ändern" onPress={() => setManualStep("sports")} /> : null}
                 </View>
                 {isDecided ? (
                   <PrimaryButton label="Zum Event-Chat" onPress={() => router.push("/chat")} />
@@ -542,7 +644,12 @@ function Header() {
   return (
     <View style={styles.header}>
       <Image source={headerLogo} style={styles.logo} resizeMode="contain" />
-      <ThemeToggle />
+      <View style={styles.headerActions}>
+        <Pressable style={styles.historyButton} onPress={() => router.push("/events/history")}>
+          <Text style={styles.historyButtonText}>↺</Text>
+        </Pressable>
+        <ThemeToggle />
+      </View>
     </View>
   );
 }
@@ -625,8 +732,33 @@ function attendanceLabel(status?: AttendanceStatus): string {
   return "Noch offen";
 }
 
+function canInfluenceDecision(status?: AttendanceStatus): boolean {
+  return status === "going" || status === "maybe";
+}
+
 function sportName(state: MccEventState, sportId: string): string {
   return state.sports.find((sport) => sport.id === sportId)?.name ?? "Sportart";
+}
+
+function homeActivityLines(state: MccEventState): string[] {
+  if (state.eventActivities.length > 0) {
+    return state.eventActivities.map((activity) => {
+      const count = (activity.assigned_user_ids ?? []).length;
+      return `${activity.title}${activity.location ? ` · ${activity.location}` : ""}${count > 0 ? ` · ${count} Personen` : ""}`;
+    });
+  }
+
+  return state.decisionText.activityRows.map((activity) =>
+    `${activity.sportName} · ${activity.profileName}${activity.locationName ? ` · ${activity.locationName}` : ""} · ${activity.participantCount} Personen`,
+  );
+}
+
+function profileSummary(state: MccEventState, sportId: string): string {
+  const profiles = state.sportProfiles.filter((profile) => profile.sport_id === sportId);
+  if (profiles.length === 0) return "Noch kein konkretes Sportprofil";
+  const locations = profiles.map((profile) => profile.location_name).filter(Boolean);
+  const locationText = [...new Set(locations)].slice(0, 2).join(", ");
+  return `${profiles.length} Profil${profiles.length === 1 ? "" : "e"}${locationText ? ` · ${locationText}` : ""}`;
 }
 
 async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
@@ -696,6 +828,9 @@ const styles = StyleSheet.create({
     opacity: 0.055,
   },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  headerActions: { alignItems: "center", flexDirection: "row", gap: 8 },
+  historyButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 999, height: 44, justifyContent: "center", width: 44 },
+  historyButtonText: { color: "#ffffff", fontSize: 24, fontWeight: "900", lineHeight: 26 },
   logo: { width: 50, height: 50 },
   menuButton: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 16, paddingVertical: 10 },
   menuButtonText: { color: "#ffffff", fontSize: 14, fontWeight: "900" },
@@ -752,6 +887,10 @@ const styles = StyleSheet.create({
   rankDotActive: { backgroundColor: "#ffffff" },
   rankText: { color: "#d9ecff", fontWeight: "900" },
   rankTextActive: { color: "#05070b" },
+  noGoButton: { borderRadius: 999, backgroundColor: "rgba(255,126,106,0.22)", paddingHorizontal: 10, paddingVertical: 8 },
+  noGoButtonText: { color: "#ffb5a8", fontSize: 12, fontWeight: "900" },
+  noGoGhost: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6 },
+  noGoGhostText: { fontSize: 12, fontWeight: "900" },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { borderRadius: 999, backgroundColor: "rgba(77,163,255,0.16)", paddingHorizontal: 10, paddingVertical: 6 },
   pillText: { color: "#8fc7ff", fontSize: 12, fontWeight: "900" },

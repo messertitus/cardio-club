@@ -34,6 +34,16 @@ export async function voteForSport(
     return fail("Die Abstimmung ist geschlossen, weil die Entscheidung bereits festgelegt wurde.");
   }
 
+  const attendanceResult = await getVoteAttendance(supabase, input.eventId, input.userId);
+
+  if (attendanceResult.error) {
+    return { data: null, error: attendanceResult.error };
+  }
+
+  if (!attendanceResult.data || attendanceResult.data.status === "not_going") {
+    return fail("Bitte gib zuerst an, ob du dabei bist oder vielleicht kommst.");
+  }
+
   const existingVotes = await listVotesForUser(supabase, input.eventId, input.userId);
 
   if (existingVotes.error) {
@@ -145,6 +155,25 @@ async function getVoteEvent(
 
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Could not load event status.") };
+  }
+
+  return ok(data);
+}
+
+async function getVoteAttendance(
+  supabase: AppSupabaseClient,
+  eventId: string,
+  userId: string,
+): Promise<ServiceResult<Pick<Row<"attendance">, "status"> | null>> {
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("status")
+    .eq("event_id", eventId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    return { data: null, error: fromPostgrestError(error, "Could not load your attendance status.") };
   }
 
   return ok(data);

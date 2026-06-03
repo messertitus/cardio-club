@@ -5,7 +5,6 @@ import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../.
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
 import { supabase } from "../../../src/lib/supabase";
 import {
-  createSubgroupsFromDecision,
   finalizeEventDecision,
   getEventDecisionPreview,
   listSports,
@@ -22,7 +21,6 @@ export default function DecisionResultScreen() {
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sportsById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport])), [sports]);
   const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
   const presentation = useMemo(
     () => (decision ? buildDecisionPresentation(decision, sportNames) : null),
@@ -48,13 +46,6 @@ export default function DecisionResultScreen() {
   async function finalize() {
     setSaving(true);
     const result = await finalizeEventDecision(supabase, { eventId });
-
-    if (!result.error && result.data.decision.mode === "subgroups") {
-      await createSubgroupsFromDecision(supabase, {
-        eventId,
-        decision: result.data.decision,
-      });
-    }
 
     setSaving(false);
 
@@ -83,23 +74,33 @@ export default function DecisionResultScreen() {
           <Card>
             <Text style={ui.cardTitle}>Warum diese Sportart?</Text>
             <Text style={ui.body}>{presentation.simpleExplanation}</Text>
-            <Text style={ui.body}>Die Sportart von letzter Woche wurde dabei nicht erneut zugelassen.</Text>
+            <Text style={ui.body}>Die Sportart von letzter Woche bekommt einen Rotations-Malus, wird aber nicht hart ausgeschlossen.</Text>
           </Card>
 
-          {decision.mode === "combined" ? (
+          {decision.mode === "multi_sport" ? (
             <Card>
-              <Text style={ui.cardTitle}>Gemeinsamer Cardiotag</Text>
-              <Text style={ui.body}>Beide Sportarten haben starken Rückhalt und passen als gemeinsamer Plan zusammen.</Text>
+              <Text style={ui.cardTitle}>Multi-Sport Event</Text>
+              <Text style={ui.body}>Mehrere Sportprofile liegen nah genug beieinander, damit es ein gemeinsames Club-Event bleibt.</Text>
             </Card>
           ) : null}
 
-          {decision.mode === "subgroups" ? (
+          {decision.mode === "twin" ? (
             <Card>
-              <Text style={ui.cardTitle}>Untergruppen</Text>
-              <Text style={ui.body}>Die Unterstützung ist klar geteilt. Die App empfiehlt getrennte Gruppen statt einen faulen Kompromiss.</Text>
-              {decision.subgroups?.map((group) => (
-                <Text key={group.sportId} style={ui.body}>
-                  {sportsById.get(group.sportId)?.name ?? group.sportId}: {group.userIds.length} Personen
+              <Text style={ui.cardTitle}>Twin Event</Text>
+              <Text style={ui.body}>Die Unterstützung ist klar geteilt. Die App empfiehlt zwei echte Gruppen statt einen faulen Kompromiss.</Text>
+            </Card>
+          ) : null}
+
+          {presentation.activityRows.length > 0 ? (
+            <Card>
+              <Text style={ui.cardTitle}>Konkrete Aktivitäten</Text>
+              {presentation.activityRows.map((activity) => (
+                <Text key={activity.profileId} style={ui.body}>
+                  {activity.sportName}: {activity.profileName}
+                  {activity.locationName ? ` · ${activity.locationName}` : ""} · {activity.participantCount} Personen
+                  {activity.activityContactId ? " · AP hinterlegt" : ""}
+                  {(activity.weatherNotes ?? []).length > 0 ? `\nWetter: ${(activity.weatherNotes ?? []).slice(0, 2).join(" ")}` : ""}
+                  {(activity.practicalityNotes ?? []).length > 0 ? `\nMachbarkeit: ${(activity.practicalityNotes ?? []).slice(0, 2).join(" ")}` : ""}
                 </Text>
               ))}
             </Card>
@@ -115,13 +116,11 @@ export default function DecisionResultScreen() {
             />
             {showScoreBreakdown
               ? presentation.scoreRows.map((score) => (
-                  <Card key={score.sportId}>
-                    <Text style={ui.cardTitle}>{score.sportName}</Text>
-                    <Text style={ui.body}>Stimmen: {score.stimmen}</Text>
-                    <Text style={ui.body}>Fairness-Ausgleich: {score.fairnessAusgleich}</Text>
-                    <Text style={ui.body}>Abwechslung: {score.abwechslung}</Text>
-                    <Text style={ui.body}>Wiederholungsabzug: {score.wiederholungsabzug}</Text>
-                  </Card>
+                  <Text key={score.id} style={ui.body}>
+                    {score.label} · {score.eventTyp}
+                    {"\n"}Teilnahme {score.teilnahme} · Stimmen {score.stimmen} · Fairness {score.fairnessAusgleich} · Minderheit {score.minderheitenschutz}
+                    {"\n"}Togetherness {score.togetherness} · Wetter {score.wetter} · Machbarkeit {score.machbarkeit} · Rotation {score.rotation} · Verlässlichkeit {score.verlaesslichkeit} · Gesamt {score.gesamt}
+                  </Text>
                 ))
               : null}
           </Card>
@@ -129,6 +128,7 @@ export default function DecisionResultScreen() {
           <Button label="Entscheidung festlegen" onPress={finalize} disabled={saving || decision.mode === "none"} />
           <Text style={ui.muted}>Nur Admins können die wöchentliche Entscheidung endgültig festlegen.</Text>
           <Button label="Teilnahme öffnen" variant="secondary" onPress={() => router.push(`/events/${eventId}/attendance`)} />
+          <Button label="Ergebnisse" variant="secondary" onPress={() => router.push({ pathname: "/events/[eventId]/results", params: { eventId } })} />
         </>
       ) : null}
     </Screen>

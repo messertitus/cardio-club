@@ -1,15 +1,16 @@
-import { Redirect } from "expo-router";
-import { useEffect, useState } from "react";
+import { Redirect, router } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { SearchField } from "../src/components/FormControls";
 import { PageHeader } from "../src/components/PageHeader";
 import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
-import { getMccEventState, listMccMembers, type MccMember } from "../src/services";
+import { getMccEventState, getOrCreateDirectChat, listMccMembers, type MccMember } from "../src/services";
 
 const roleLabels = {
   admin: "Admin",
@@ -22,7 +23,24 @@ export default function MembersScreen() {
   const { theme } = useTheme();
   const [members, setMembers] = useState<MccMember[]>([]);
   const [openedUserId, setOpenedUserId] = useState<string | null>(null);
+  const [locationFilterOpen, setLocationFilterOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("Konstanz");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [startingChatUserId, setStartingChatUserId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const cityOptions = useMemo(() => {
+    const cities = [...new Set(members.map((member) => member.city).filter((city): city is string => Boolean(city)))].sort((a, b) => a.localeCompare(b));
+    return ["Alle", "Konstanz", ...cities.filter((city) => city !== "Konstanz")];
+  }, [members]);
+  const filteredMembers = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    return members.filter((member) => {
+      const cityMatches = selectedCity === "Alle" || (member.city ?? "Stadt noch offen") === selectedCity;
+      const searchMatches = !query || [member.displayName, member.city, member.favoriteSports, member.contactSports.join(" ")].filter(Boolean).join(" ").toLowerCase().includes(query);
+      return cityMatches && searchMatches;
+    });
+  }, [memberSearch, members, selectedCity]);
 
   useEffect(() => {
     async function load() {
@@ -48,14 +66,34 @@ export default function MembersScreen() {
   if (loading) return <LoadingState />;
   if (!user) return <Redirect href="/auth" />;
 
+  async function contactAdmin(member: MccMember) {
+    if (!user || member.role !== "admin" || member.userId === user.id) return;
+    setStartingChatUserId(member.userId);
+    const result = await getOrCreateDirectChat(supabase, { requesterId: user.id, adminId: member.userId });
+    setStartingChatUserId(null);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    router.push(`/chat?directChatId=${result.data.id}`);
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <BrandBackground />
       <View style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <PageHeader title="Mitglieder" showBack={false} showTheme />
+          <PageHeader
+            title="Mitglieder"
+            titleMeta={`${filteredMembers.length}`}
+            showBack={false}
+            showTheme
+            actions={<HeaderIconButton label={locationFilterOpen ? "×" : "!"} open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />}
+          />
           {message ? <Text style={styles.notice}>{message}</Text> : null}
-          {members.map((member) => {
+          <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied oder Sportart suchen" />
+          {filteredMembers.length === 0 ? <Text style={[styles.detail, { color: theme.muted }]}>Keine Mitglieder für diesen Filter.</Text> : null}
+          {filteredMembers.map((member) => {
             const opened = openedUserId === member.userId;
             return (
               <Pressable
@@ -79,17 +117,67 @@ export default function MembersScreen() {
                     <ProfileLine label="Rolle" value={roleLabels[member.role]} />
                     <ProfileLine label="Lieblingssportarten" value={member.favoriteSports ?? "Noch offen"} />
                     <ProfileLine label="Alter" value={member.birthDate ? formatAge(member.birthDate) : "Noch offen"} />
-                    <ProfileLine label="Ansprechpartner" value={member.contactSports.length > 0 ? member.contactSports.join(", ") : "Keine Sportart"} />
+                    <ProfileLine label="Ansprechpartner" value={member.contactSports.length > 0 ? member.contactSports.join(", ") : "Kein Sportprofil"} />
+                    <ProfileLine label="Ideen" value={`${member.stats.ideasSuggested}`} />
+                    <ProfileLine label="Teilnahmen" value={`${member.stats.plannedAttendances} geplant, ${member.stats.actualAttendances} bestätigt`} />
+                    <ProfileLine label="Verlässlichkeit" value={member.stats.reliabilityPercent === null ? "Noch offen" : `${member.stats.reliabilityPercent}% (${member.stats.noShows} No-Shows)`} />
+                    {member.role === "admin" && member.userId !== user.id ? (
+                      <Pressable style={[styles.contactAdminButton, { backgroundColor: theme.button }]} onPress={() => void contactAdmin(member)} disabled={startingChatUserId === member.userId}>
+                        <Text style={[styles.contactAdminText, { color: theme.inverse }]}>{startingChatUserId === member.userId ? "Öffne Chat..." : "Admin kontaktieren"}</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 ) : null}
               </Pressable>
             );
           })}
         </ScrollView>
+        {locationFilterOpen ? (
+          <View style={[styles.filterPanel, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+            <Text style={[styles.filterPanelTitle, { color: theme.text }]}>Standortfilter</Text>
+            {cityOptions.map((city) => {
+              const active = selectedCity === city;
+              const cityMembers = membersForCity(members, city);
+              const preview = cityMembers.slice(0, 3).map((member) => member.displayName).join(", ");
+              return (
+                <Pressable
+                  key={city}
+                  style={[styles.filterRow, { backgroundColor: active ? theme.button : theme.surface }]}
+                  onPress={() => {
+                    setSelectedCity(city);
+                    setLocationFilterOpen(false);
+                  }}
+                >
+                  <View style={styles.filterRowText}>
+                    <Text style={[styles.filterCity, { color: active ? theme.inverse : theme.text }]}>{city}</Text>
+                    <Text style={[styles.filterPreview, { color: active ? theme.inverse : theme.muted }]} numberOfLines={1}>
+                      {preview || "Noch keine Mitglieder"}
+                    </Text>
+                  </View>
+                  <Text style={[styles.filterCount, { color: active ? theme.inverse : theme.muted }]}>{cityMembers.length}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         <BottomNav active="members" />
       </View>
     </SafeAreaView>
   );
+}
+
+function HeaderIconButton({ label, open, onPress }: { label: string; open: boolean; onPress: () => void }) {
+  const { theme } = useTheme();
+  return (
+    <Pressable style={[styles.headerIconButton, { borderColor: open ? theme.accent : theme.border, backgroundColor: theme.softSurface }]} onPress={onPress}>
+      <Text style={[styles.headerIconText, { color: open ? theme.accent : theme.text }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function membersForCity(members: MccMember[], city: string): MccMember[] {
+  if (city === "Alle") return members;
+  return members.filter((member) => (member.city ?? "Stadt noch offen") === city);
 }
 
 function ProfileLine({ label, value }: { label: string; value: string }) {
@@ -124,6 +212,23 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
   title: { fontSize: 32, fontWeight: "900", letterSpacing: 0 },
   notice: { color: "#ffb4a8", fontSize: 14, fontWeight: "800" },
+  headerIconButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+    position: "relative",
+  },
+  headerIconText: { fontSize: 18, fontWeight: "900", lineHeight: 20 },
+  filterPanel: { borderRadius: 22, borderWidth: 1, gap: 8, maxWidth: 360, padding: 10, position: "absolute", right: 16, top: 72, width: "82%", zIndex: 20 },
+  filterPanelTitle: { fontSize: 13, fontWeight: "900", paddingHorizontal: 4 },
+  filterRow: { alignItems: "center", borderRadius: 16, flexDirection: "row", gap: 10, justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10 },
+  filterRowText: { flex: 1, minWidth: 0, gap: 2 },
+  filterCity: { fontSize: 14, fontWeight: "900" },
+  filterPreview: { fontSize: 12, fontWeight: "700" },
+  filterCount: { fontSize: 13, fontWeight: "900" },
   card: {
     gap: 10,
     borderRadius: 22,
@@ -155,5 +260,7 @@ const styles = StyleSheet.create({
   profileLine: { gap: 2 },
   profileLabel: { color: "#728197", fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   profileValue: { color: "#d9ecff", fontSize: 14, fontWeight: "800", lineHeight: 20 },
+  contactAdminButton: { alignItems: "center", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 11 },
+  contactAdminText: { fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.84 },
 });

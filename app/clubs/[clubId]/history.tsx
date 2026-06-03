@@ -32,10 +32,17 @@ export default function EventHistoryScreen() {
         <Card key={event.id}>
           <Pill>{event.status}</Pill>
           <Text style={ui.cardTitle}>Woche ab {event.week_start_date}</Text>
-          <Text style={ui.body}>Ausgewählt: {event.selected_sport_id ?? "noch offen"}</Text>
+          <Text style={ui.body}>Typ: {eventTypeLabel(event.decision_type)}</Text>
           {event.decision_reason ? <Text style={ui.body}>{event.decision_reason}</Text> : null}
         </Card>
       ))}
     </Screen>
   );
+}
+
+function eventTypeLabel(type: Row<"weekly_events">["decision_type"]): string {
+  if (type === "multi_sport") return "Multi-Sport";
+  if (type === "twin") return "Twin Event";
+  if (type === "single") return "Single Event";
+  return "noch offen";
 }

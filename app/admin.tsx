@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { MapLocationPicker, SearchField } from "../src/components/FormControls";
 import { PageHeader } from "../src/components/PageHeader";
 import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -11,22 +12,25 @@ import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import {
   deactivateMccMember,
-  deleteMccSportContact,
+  deleteSportProfile,
   deleteMccSport,
   getMccEventState,
   isCurrentUserAdmin,
+  listInvitationTree,
   listMccMembers,
   listMccSports,
-  listMccSportContacts,
   listProfileNameChangeRequests,
+  listSportProfiles,
   reviewProfileNameChangeRequest,
+  setSportProfileActive,
+  updateMccMemberDisplayName,
   updateMccMemberRole,
-  upsertMccSportContact,
   upsertMccSport,
+  upsertSportProfile,
   type ClubMemberRole,
+  type InvitationTreeEntry,
   type MccEventState,
   type MccMember,
-  type MccSportContact,
   type Row,
   type SportIntensityLevel,
   type SportLocationType,
@@ -36,27 +40,98 @@ const roles: ClubMemberRole[] = ["member", "mod", "admin"];
 const intensityOptions: SportIntensityLevel[] = ["low", "medium", "high"];
 const locationOptions: SportLocationType[] = ["indoor", "outdoor", "water", "field", "flexible"];
 
-type AdminSection = "overview" | "contacts" | "sports" | "members" | "nameRequests";
+type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests";
 type PendingConfirm = { title: string; detail: string; onConfirm: () => void } | null;
+type InvitationTreeNode = {
+  id: string;
+  label: string;
+  meta: string;
+  accent?: string | null;
+  children: InvitationTreeNode[];
+};
 
 type SportDraft = {
   name: string;
   description: string;
-  locationDescription: string;
   category: string;
   intensityLevel: SportIntensityLevel;
-  locationType: SportLocationType;
   combinableTags: string;
 };
 
 const emptySportDraft: SportDraft = {
   name: "",
   description: "",
-  locationDescription: "",
   category: "cardio",
   intensityLevel: "medium",
-  locationType: "flexible",
   combinableTags: "",
+};
+
+type ProfileDraft = {
+  sportId: string;
+  name: string;
+  locationName: string;
+  mapUrl: string;
+  postalCode: string;
+  locationCity: string;
+  latitude: string;
+  longitude: string;
+  locationType: SportLocationType;
+  minimumGroupSize: string;
+  maximumGroupSize: string;
+  requiredEquipment: string;
+  availableEquipment: string;
+  costNote: string;
+  openingNotes: string;
+  transitNotes: string;
+  amenityNotes: string;
+  safetyNotes: string;
+  locationRules: string;
+  apRequired: boolean;
+  apContactId: string;
+  reservationRequired: boolean;
+  lightingAvailable: boolean;
+  requiresDry: boolean;
+  rainSensitive: boolean;
+  heatSensitive: boolean;
+  coldSensitive: boolean;
+  thunderstormUnsafe: boolean;
+  maxPrecipitationMm: string;
+  minTemperatureC: string;
+  maxTemperatureC: string;
+};
+
+const emptyProfileDraft: ProfileDraft = {
+  sportId: "",
+  name: "",
+  locationName: "",
+  mapUrl: "",
+  postalCode: "",
+  locationCity: "",
+  latitude: "",
+  longitude: "",
+  locationType: "flexible",
+  minimumGroupSize: "",
+  maximumGroupSize: "",
+  requiredEquipment: "",
+  availableEquipment: "",
+  costNote: "",
+  openingNotes: "",
+  transitNotes: "",
+  amenityNotes: "",
+  safetyNotes: "",
+  locationRules: "",
+  apRequired: false,
+  apContactId: "",
+  reservationRequired: false,
+  lightingAvailable: false,
+  requiresDry: false,
+  rainSensitive: false,
+  heatSensitive: false,
+  coldSensitive: false,
+  thunderstormUnsafe: true,
+  maxPrecipitationMm: "",
+  minTemperatureC: "",
+  maxTemperatureC: "",
 };
 
 export default function AdminScreen() {
@@ -66,28 +141,44 @@ export default function AdminScreen() {
   const [state, setState] = useState<MccEventState | null>(null);
   const [members, setMembers] = useState<MccMember[]>([]);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
-  const [sportContacts, setSportContacts] = useState<MccSportContact[]>([]);
+  const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);
+  const [invitationTree, setInvitationTree] = useState<InvitationTreeEntry[]>([]);
   const [nameRequests, setNameRequests] = useState<Row<"profile_change_requests">[]>([]);
   const [sportDraft, setSportDraft] = useState<SportDraft>(emptySportDraft);
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [editingSportId, setEditingSportId] = useState<string | null>(null);
-  const [contactSportId, setContactSportId] = useState<string | null>(null);
-  const [contactUserId, setContactUserId] = useState<string | null>(null);
-  const [contactNote, setContactNote] = useState("");
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [profileSearch, setProfileSearch] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [editingMemberNameId, setEditingMemberNameId] = useState<string | null>(null);
+  const [memberNameDraft, setMemberNameDraft] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
   const [isAdmin, setIsAdmin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
-  const contactsBySport = useMemo(() => {
-    const map = new Map<string, MccSportContact[]>();
-    for (const contact of sportContacts) {
-      const next = map.get(contact.sport_id) ?? [];
-      next.push(contact);
-      map.set(contact.sport_id, next);
+  const profilesBySport = useMemo(() => {
+    const query = profileSearch.trim().toLowerCase();
+    const map = new Map<string, Row<"sport_profiles">[]>();
+    for (const profile of sportProfiles) {
+      const sport = sports.find((entry) => entry.id === profile.sport_id);
+      const haystack = [profile.name, profile.location_name, profile.location_city, profile.postal_code, sport?.name].filter(Boolean).join(" ").toLowerCase();
+      if (query && !haystack.includes(query)) continue;
+      const next = map.get(profile.sport_id) ?? [];
+      next.push(profile);
+      map.set(profile.sport_id, next);
     }
     return map;
-  }, [sportContacts]);
+  }, [profileSearch, sportProfiles, sports]);
+
+  const filteredMembers = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    if (!query) return members;
+    return members.filter((member) => [member.displayName, member.city, member.phone, roleLabel(member.role)].filter(Boolean).join(" ").toLowerCase().includes(query));
+  }, [memberSearch, members]);
+
+  const invitationRoots = useMemo(() => buildInvitationTree(invitationTree), [invitationTree]);
 
   async function load() {
     if (!user) return;
@@ -106,28 +197,39 @@ export default function AdminScreen() {
       return;
     }
 
-    const [membersResult, sportsResult, contactsResult, nameRequestsResult] = await Promise.all([
+    const [membersResult, sportsResult, profilesResult, invitationTreeResult, nameRequestsResult] = await Promise.all([
       listMccMembers(supabase, {
         clubId: eventResult.data.clubId,
       }),
       listMccSports(supabase),
-      listMccSportContacts(supabase),
+      listSportProfiles(supabase),
+      listInvitationTree(supabase),
       listProfileNameChangeRequests(supabase),
     ]);
     setBusy(false);
 
-    if (membersResult.error || sportsResult.error || contactsResult.error || nameRequestsResult.error) {
-      setMessage(membersResult.error?.message ?? sportsResult.error?.message ?? contactsResult.error?.message ?? nameRequestsResult.error?.message ?? "Adminbereich konnte nicht geladen werden.");
+    if (membersResult.error || sportsResult.error || profilesResult.error || invitationTreeResult.error || nameRequestsResult.error) {
+      setMessage(
+        membersResult.error?.message ??
+          sportsResult.error?.message ??
+          profilesResult.error?.message ??
+          invitationTreeResult.error?.message ??
+          nameRequestsResult.error?.message ??
+          "Adminbereich konnte nicht geladen werden.",
+      );
       return;
     }
 
     setMessage(null);
     setMembers(membersResult.data);
     setSports(sportsResult.data);
-    setSportContacts(contactsResult.data);
+    setSportProfiles(profilesResult.data);
+    setInvitationTree(invitationTreeResult.data);
     setNameRequests(nameRequestsResult.data);
-    setContactSportId((current) => current ?? sportsResult.data[0]?.id ?? null);
-    setContactUserId((current) => current ?? membersResult.data[0]?.userId ?? null);
+    setProfileDraft((current) => ({
+      ...current,
+      sportId: current.sportId || sportsResult.data[0]?.id || "",
+    }));
   }
 
   useEffect(() => {
@@ -160,34 +262,6 @@ export default function AdminScreen() {
     await load();
   }
 
-  async function saveSportContact() {
-    if (!contactSportId || !contactUserId) {
-      setMessage("Bitte Sportart und Mitglied auswählen.");
-      return;
-    }
-    const result = await upsertMccSportContact(supabase, {
-      sportId: contactSportId,
-      userId: contactUserId,
-      note: contactNote,
-      isPrimary: true,
-    });
-    if (result.error) {
-      setMessage(result.error.message);
-      return;
-    }
-    setContactNote("");
-    await load();
-  }
-
-  async function removeSportContact(contact: MccSportContact) {
-    const result = await deleteMccSportContact(supabase, { sportId: contact.sport_id, userId: contact.user_id });
-    if (result.error) {
-      setMessage(result.error.message);
-      return;
-    }
-    await load();
-  }
-
   async function deactivateMember(member: MccMember) {
     if (member.userId === user?.id) return;
     const result = await deactivateMccMember(supabase, { userId: member.userId });
@@ -203,11 +277,9 @@ export default function AdminScreen() {
     setSportDraft({
       name: sport.name,
       description: sport.description ?? "",
-      locationDescription: sport.location_description ?? "",
       category: sport.category,
       intensityLevel: sport.intensity_level,
-      locationType: sport.location_type,
-      combinableTags: sport.combinable_tags.join(", "),
+      combinableTags: (sport.combinable_tags ?? []).join(", "),
     });
   }
 
@@ -221,10 +293,8 @@ export default function AdminScreen() {
       sportId: editingSportId,
       name: sportDraft.name,
       description: sportDraft.description,
-      locationDescription: sportDraft.locationDescription,
       category: sportDraft.category,
       intensityLevel: sportDraft.intensityLevel,
-      locationType: sportDraft.locationType,
       combinableTags: sportDraft.combinableTags.split(","),
     });
 
@@ -237,12 +307,139 @@ export default function AdminScreen() {
     await load();
   }
 
+  function editProfile(profile: Row<"sport_profiles">) {
+    setEditingProfileId(profile.id);
+    setProfileDraft({
+      sportId: profile.sport_id,
+      name: profile.name,
+      locationName: profile.location_name ?? "",
+      mapUrl: profile.map_url ?? "",
+      postalCode: profile.postal_code ?? "",
+      locationCity: profile.location_city ?? "",
+      latitude: profile.latitude?.toString() ?? "",
+      longitude: profile.longitude?.toString() ?? "",
+      locationType: profile.location_type,
+      minimumGroupSize: String(profile.minimum_group_size),
+      maximumGroupSize: profile.maximum_group_size?.toString() ?? "",
+      requiredEquipment: (profile.required_equipment ?? []).join(", "),
+      availableEquipment: (profile.available_equipment ?? []).join(", "),
+      costNote: profile.cost_note ?? "",
+      openingNotes: profile.opening_notes ?? "",
+      transitNotes: profile.transit_notes ?? "",
+      amenityNotes: profile.amenity_notes ?? "",
+      safetyNotes: profile.safety_notes ?? "",
+      locationRules: profile.location_rules ?? "",
+      apRequired: profile.ap_required,
+      apContactId: profile.ap_contact_id ?? "",
+      reservationRequired: Boolean(profile.reservation_required),
+      lightingAvailable: Boolean(profile.lighting_available),
+      requiresDry: weatherRuleBoolean(profile.weather_rules, "requiresDry"),
+      rainSensitive: weatherRuleBoolean(profile.weather_rules, "rainSensitive"),
+      heatSensitive: weatherRuleBoolean(profile.weather_rules, "heatSensitive"),
+      coldSensitive: weatherRuleBoolean(profile.weather_rules, "coldSensitive"),
+      thunderstormUnsafe: weatherRuleBoolean(profile.weather_rules, "thunderstormUnsafe", true),
+      maxPrecipitationMm: formatOptionalNumber(weatherRuleNumber(profile.weather_rules, "maxPrecipitationMm")),
+      minTemperatureC: formatOptionalNumber(weatherRuleNumber(profile.weather_rules, "minTemperatureC")),
+      maxTemperatureC: formatOptionalNumber(weatherRuleNumber(profile.weather_rules, "maxTemperatureC")),
+    });
+  }
+
+  function resetProfileDraft() {
+    setEditingProfileId(null);
+    setProfileDraft({ ...emptyProfileDraft, sportId: sports[0]?.id ?? "" });
+  }
+
+  async function saveProfile() {
+    if (!user) return;
+    const result = await upsertSportProfile(supabase, {
+      profileId: editingProfileId,
+      sportId: profileDraft.sportId,
+      name: profileDraft.name,
+      locationName: profileDraft.locationName,
+      mapUrl: profileDraft.mapUrl,
+      postalCode: profileDraft.postalCode,
+      locationCity: profileDraft.locationCity,
+      latitude: parseOptionalNumber(profileDraft.latitude),
+      longitude: parseOptionalNumber(profileDraft.longitude),
+      locationType: profileDraft.locationType,
+      isIndoor: profileDraft.locationType === "indoor",
+      minimumGroupSize: parseOptionalNumber(profileDraft.minimumGroupSize),
+      maximumGroupSize: parseOptionalNumber(profileDraft.maximumGroupSize),
+      requiredEquipment: parseCsv(profileDraft.requiredEquipment),
+      availableEquipment: parseCsv(profileDraft.availableEquipment),
+      costNote: profileDraft.costNote,
+      openingNotes: profileDraft.openingNotes,
+      transitNotes: profileDraft.transitNotes,
+      amenityNotes: profileDraft.amenityNotes,
+      safetyNotes: profileDraft.safetyNotes,
+      locationRules: profileDraft.locationRules,
+      apRequired: profileDraft.apRequired,
+      apContactId: profileDraft.apContactId || null,
+      reservationRequired: profileDraft.reservationRequired,
+      lightingAvailable: profileDraft.lightingAvailable,
+      weatherRules: {
+        requiresDry: profileDraft.requiresDry,
+        rainSensitive: profileDraft.rainSensitive,
+        heatSensitive: profileDraft.heatSensitive,
+        coldSensitive: profileDraft.coldSensitive,
+        thunderstormUnsafe: profileDraft.thunderstormUnsafe,
+        maxPrecipitationMm: parseOptionalNumber(profileDraft.maxPrecipitationMm) ?? undefined,
+        minTemperatureC: parseOptionalNumber(profileDraft.minTemperatureC) ?? undefined,
+        maxTemperatureC: parseOptionalNumber(profileDraft.maxTemperatureC) ?? undefined,
+      },
+      createdBy: user.id,
+    });
+
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+
+    resetProfileDraft();
+    await load();
+  }
+
+  async function toggleProfileActive(profile: Row<"sport_profiles">) {
+    const result = await setSportProfileActive(supabase, { profileId: profile.id, isActive: !profile.is_active });
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    await load();
+  }
+
+  async function removeProfile(profile: Row<"sport_profiles">) {
+    const result = await deleteSportProfile(supabase, profile.id);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    if (editingProfileId === profile.id) resetProfileDraft();
+    await load();
+  }
+
   async function deleteSport(sport: Row<"sports">) {
     const result = await deleteMccSport(supabase, sport.id);
     if (result.error) {
       setMessage(result.error.message);
       return;
     }
+    await load();
+  }
+
+  function startRenameMember(member: MccMember) {
+    setEditingMemberNameId(member.userId);
+    setMemberNameDraft(member.displayName);
+  }
+
+  async function saveMemberName(member: MccMember) {
+    const result = await updateMccMemberDisplayName(supabase, { userId: member.userId, displayName: memberNameDraft });
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    setEditingMemberNameId(null);
+    setMemberNameDraft("");
     await load();
   }
 
@@ -271,60 +468,11 @@ export default function AdminScreen() {
 
           {isAdmin && activeSection === "overview" ? (
             <View style={styles.adminGrid}>
-              <AdminMenuCard title="Sport-APs" body="Ansprechpartner pro Sportart verwalten" onPress={() => setActiveSection("contacts")} />
-              <AdminMenuCard title="Sportarten" body="Anlegen, ändern und löschen" onPress={() => setActiveSection("sports")} />
+              <AdminMenuCard title="Sportarten" body="Abstrakte Sportarten anlegen, ändern und löschen" onPress={() => setActiveSection("sports")} />
+              <AdminMenuCard title="Sportprofile" body="Orte, Profilkontakte, Wetter und Gruppengrößen pflegen" onPress={() => setActiveSection("profiles")} />
               <AdminMenuCard title="Mitglieder" body="Rechte und Deaktivierung" onPress={() => setActiveSection("members")} />
+              <AdminMenuCard title="Einladungsbaum" body="Sehen, wer wen eingeladen hat" onPress={() => setActiveSection("inviteTree")} />
               <AdminMenuCard title="Namensanfragen" body={`${nameRequests.length} offene Freigaben`} onPress={() => setActiveSection("nameRequests")} />
-            </View>
-          ) : null}
-
-          {isAdmin && activeSection === "contacts" ? (
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Ansprechpartner pro Sportart</Text>
-              <Text style={[styles.body, { color: theme.muted }]}>Jede Sportart kann einen primären Ansprechpartner haben. Ideal ist die Person, die die Idee eingebracht hat oder die Aktivität organisiert.</Text>
-              <PickerGroup
-                label="Sportart"
-                items={sports.map((sport) => ({ id: sport.id, label: sport.name }))}
-                selectedId={contactSportId}
-                onSelect={setContactSportId}
-              />
-              <PickerGroup
-                label="Mitglied"
-                items={members.map((member) => ({ id: member.userId, label: member.displayName }))}
-                selectedId={contactUserId}
-                onSelect={setContactUserId}
-              />
-              <AdminInput value={contactNote} onChangeText={setContactNote} placeholder="Optionaler Hinweis, z. B. Treffpunkt-Erfahrung" />
-              <Pressable
-                style={[styles.primaryButton, { backgroundColor: theme.button, alignSelf: "flex-start" }]}
-                onPress={() =>
-                  confirmAdminAction("Ansprechpartner speichern?", "Diese Person wird primärer Ansprechpartner für die gewählte Sportart.", () => void saveSportContact())
-                }
-              >
-                <Text style={[styles.primaryText, { color: theme.inverse }]}>Ansprechpartner setzen</Text>
-              </Pressable>
-              {sports.map((sport) => (
-                <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
-                  <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
-                  {(contactsBySport.get(sport.id) ?? []).length === 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Noch kein Ansprechpartner</Text> : null}
-                  {(contactsBySport.get(sport.id) ?? []).map((contact) => (
-                    <View key={contact.id} style={styles.contactRow}>
-                      <View style={styles.memberText}>
-                        <Text style={[styles.muted, { color: theme.text }]}>
-                          {contact.displayName} {contact.is_primary ? "· primär" : ""}
-                        </Text>
-                        {contact.note ? <Text style={[styles.muted, { color: theme.muted }]}>{contact.note}</Text> : null}
-                      </View>
-                      <Pressable
-                        style={[styles.roleButton, styles.dangerButton]}
-                        onPress={() => confirmAdminAction("Ansprechpartner entfernen?", `${contact.displayName} wird für ${sport.name} entfernt.`, () => void removeSportContact(contact))}
-                      >
-                        <Text style={styles.dangerText}>Entfernen</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              ))}
             </View>
           ) : null}
 
@@ -334,12 +482,6 @@ export default function AdminScreen() {
               <View style={styles.formGrid}>
                 <AdminInput value={sportDraft.name} onChangeText={(name) => setSportDraft((draft) => ({ ...draft, name }))} placeholder="Name" />
                 <AdminInput value={sportDraft.description} onChangeText={(description) => setSportDraft((draft) => ({ ...draft, description }))} placeholder="Beschreibung" multiline />
-                <AdminInput
-                  value={sportDraft.locationDescription}
-                  onChangeText={(locationDescription) => setSportDraft((draft) => ({ ...draft, locationDescription }))}
-                  placeholder="Bestmögliche Standortbeschreibung"
-                  multiline
-                />
                 <AdminInput value={sportDraft.category} onChangeText={(category) => setSportDraft((draft) => ({ ...draft, category }))} placeholder="Kategorie" />
                 <AdminInput
                   value={sportDraft.combinableTags}
@@ -348,7 +490,6 @@ export default function AdminScreen() {
                 />
               </View>
               <ChipGroup label="Schwierigkeit" options={intensityOptions} selected={sportDraft.intensityLevel} onSelect={(intensityLevel) => setSportDraft((draft) => ({ ...draft, intensityLevel }))} />
-              <ChipGroup label="Art" options={locationOptions} selected={sportDraft.locationType} onSelect={(locationType) => setSportDraft((draft) => ({ ...draft, locationType }))} />
               <View style={styles.roleRow}>
                 <Pressable
                   style={[styles.primaryButton, { backgroundColor: theme.button }]}
@@ -374,9 +515,8 @@ export default function AdminScreen() {
                   <View>
                     <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
                     {sport.description ? <Text style={[styles.muted, { color: theme.muted }]}>{sport.description}</Text> : null}
-                    {sport.location_description ? <Text style={[styles.muted, { color: theme.accent }]}>Standort: {sport.location_description}</Text> : null}
                     <Text style={[styles.muted, { color: theme.muted }]}>
-                      {sport.category} · {intensityLabel(sport.intensity_level)} · {locationLabel(sport.location_type)}
+                      {sport.category} · {intensityLabel(sport.intensity_level)}
                     </Text>
                   </View>
                   <View style={styles.roleRow}>
@@ -401,10 +541,171 @@ export default function AdminScreen() {
             </View>
           ) : null}
 
+          {isAdmin && activeSection === "profiles" ? (
+            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Sportprofile verwalten</Text>
+              <PickerGroup
+                label="Sportart"
+                items={sports.map((sport) => ({ id: sport.id, label: sport.name }))}
+                selectedId={profileDraft.sportId || sports[0]?.id || null}
+                onSelect={(sportId) => setProfileDraft((draft) => ({ ...draft, sportId }))}
+              />
+              <View style={styles.formGrid}>
+                <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Profilname, z. B. Beachvolleyball im Stadtpark" />
+                <MapLocationPicker
+                  label="Standort"
+                  required
+                  location={profileDraft.locationName}
+                  mapUrl={profileDraft.mapUrl}
+                  onLocationChange={(locationName) => setProfileDraft((draft) => ({ ...draft, locationName }))}
+                  onMapUrlChange={(mapUrl) => setProfileDraft((draft) => ({ ...draft, mapUrl }))}
+                  onCoordinatesChange={({ latitude, longitude }) => setProfileDraft((draft) => ({ ...draft, latitude: latitude?.toString() ?? "", longitude: longitude?.toString() ?? "" }))}
+                />
+                <AdminInput value={profileDraft.locationCity} onChangeText={(locationCity) => setProfileDraft((draft) => ({ ...draft, locationCity }))} placeholder="Stadt optional, z. B. Konstanz" />
+                <AdminInput value={profileDraft.postalCode} onChangeText={(postalCode) => setProfileDraft((draft) => ({ ...draft, postalCode: postalCode.replace(/\D/g, '').slice(0, 5) }))} placeholder="PLZ optional" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Pflicht: Mindestanzahl, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Optional: Maximalanzahl, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.requiredEquipment} onChangeText={(requiredEquipment) => setProfileDraft((draft) => ({ ...draft, requiredEquipment }))} placeholder="Optional: Was müssen Mitglieder mitbringen? Komma getrennt" />
+                <AdminInput value={profileDraft.availableEquipment} onChangeText={(availableEquipment) => setProfileDraft((draft) => ({ ...draft, availableEquipment }))} placeholder="Optional: Was ist vor Ort vorhanden?" />
+                <AdminInput value={profileDraft.costNote} onChangeText={(costNote) => setProfileDraft((draft) => ({ ...draft, costNote }))} placeholder="Optional: Kostenhinweis" />
+                <AdminInput value={profileDraft.openingNotes} onChangeText={(openingNotes) => setProfileDraft((draft) => ({ ...draft, openingNotes }))} placeholder="Optional: Öffnungszeiten oder Zeitfenster" multiline />
+                <AdminInput value={profileDraft.transitNotes} onChangeText={(transitNotes) => setProfileDraft((draft) => ({ ...draft, transitNotes }))} placeholder="Optional: ÖPNV/Parken" multiline />
+                <AdminInput value={profileDraft.amenityNotes} onChangeText={(amenityNotes) => setProfileDraft((draft) => ({ ...draft, amenityNotes }))} placeholder="Toiletten/Wasser/Umkleiden" multiline />
+                <AdminInput value={profileDraft.locationRules} onChangeText={(locationRules) => setProfileDraft((draft) => ({ ...draft, locationRules }))} placeholder="Standortregeln" multiline />
+                <AdminInput value={profileDraft.safetyNotes} onChangeText={(safetyNotes) => setProfileDraft((draft) => ({ ...draft, safetyNotes }))} placeholder="Sicherheitsinformationen" multiline />
+              </View>
+              <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
+              <PickerGroup
+                label="Profil-AP"
+                items={members.map((member) => ({ id: member.userId, label: member.displayName }))}
+                selectedId={profileDraft.apContactId || null}
+                onSelect={(apContactId) => setProfileDraft((draft) => ({ ...draft, apContactId }))}
+              />
+              {profileDraft.apContactId ? (
+                <Pressable style={[styles.roleButton, { backgroundColor: theme.surface, alignSelf: "flex-start" }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apContactId: "" }))}>
+                  <Text style={[styles.roleText, { color: theme.text }]}>Kein Profil-AP</Text>
+                </Pressable>
+              ) : null}
+              <View style={styles.roleRow}>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.apRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apRequired: !draft.apRequired }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.apRequired ? theme.inverse : theme.text }]}>Ansprechpartner vor Ort nötig</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.reservationRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, reservationRequired: !draft.reservationRequired }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.reservationRequired ? theme.inverse : theme.text }]}>Reservierung</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.lightingAvailable ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, lightingAvailable: !draft.lightingAvailable }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.lightingAvailable ? theme.inverse : theme.text }]}>Licht</Text>
+                </Pressable>
+              </View>
+              <View style={styles.roleRow}>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.requiresDry ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, requiresDry: !draft.requiresDry }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.requiresDry ? theme.inverse : theme.text }]}>Trocken nötig</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.rainSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, rainSensitive: !draft.rainSensitive }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.rainSensitive ? theme.inverse : theme.text }]}>Regen sensibel</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.heatSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, heatSensitive: !draft.heatSensitive }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.heatSensitive ? theme.inverse : theme.text }]}>Hitze sensibel</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.coldSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, coldSensitive: !draft.coldSensitive }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.coldSensitive ? theme.inverse : theme.text }]}>Kälte sensibel</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.thunderstormUnsafe ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, thunderstormUnsafe: !draft.thunderstormUnsafe }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.thunderstormUnsafe ? theme.inverse : theme.text }]}>Gewitter blockt</Text>
+                </Pressable>
+              </View>
+              <View style={styles.roleRow}>
+                <Pressable
+                  style={[styles.primaryButton, { backgroundColor: theme.button }]}
+                  onPress={() =>
+                    confirmAdminAction(
+                      editingProfileId ? "Sportprofil speichern?" : "Sportprofil anlegen?",
+                      editingProfileId ? `${profileDraft.name} wird geändert.` : `${profileDraft.name || "Neues Profil"} wird hinzugefügt.`,
+                      () => void saveProfile(),
+                    )
+                  }
+                >
+                  <Text style={[styles.primaryText, { color: theme.inverse }]}>{editingProfileId ? "Speichern" : "Anlegen"}</Text>
+                </Pressable>
+                {editingProfileId ? (
+                  <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={resetProfileDraft}>
+                    <Text style={[styles.roleText, { color: theme.text }]}>Abbrechen</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              <SearchField value={profileSearch} onChangeText={setProfileSearch} placeholder="Sportart oder Standort suchen" />
+              {sports.map((sport) => {
+                const profiles = profilesBySport.get(sport.id) ?? [];
+                if (profileSearch.trim() && profiles.length === 0) return null;
+                return (
+                  <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
+                    <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
+                    <Text style={[styles.muted, { color: theme.muted }]}>Abstrakte Sportart - darunter liegen konkrete Profile.</Text>
+                    {profiles.length === 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Noch kein Sportprofil.</Text> : null}
+                    {profiles.map((profile) => {
+                      const apMember = members.find((member) => member.userId === profile.ap_contact_id);
+                      const requiredEquipment = profile.required_equipment ?? [];
+                      return (
+                        <View key={profile.id} style={[styles.profileChildCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                          <View>
+                            <Text style={[styles.name, { color: theme.text }]}>{profile.name}</Text>
+                            <Text style={[styles.muted, { color: theme.muted }]}>
+                              {[profile.location_name ?? "Ort offen", profile.location_city, profile.postal_code].filter(Boolean).join(" - ")} - min. {profile.minimum_group_size}
+                              {profile.maximum_group_size ? ` - max. ${profile.maximum_group_size}` : ""}
+                            </Text>
+                            <Text style={[styles.muted, { color: profile.is_active ? theme.accent : theme.muted }]}>
+                              {profile.is_active ? "aktiv" : "inaktiv"} - {locationLabel(profile.location_type)}
+                              {apMember ? ` - Kontakt: ${apMember.displayName}` : " - Kontakt offen"}
+                            </Text>
+                            {requiredEquipment.length > 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Mitbringen: {requiredEquipment.join(", ")}</Text> : null}
+                            {profile.opening_notes || profile.transit_notes || profile.amenity_notes ? (
+                              <Text style={[styles.muted, { color: theme.muted }]}>
+                                {[profile.opening_notes, profile.transit_notes, profile.amenity_notes].filter(Boolean).join(" - ")}
+                              </Text>
+                            ) : null}
+                            {profile.location_rules || profile.safety_notes ? (
+                              <Text style={[styles.muted, { color: theme.muted }]}>
+                                {[profile.location_rules, profile.safety_notes].filter(Boolean).join(" - ")}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View style={styles.roleRow}>
+                            <Pressable style={[styles.roleButton, { backgroundColor: theme.softSurface }]} onPress={() => editProfile(profile)}>
+                              <Text style={[styles.roleText, { color: theme.text }]}>Bearbeiten</Text>
+                            </Pressable>
+                            <Pressable style={[styles.roleButton, profile.is_active ? styles.dangerButton : { backgroundColor: theme.softSurface }]} onPress={() => void toggleProfileActive(profile)}>
+                              <Text style={profile.is_active ? styles.dangerText : [styles.roleText, { color: theme.text }]}>
+                                {profile.is_active ? "Deaktivieren" : "Aktivieren"}
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.roleButton, styles.dangerButton]}
+                              onPress={() =>
+                                confirmAdminAction(
+                                  "Sportprofil löschen?",
+                                  `${profile.name} wird komplett entfernt. Bereits entschiedene Event-Aktivitäten behalten ihren Text, verlieren aber die Profilreferenz.`,
+                                  () => void removeProfile(profile),
+                                )
+                              }
+                            >
+                              <Text style={styles.dangerText}>Löschen</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+
           {isAdmin && activeSection === "members" ? (
             <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Mitglieder & Rechte</Text>
-              {members.map((member) => (
+              <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied, Stadt oder Rolle suchen" />
+              {filteredMembers.map((member) => (
                 <View key={member.userId} style={[styles.memberCard, { borderTopColor: theme.border }]}>
                   <View>
                     <Text style={[styles.name, { color: theme.text }]}>{member.displayName}</Text>
@@ -412,7 +713,23 @@ export default function AdminScreen() {
                       {member.city ?? "Stadt offen"} · {member.phone ?? "Keine Nummer"} · {roleLabel(member.role)}
                     </Text>
                   </View>
+                  {editingMemberNameId === member.userId ? (
+                    <View style={styles.formGrid}>
+                      <AdminInput value={memberNameDraft} onChangeText={setMemberNameDraft} placeholder="Neuer Anzeigename" />
+                      <View style={styles.roleRow}>
+                        <Pressable style={[styles.roleButton, { backgroundColor: theme.button }]} onPress={() => void saveMemberName(member)}>
+                          <Text style={[styles.roleText, { color: theme.inverse }]}>Name speichern</Text>
+                        </Pressable>
+                        <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => setEditingMemberNameId(null)}>
+                          <Text style={[styles.roleText, { color: theme.text }]}>Abbrechen</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
                   <View style={styles.roleRow}>
+                    <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => startRenameMember(member)}>
+                      <Text style={[styles.roleText, { color: theme.text }]}>Name</Text>
+                    </Pressable>
                     {roles.map((role) => (
                       <Pressable
                         key={role}
@@ -437,6 +754,15 @@ export default function AdminScreen() {
                   </View>
                 </View>
               ))}
+            </View>
+          ) : null}
+
+          {isAdmin && activeSection === "inviteTree" ? (
+            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Einladungsbaum</Text>
+              <Text style={[styles.body, { color: theme.muted }]}>Jeder Ast zeigt, welcher Code von wem erstellt wurde und welche weiteren Codes daraus entstanden sind.</Text>
+              {invitationTree.length === 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Noch keine Einladungscodes.</Text> : null}
+              <InvitationTreeView nodes={invitationRoots} />
             </View>
           ) : null}
 
@@ -488,6 +814,36 @@ export default function AdminScreen() {
 function AdminInput(props: React.ComponentProps<typeof TextInput>) {
   const { theme } = useTheme();
   return <TextInput placeholderTextColor={theme.muted} style={[styles.input, props.multiline && styles.textArea, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]} {...props} />;
+}
+
+function InvitationTreeView({ nodes }: { nodes: InvitationTreeNode[] }) {
+  return (
+    <View style={styles.treeList}>
+      {nodes.map((node) => (
+        <InvitationTreeItem key={node.id} node={node} depth={0} />
+      ))}
+    </View>
+  );
+}
+
+function InvitationTreeItem({ node, depth }: { node: InvitationTreeNode; depth: number }) {
+  const { theme } = useTheme();
+  return (
+    <View style={[styles.treeItem, depth > 0 && styles.treeItemNested]}>
+      <View style={[styles.treeStem, { backgroundColor: theme.border }]} />
+      <View style={[styles.treeCard, { borderColor: node.accent ? theme.accent : theme.border, backgroundColor: theme.surface }]}>
+        <Text style={[styles.name, { color: theme.text }]}>{node.label}</Text>
+        <Text style={[styles.muted, { color: node.accent ? theme.accent : theme.muted }]}>{node.meta}</Text>
+      </View>
+      {node.children.length > 0 ? (
+        <View style={styles.treeChildren}>
+          {node.children.map((child) => (
+            <InvitationTreeItem key={child.id} node={child} depth={depth + 1} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 function ConfirmSheet({ confirm, onCancel, onConfirm }: { confirm: Exclude<PendingConfirm, null>; onCancel: () => void; onConfirm: () => void }) {
@@ -555,15 +911,128 @@ function PickerGroup({
 }
 
 function sectionTitle(section: AdminSection): string {
-  if (section === "contacts") return "Sport-APs";
   if (section === "sports") return "Sportarten";
+  if (section === "profiles") return "Sportprofile";
   if (section === "members") return "Mitglieder";
+  if (section === "inviteTree") return "Einladungsbaum";
   if (section === "nameRequests") return "Namensanfragen";
   return "Club steuern";
 }
 
 function isAdminSection(value: string): value is AdminSection {
-  return value === "overview" || value === "contacts" || value === "sports" || value === "members" || value === "nameRequests";
+  return value === "overview" || value === "sports" || value === "profiles" || value === "members" || value === "inviteTree" || value === "nameRequests";
+}
+
+function buildInvitationTree(entries: InvitationTreeEntry[]): InvitationTreeNode[] {
+  const codesByCreator = new Map<string, InvitationTreeEntry[]>();
+  const usedUserIds = new Set<string>();
+
+  for (const entry of entries) {
+    const creatorKey = entry.created_by ?? "system";
+    const codes = codesByCreator.get(creatorKey) ?? [];
+    codes.push(entry);
+    codesByCreator.set(creatorKey, codes);
+    if (entry.used_by) usedUserIds.add(entry.used_by);
+  }
+
+  const creatorKeys = [...codesByCreator.keys()];
+  const rootKeys = creatorKeys.filter((key) => key === "system" || !usedUserIds.has(key));
+  const visitedCreators = new Set<string>();
+  const roots = (rootKeys.length > 0 ? rootKeys : creatorKeys).map((key) => buildCreatorNode(key, codesByCreator, visitedCreators));
+
+  return roots.filter((node) => node.children.length > 0);
+}
+
+function buildCreatorNode(
+  creatorKey: string,
+  codesByCreator: Map<string, InvitationTreeEntry[]>,
+  visitedCreators: Set<string>,
+): InvitationTreeNode {
+  const codes = codesByCreator.get(creatorKey) ?? [];
+  const creatorName = creatorKey === "system" ? "System" : codes[0]?.createdByName ?? "Mitglied";
+
+  if (visitedCreators.has(creatorKey)) {
+    return {
+      id: `creator-${creatorKey}-loop`,
+      label: creatorName,
+      meta: "Weitere Codes sind bereits im Baum sichtbar.",
+      children: [],
+    };
+  }
+
+  visitedCreators.add(creatorKey);
+  return {
+    id: `creator-${creatorKey}`,
+    label: creatorName,
+    meta: "hat Einladungscodes erstellt",
+    accent: creatorKey === "system" ? "system" : null,
+    children: codes.map((code) => buildCodeNode(code, codesByCreator, visitedCreators)),
+  };
+}
+
+function buildCodeNode(
+  code: InvitationTreeEntry,
+  codesByCreator: Map<string, InvitationTreeEntry[]>,
+  visitedCreators: Set<string>,
+): InvitationTreeNode {
+  const usedMeta = code.used_at ? `verwendet am ${formatDate(code.used_at)}` : "noch nicht verwendet";
+  const memberChildren =
+    code.used_by && !visitedCreators.has(code.used_by)
+      ? (() => {
+          visitedCreators.add(code.used_by);
+          return (codesByCreator.get(code.used_by) ?? []).map((childCode) => buildCodeNode(childCode, codesByCreator, visitedCreators));
+        })()
+      : [];
+  const usedMember = code.used_by
+    ? [{
+        id: `member-${code.used_by}-${code.code}`,
+        label: code.usedByName ?? "Mitglied",
+        meta: [code.usedByCity, usedMeta].filter(Boolean).join(" · "),
+        accent: code.used_at ? "used" : null,
+        children: memberChildren,
+      }]
+    : [];
+
+  return {
+    id: `code-${code.code}`,
+    label: `Code ${code.code}`,
+    meta: code.used_by ? "eingelöst" : "wartet auf Einlösung",
+    children: usedMember,
+  };
+}
+
+function formatDate(value: string): string {
+  return new Date(value).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function weatherRuleBoolean(value: unknown, key: string, fallback = false): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
+  const next = (value as Record<string, unknown>)[key];
+  return typeof next === "boolean" ? next : fallback;
+}
+
+function weatherRuleNumber(value: unknown, key: string): number | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const next = (value as Record<string, unknown>)[key];
+  return typeof next === "number" && Number.isFinite(next) ? next : null;
+}
+
+function formatOptionalNumber(value: number | null): string {
+  return typeof value === "number" ? String(value) : "";
 }
 
 function roleLabel(role: ClubMemberRole): string {
@@ -672,7 +1141,14 @@ const styles = StyleSheet.create({
   },
   memberText: { flex: 1, minWidth: 0 },
   memberCard: { gap: 10, borderTopWidth: 1, paddingTop: 12 },
+  profileChildCard: { gap: 8, borderRadius: 18, borderWidth: 1, padding: 12 },
   contactRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  treeList: { gap: 10 },
+  treeItem: { gap: 8, paddingLeft: 16, position: "relative" },
+  treeItemNested: { marginLeft: 14 },
+  treeStem: { borderRadius: 999, bottom: 0, left: 3, opacity: 0.8, position: "absolute", top: 0, width: 2 },
+  treeCard: { borderRadius: 16, borderWidth: 1, gap: 3, paddingHorizontal: 12, paddingVertical: 10 },
+  treeChildren: { gap: 8 },
   name: { fontSize: 16, fontWeight: "900" },
   badge: {
     overflow: "hidden",

@@ -3,14 +3,21 @@ export type AttendanceLike = {
   status: "going" | "maybe" | "not_going";
 };
 
-export type VoteLike = {
+export type UserScopedDecisionInput = {
   user_id: string;
 };
 
-export function excludeNonAttendingVotes<TVote extends VoteLike>(
+export function excludeNonAttendingEntries<TEntry extends UserScopedDecisionInput>(
+  entries: TEntry[],
+  attendance: AttendanceLike[],
+): TEntry[] {
+  const attendingUsers = new Set(attendance.filter((row) => row.status === "going" || row.status === "maybe").map((row) => row.user_id));
+  return entries.filter((entry) => attendingUsers.has(entry.user_id));
+}
+
+export function excludeNonAttendingVotes<TVote extends UserScopedDecisionInput>(
   votes: TVote[],
   attendance: AttendanceLike[],
 ): TVote[] {
-  const nonAttendingUsers = new Set(attendance.filter((row) => row.status === "not_going").map((row) => row.user_id));
-  return votes.filter((vote) => !nonAttendingUsers.has(vote.user_id));
+  return excludeNonAttendingEntries(votes, attendance);
 }
