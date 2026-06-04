@@ -1,11 +1,18 @@
 import type { SportProfile, WeatherRules } from "../lib/fairConstellationSelection";
 import type { Row, SportLocationType } from "./database.types";
+import { readLocalCache, removeLocalCache, writeLocalCache } from "./localCache";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
+const SPORT_PROFILES_CACHE_KEY = "mcc.cache.sportProfiles.v2";
+const SPORT_PROFILE_LINKS_CACHE_KEY = "mcc.cache.sportProfileLinks.v2";
+const ACTIVE_SPORTS_CACHE_KEY = "mcc.cache.activeSportsWithProfiles.v2";
+const SHORT_CACHE_MS = 60_000;
+
 export type SportProfileAdminInput = {
   profileId?: string | null;
-  sportId: string;
+  sportId?: string;
+  sportIds?: string[];
   name: string;
   locationName?: string | null;
   mapUrl?: string | null;
@@ -35,7 +42,27 @@ export type SportProfileAdminInput = {
   createdBy?: string | null;
 };
 
+export async function listSportProfileSportLinks(
+  supabase: AppSupabaseClient,
+): Promise<ServiceResult<Row<"sport_profile_sports">[]>> {
+  const cached = await readLocalCache<Row<"sport_profile_sports">[]>(SPORT_PROFILE_LINKS_CACHE_KEY, SHORT_CACHE_MS);
+  if (cached) return ok(cached);
+
+  const { data, error } = await supabase.from("sport_profile_sports").select().order("sport_id", { ascending: true });
+
+  if (error || !data) {
+    if (isMissingRelationError(error)) return ok([]);
+    return { data: null, error: fromPostgrestError(error, "Sportprofil-Zuordnungen konnten nicht geladen werden.") };
+  }
+
+  await writeLocalCache(SPORT_PROFILE_LINKS_CACHE_KEY, data);
+  return ok(data);
+}
+
 export async function listSportProfiles(supabase: AppSupabaseClient): Promise<ServiceResult<Row<"sport_profiles">[]>> {
+  const cached = await readLocalCache<Row<"sport_profiles">[]>(SPORT_PROFILES_CACHE_KEY, SHORT_CACHE_MS);
+  if (cached) return ok(cached);
+
   const { data, error } = await supabase
     .from("sport_profiles")
     .select()
@@ -46,6 +73,7 @@ export async function listSportProfiles(supabase: AppSupabaseClient): Promise<Se
     return { data: null, error: fromPostgrestError(error, "Sportprofile konnten nicht geladen werden.") };
   }
 
+  await writeLocalCache(SPORT_PROFILES_CACHE_KEY, data);
   return ok(data);
 }
 
@@ -53,10 +81,53 @@ export async function listSportProfilesForSports(
   supabase: AppSupabaseClient,
   sportIds: string[],
 ): Promise<ServiceResult<Row<"sport_profiles">[]>> {
-  if (sportIds.length === 0) {
+  const normalizedSportIds = normalizeSportIds(sportIds);
+  if (normalizedSportIds.length === 0) {
     return ok([]);
   }
 
+  const linksResult = await supabase
+    .from("sport_profile_sports")
+    .select()
+    .in("sport_id", normalizedSportIds);
+
+  if (linksResult.error) {
+    if (!isMissingRelationError(linksResult.error)) {
+      return { data: null, error: fromPostgrestError(linksResult.error, "Sportprofile konnten nicht geladen werden.") };
+    }
+    return loadLegacyProfilesForSports(supabase, normalizedSportIds);
+  }
+
+  const linkedProfileIds = [...new Set((linksResult.data ?? []).map((link) => link.profile_id))];
+  const linkedRows = linkedProfileIds.length
+    ? await supabase.from("sport_profiles").select().in("id", linkedProfileIds).eq("is_active", true).order("name", { ascending: true })
+    : { data: [] as Row<"sport_profiles">[], error: null };
+
+  if (linkedRows.error || !linkedRows.data) {
+    return { data: null, error: fromPostgrestError(linkedRows.error, "Sportprofile konnten nicht geladen werden.") };
+  }
+
+  const legacyRows = await loadLegacyProfilesForSports(supabase, normalizedSportIds);
+  if (legacyRows.error) return legacyRows;
+
+  const profilesById = new Map(linkedRows.data.map((profile) => [profile.id, profile]));
+  const result = new Map<string, Row<"sport_profiles">>();
+  for (const link of linksResult.data ?? []) {
+    const profile = profilesById.get(link.profile_id);
+    if (!profile?.is_active) continue;
+    result.set(`${profile.id}:${link.sport_id}`, { ...profile, sport_id: link.sport_id });
+  }
+  for (const profile of legacyRows.data) {
+    result.set(`${profile.id}:${profile.sport_id}`, profile);
+  }
+
+  return ok([...result.values()].sort((a, b) => a.name.localeCompare(b.name)));
+}
+
+async function loadLegacyProfilesForSports(
+  supabase: AppSupabaseClient,
+  sportIds: string[],
+): Promise<ServiceResult<Row<"sport_profiles">[]>> {
   const { data, error } = await supabase
     .from("sport_profiles")
     .select()
@@ -78,17 +149,19 @@ export async function upsertSportProfile(
   if (!input.name.trim()) {
     return fail("Bitte gib einen Profilnamen ein.");
   }
-  if (!input.sportId) {
-    return fail("Bitte wähle die zugehörige Sportart aus.");
+  const sportIds = normalizeSportIds(input.sportIds ?? (input.sportId ? [input.sportId] : []));
+  const primarySportId = sportIds[0];
+  if (!primarySportId) {
+    return fail("Bitte waehle mindestens eine zugehoerige Sportart aus.");
   }
-  if (!input.locationName?.trim() && !input.locationCity?.trim() && !input.mapUrl?.trim()) {
-    return fail("Bitte hinterlege einen Standort oder eine Stadt.");
+  if (!input.locationName?.trim()) {
+    return fail("Bitte gib einen kurzen Standortnamen ein.");
   }
   if (!input.minimumGroupSize || input.minimumGroupSize < 1) {
     return fail("Bitte gib die Mindestanzahl an.");
   }
   if (input.maximumGroupSize && input.maximumGroupSize < input.minimumGroupSize) {
-    return fail("Die Maximalanzahl muss größer oder gleich der Mindestanzahl sein.");
+    return fail("Die Maximalanzahl muss groesser oder gleich der Mindestanzahl sein.");
   }
 
   const apContactId = input.apContactId ?? input.createdBy ?? null;
@@ -98,7 +171,7 @@ export async function upsertSportProfile(
     .upsert(
       {
         id: input.profileId ?? undefined,
-        sport_id: input.sportId,
+        sport_id: primarySportId,
         name: input.name.trim(),
         location_name: input.locationName?.trim() || null,
         map_url: input.mapUrl?.trim() || null,
@@ -136,7 +209,33 @@ export async function upsertSportProfile(
     return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht gespeichert werden.") };
   }
 
+  const linkResult = await replaceSportProfileLinks(supabase, data.id, sportIds);
+  if (linkResult.error) {
+    return { data: null, error: linkResult.error };
+  }
+
+  await clearSportProfileCaches();
   return ok(data);
+}
+
+async function replaceSportProfileLinks(
+  supabase: AppSupabaseClient,
+  profileId: string,
+  sportIds: string[],
+): Promise<ServiceResult<{ saved: true }>> {
+  const deleteResult = await supabase.from("sport_profile_sports").delete().eq("profile_id", profileId);
+  if (deleteResult.error) {
+    if (isMissingRelationError(deleteResult.error)) return ok({ saved: true });
+    return { data: null, error: fromPostgrestError(deleteResult.error, "Sportprofil-Zuordnungen konnten nicht gespeichert werden.") };
+  }
+
+  const rows = sportIds.map((sportId) => ({ profile_id: profileId, sport_id: sportId }));
+  const insertResult = rows.length ? await supabase.from("sport_profile_sports").insert(rows) : { error: null };
+  if (insertResult.error) {
+    return { data: null, error: fromPostgrestError(insertResult.error, "Sportprofil-Zuordnungen konnten nicht gespeichert werden.") };
+  }
+
+  return ok({ saved: true });
 }
 
 export async function deleteSportProfile(
@@ -149,6 +248,7 @@ export async function deleteSportProfile(
     return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht geloescht werden.") };
   }
 
+  await clearSportProfileCaches();
   return ok({ deleted: true });
 }
 
@@ -164,10 +264,15 @@ export async function setSportProfileActive(
     .single();
 
   if (error || !data) {
-    return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht geändert werden.") };
+    return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht geaendert werden.") };
   }
 
+  await clearSportProfileCaches();
   return ok(data);
+}
+
+async function clearSportProfileCaches() {
+  await removeLocalCache([SPORT_PROFILES_CACHE_KEY, SPORT_PROFILE_LINKS_CACHE_KEY, ACTIVE_SPORTS_CACHE_KEY]);
 }
 
 export function mapSportProfile(row: Row<"sport_profiles">): SportProfile {
@@ -215,4 +320,14 @@ function deriveVenueGroupKey(value: string | null): string | null {
     .slice(0, 80);
 
   return normalized || null;
+}
+
+function normalizeSportIds(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function isMissingRelationError(error: unknown): boolean {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
+  const message = typeof error === "object" && error && "message" in error ? String((error as { message?: unknown }).message) : "";
+  return code === "42P01" || message.includes("sport_profile_sports");
 }

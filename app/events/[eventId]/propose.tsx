@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SearchField } from "../../../src/components/FormControls";
+import { SportIconBadge } from "../../../src/components/SportIcon";
 import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
@@ -80,7 +81,10 @@ export default function ProposeSportScreen() {
         return (
           <Card key={sport.id}>
             <Pill>{sport.category}</Pill>
-            <Text style={ui.cardTitle}>{sport.name}</Text>
+            <View style={styles.sportTitleRow}>
+              <SportIconBadge sport={sport} size={36} />
+              <Text style={[ui.cardTitle, styles.sportTitleText]}>{sport.name}</Text>
+            </View>
             <Text style={ui.body}>
               {sport.intensity_level} · {sport.location_type}
             </Text>
@@ -97,3 +101,8 @@ export default function ProposeSportScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  sportTitleRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  sportTitleText: { flex: 1, minWidth: 0 },
+});

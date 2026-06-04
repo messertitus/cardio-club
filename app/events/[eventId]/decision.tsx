@@ -1,12 +1,15 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { MapRouteButton } from "../../../src/components/MapRouteButton";
+import { SportIconBadge } from "../../../src/components/SportIcon";
 import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
 import { supabase } from "../../../src/lib/supabase";
 import {
   finalizeEventDecision,
   getEventDecisionPreview,
+  listSportProfilesForSports,
   listSports,
   type EventDecisionPreview,
   type Row,
@@ -16,19 +19,17 @@ export default function DecisionResultScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const [decision, setDecision] = useState<EventDecisionPreview | null>(null);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
+  const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
-  const presentation = useMemo(
-    () => (decision ? buildDecisionPresentation(decision, sportNames) : null),
-    [decision, sportNames],
-  );
+  const presentation = useMemo(() => (decision ? buildDecisionPresentation(decision, sportNames) : null), [decision, sportNames]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [eventId]);
 
   async function load() {
@@ -37,16 +38,18 @@ export default function DecisionResultScreen() {
       listSports(supabase),
       getEventDecisionPreview(supabase, { eventId }),
     ]);
+    const decisionSportIds = decisionResult.data ? [...new Set(decisionResult.data.activities.map((activity) => activity.sportId))] : [];
+    const profilesResult = await listSportProfilesForSports(supabase, decisionSportIds);
     setSports(sportsResult.data ?? []);
+    setSportProfiles(profilesResult.data ?? []);
     setDecision(decisionResult.data);
-    setError(sportsResult.error?.message ?? decisionResult.error?.message ?? null);
+    setError(sportsResult.error?.message ?? decisionResult.error?.message ?? profilesResult.error?.message ?? null);
     setLoading(false);
   }
 
   async function finalize() {
     setSaving(true);
     const result = await finalizeEventDecision(supabase, { eventId });
-
     setSaving(false);
 
     if (result.error) {
@@ -67,7 +70,10 @@ export default function DecisionResultScreen() {
             {presentation.resultLabels.map((label) => (
               <Pill key={label}>{label}</Pill>
             ))}
-            <Text style={ui.title}>{presentation.selectedSportName}</Text>
+            <View style={styles.titleRow}>
+              <SportIconBadge sport={sports.find((sport) => sport.id === decision.selectedSportId)} size={38} />
+              <Text style={[ui.title, styles.titleText]}>{presentation.selectedSportName}</Text>
+            </View>
             {presentation.secondarySportName ? <Text style={ui.cardTitle}>+ {presentation.secondarySportName}</Text> : null}
           </Card>
 
@@ -94,26 +100,28 @@ export default function DecisionResultScreen() {
           {presentation.activityRows.length > 0 ? (
             <Card>
               <Text style={ui.cardTitle}>Konkrete Aktivitäten</Text>
-              {presentation.activityRows.map((activity) => (
-                <Text key={activity.profileId} style={ui.body}>
-                  {activity.sportName}: {activity.profileName}
-                  {activity.locationName ? ` · ${activity.locationName}` : ""} · {activity.participantCount} Personen
-                  {activity.activityContactId ? " · AP hinterlegt" : ""}
-                  {(activity.weatherNotes ?? []).length > 0 ? `\nWetter: ${(activity.weatherNotes ?? []).slice(0, 2).join(" ")}` : ""}
-                  {(activity.practicalityNotes ?? []).length > 0 ? `\nMachbarkeit: ${(activity.practicalityNotes ?? []).slice(0, 2).join(" ")}` : ""}
-                </Text>
-              ))}
+              {presentation.activityRows.map((activity) => {
+                const profile = sportProfiles.find((entry) => entry.id === activity.profileId);
+                return (
+                  <View key={activity.profileId} style={styles.activityRow}>
+                    <Text style={[ui.body, styles.activityText]}>
+                      {activity.sportName}: {activity.profileName}
+                      {activity.locationName ? ` · ${activity.locationName}` : ""} · {activity.participantCount} Personen
+                      {activity.activityContactId ? " · AP hinterlegt" : ""}
+                      {(activity.weatherNotes ?? []).length > 0 ? `\nWetter: ${(activity.weatherNotes ?? []).slice(0, 2).join(" ")}` : ""}
+                      {(activity.practicalityNotes ?? []).length > 0 ? `\nMachbarkeit: ${(activity.practicalityNotes ?? []).slice(0, 2).join(" ")}` : ""}
+                    </Text>
+                    <MapRouteButton target={profile ? profileMapTarget(profile) : activity.locationName ? { label: activity.locationName } : null} compact />
+                  </View>
+                );
+              })}
             </Card>
           ) : null}
 
           <Card>
             <Text style={ui.cardTitle}>Details</Text>
             <Text style={ui.body}>Die genaue Bewertung ist optional, falls ihr die Entscheidung prüfen wollt.</Text>
-            <Button
-              label={showScoreBreakdown ? "Bewertung ausblenden" : "Bewertung anzeigen"}
-              variant="secondary"
-              onPress={() => setShowScoreBreakdown((visible) => !visible)}
-            />
+            <Button label={showScoreBreakdown ? "Bewertung ausblenden" : "Bewertung anzeigen"} variant="secondary" onPress={() => setShowScoreBreakdown((visible) => !visible)} />
             {showScoreBreakdown
               ? presentation.scoreRows.map((score) => (
                   <Text key={score.id} style={ui.body}>
@@ -134,3 +142,19 @@ export default function DecisionResultScreen() {
     </Screen>
   );
 }
+
+function profileMapTarget(profile: Row<"sport_profiles">) {
+  return {
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    mapUrl: profile.map_url,
+    label: [profile.location_name, profile.location_city, profile.postal_code].filter(Boolean).join(" "),
+  };
+}
+
+const styles = StyleSheet.create({
+  titleRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  titleText: { flex: 1, minWidth: 0 },
+  activityRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  activityText: { flex: 1, minWidth: 0 },
+});

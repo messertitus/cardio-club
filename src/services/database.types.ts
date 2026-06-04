@@ -108,9 +108,11 @@ export type Database = {
           description: string | null;
           location_description: string | null;
           category: string;
+          icon_name: string | null;
           intensity_level: SportIntensityLevel;
           location_type: SportLocationType;
           combinable_tags: string[];
+          is_active: boolean;
           created_by: string | null;
           created_at: string;
         };
@@ -120,9 +122,11 @@ export type Database = {
           description?: string | null;
           location_description?: string | null;
           category: string;
+          icon_name?: string | null;
           intensity_level: SportIntensityLevel;
           location_type: SportLocationType;
           combinable_tags?: string[];
+          is_active?: boolean;
           created_by?: string | null;
           created_at?: string;
         };
@@ -131,9 +135,29 @@ export type Database = {
           description?: string | null;
           location_description?: string | null;
           category?: string;
+          icon_name?: string | null;
           intensity_level?: SportIntensityLevel;
           location_type?: SportLocationType;
           combinable_tags?: string[];
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+      sport_profile_sports: {
+        Row: {
+          profile_id: string;
+          sport_id: string;
+          created_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          sport_id: string;
+          created_at?: string;
+        };
+        Update: {
+          profile_id?: string;
+          sport_id?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -871,6 +895,7 @@ export type Database = {
           sport_tags?: string[];
           sport_description?: string | null;
           sport_location_description?: string | null;
+          sport_is_active?: boolean;
         };
         Returns: {
           id: string;
@@ -878,9 +903,11 @@ export type Database = {
           description: string | null;
           location_description: string | null;
           category: string;
+          icon_name: string | null;
           intensity_level: SportIntensityLevel;
           location_type: SportLocationType;
           combinable_tags: string[];
+          is_active: boolean;
           created_by: string | null;
           created_at: string;
         };

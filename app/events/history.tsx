@@ -1,6 +1,7 @@
 import { Redirect, router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { BackButton } from "../../src/components/BackButton";
 import { DetailLine } from "../../src/components/FormControls";
 import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/context/AuthContext";
@@ -61,8 +62,14 @@ export default function EventHistoryScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <Screen title="Vergangene Events" subtitle="Entscheidungen, konkrete Aktivitäten und Details rückwirkend ansehen.">
-      <Button label="Zurück" variant="ghost" onPress={() => router.back()} />
+    <Screen>
+      <View style={styles.header}>
+        <View style={styles.headerText}>
+          <Text style={ui.title}>Vergangene Events</Text>
+          <Text style={ui.subtitle}>Entscheidungen, konkrete Aktivitäten und Details rückwirkend ansehen.</Text>
+        </View>
+        <BackButton onPress={() => router.back()} />
+      </View>
       <ErrorText>{error}</ErrorText>
       {busy ? <LoadingState /> : null}
       {!busy && events.length === 0 ? <Text style={ui.body}>Noch keine Events.</Text> : null}
@@ -98,6 +105,11 @@ export default function EventHistoryScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { alignItems: "flex-start", flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  headerText: { flex: 1, minWidth: 0, gap: 6 },
+});
 
 function eventTypeLabel(type: Row<"weekly_events">["decision_type"]): string {
   if (type === "multi_sport") return "Multi-Sport";

@@ -1,9 +1,12 @@
 import type { Json, Row, SportLocationType } from "./database.types";
+import { readLocalCache, removeLocalCache, writeLocalCache } from "./localCache";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
 export type SportIdeaDraftStep = "location" | "essentials" | "optional" | "review";
 export type SportIdeaLocationMode = Row<"sport_ideas">["location_mode"];
+const SPORT_IDEAS_CACHE_KEY = "mcc.cache.sportIdeas.v1";
+const SHORT_CACHE_MS = 30_000;
 
 export type SportIdeaWithCreator = Row<"sport_ideas"> & {
   creatorName: string;
@@ -46,6 +49,9 @@ export type SportIdeaInput = {
 };
 
 export async function listSportIdeas(supabase: AppSupabaseClient): Promise<ServiceResult<SportIdeaWithCreator[]>> {
+  const cached = await readLocalCache<SportIdeaWithCreator[]>(SPORT_IDEAS_CACHE_KEY, SHORT_CACHE_MS);
+  if (cached) return ok(cached);
+
   const { data, error } = await supabase.from("sport_ideas").select().order("created_at", { ascending: false }).limit(50);
 
   if (error || !data) {
@@ -69,8 +75,7 @@ export async function listSportIdeas(supabase: AppSupabaseClient): Promise<Servi
   const profiles = new Map(profilesResult.data.map((profile) => [profile.id, profile]));
   const sportNames = new Map(sportsResult.data.map((sport) => [sport.id, sport.name]));
 
-  return ok(
-    data.map((idea) => {
+  const result = data.map((idea) => {
       const profile = profiles.get(idea.suggested_by);
       return {
         ...idea,
@@ -78,8 +83,9 @@ export async function listSportIdeas(supabase: AppSupabaseClient): Promise<Servi
         creatorCity: profile?.city ?? null,
         sportName: idea.sport_id ? sportNames.get(idea.sport_id) ?? null : null,
       };
-    }),
-  );
+    });
+  await writeLocalCache(SPORT_IDEAS_CACHE_KEY, result);
+  return ok(result);
 }
 
 export async function suggestSportIdea(
@@ -112,6 +118,7 @@ export async function saveSportIdeaDraft(
     return { data: null, error: fromPostgrestError(error, "Entwurf konnte nicht gespeichert werden.") };
   }
 
+  await removeLocalCache([SPORT_IDEAS_CACHE_KEY]);
   return ok(data);
 }
 
@@ -132,6 +139,7 @@ export async function submitSportIdea(
     return { data: null, error: fromPostgrestError(error, "Sportidee konnte nicht eingereicht werden.") };
   }
 
+  await removeLocalCache([SPORT_IDEAS_CACHE_KEY]);
   return ok(data);
 }
 
@@ -151,6 +159,7 @@ export async function saveSportIdeaAdminEdits(
     return { data: null, error: fromPostgrestError(error, "Sportidee konnte nicht ergänzt werden.") };
   }
 
+  await removeLocalCache([SPORT_IDEAS_CACHE_KEY]);
   return ok(data);
 }
 
@@ -175,6 +184,7 @@ export async function reviewSportIdea(
     return { data: null, error: fromPostgrestError(error, "Sportidee konnte nicht geprüft werden.") };
   }
 
+  await removeLocalCache([SPORT_IDEAS_CACHE_KEY]);
   return ok(data);
 }
 
@@ -243,8 +253,8 @@ function validateIdeaForSubmit(input: SportIdeaInput): string | null {
   if (!textOrNull(input.name)) return "Bitte gib der Idee einen Namen.";
   if (!textOrNull(input.profileName) && !textOrNull(input.name)) return "Bitte gib einen Profilnamen an.";
   if (!input.locationMode) return "Bitte wähle aus, ob der Standort fest oder flexibel ist.";
-  if (input.locationMode === "fixed" && !textOrNull(input.location) && !textOrNull(input.mapUrl)) {
-    return "Bitte markiere den Standort auf der Karte.";
+  if (input.locationMode === "fixed" && !textOrNull(input.location)) {
+    return "Bitte gib einen kurzen Standortnamen an.";
   }
   if (input.locationMode === "flexible" && !textOrNull(input.locationCity) && !textOrNull(input.postalCode)) {
     return "Bitte gib für flexible Ideen mindestens Stadt oder PLZ an.";

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -10,7 +10,7 @@ import { ThemeToggle } from "../src/components/ThemeToggle";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
-import { isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas } from "../src/services";
+import { getMyProfile, isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas, updateProfileCity } from "../src/services";
 
 const darkLogo = require("../assets/mcc-logo-white-symbol-transparent.png");
 const lightLogo = require("../assets/mcc-logo-color-symbol.png");
@@ -30,6 +30,10 @@ export default function MenuScreen() {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [readNotifications, setReadNotifications] = useState<Record<string, number>>({});
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [locationPromptOpen, setLocationPromptOpen] = useState(false);
+  const [postalCode, setPostalCode] = useState("");
+  const [city, setCity] = useState("");
+  const [locationBusy, setLocationBusy] = useState(false);
   const visibleNotifications = notifications.filter((notification) => isNotificationVisible(notification.id, readNotifications));
   const unreadNotifications = visibleNotifications.filter((notification) => !readNotifications[notification.id]);
 
@@ -39,6 +43,11 @@ export default function MenuScreen() {
       if (!user) return;
       const readMap = await loadReadNotifications(user.id);
       setReadNotifications(readMap);
+      const profileResult = await getMyProfile(supabase, user.id);
+      if (profileResult.data) {
+        setPostalCode(profileResult.data.postal_code ?? "");
+        setCity(profileResult.data.city ?? "");
+      }
       const adminResult = await isCurrentUserAdmin(supabase, user.id);
       const nextIsAdmin = adminResult.data ?? false;
       setIsAdmin(nextIsAdmin);
@@ -102,6 +111,22 @@ export default function MenuScreen() {
     router.replace("/auth");
   }
 
+  async function updatePostalCode(value: string) {
+    const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
+    setPostalCode(nextPostalCode);
+    if (nextPostalCode.length !== 5) return;
+    const onlineCity = await fetchGermanCityByPostalCode(nextPostalCode);
+    setCity(onlineCity ?? inferCityFromPostalCode(nextPostalCode));
+  }
+
+  async function saveLocation() {
+    if (!user || postalCode.length < 5 || !city.trim()) return;
+    setLocationBusy(true);
+    const result = await updateProfileCity(supabase, { userId: user.id, postalCode, city: city.trim() });
+    setLocationBusy(false);
+    if (!result.error) setLocationPromptOpen(false);
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <BrandBackground />
@@ -142,8 +167,9 @@ export default function MenuScreen() {
             <MenuItem index={1} title="Sportarten und Standorte" body="Neue Aktivität vorschlagen" onPress={() => router.push("/ideas")} />
             <MenuItem index={2} title="PIN" body="App-PIN ändern" onPress={() => router.push("/pin")} />
             <MenuItem index={3} title="Push" body="Benachrichtigungen verwalten" onPress={() => router.push("/push")} />
-            <MenuItem index={4} title="Profil" body="Name, Stadt und Telefonnummer" onPress={() => router.push("/profile")} />
-            {isAdmin ? <MenuItem index={5} title="Admin" body="Mitglieder und Rechte verwalten" onPress={() => router.push("/admin")} /> : null}
+            <MenuItem index={4} title="Standort" body={city ? `${postalCode} ${city}` : "PLZ und Stadt setzen"} onPress={() => setLocationPromptOpen(true)} />
+            <MenuItem index={5} title="Profil" body="Name und Telefonnummer" onPress={() => router.push("/profile")} />
+            {isAdmin ? <MenuItem index={6} title="Admin" body="Mitglieder und Rechte verwalten" onPress={() => router.push("/admin")} /> : null}
           </View>
 
           <Pressable style={({ pressed }) => [styles.signOut, { borderColor: theme.border }, pressed && styles.itemPressed]} onPress={signOut}>
@@ -153,6 +179,16 @@ export default function MenuScreen() {
         {isAdmin && notificationsOpen ? (
           <NotificationPreviewPanel notifications={visibleNotifications} readNotifications={readNotifications} onSelect={openNotification} onMarkUnread={markNotificationUnread} />
         ) : null}
+        <LocationPrompt
+          visible={locationPromptOpen}
+          postalCode={postalCode}
+          city={city}
+          busy={locationBusy}
+          onPostalCodeChange={updatePostalCode}
+          onCityChange={setCity}
+          onSave={saveLocation}
+          onClose={() => setLocationPromptOpen(false)}
+        />
         <BottomNav active="menu" />
       </View>
     </SafeAreaView>
@@ -173,6 +209,66 @@ function AdminNoticeButton({ count, open, onPress }: { count: number; open: bool
         </View>
       ) : null}
     </Pressable>
+  );
+}
+
+function LocationPrompt({
+  visible,
+  postalCode,
+  city,
+  busy,
+  onPostalCodeChange,
+  onCityChange,
+  onSave,
+  onClose,
+}: {
+  visible: boolean;
+  postalCode: string;
+  city: string;
+  busy: boolean;
+  onPostalCodeChange: (value: string) => void;
+  onCityChange: (value: string) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const { theme } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={undefined} style={styles.locationOverlay}>
+        <View style={[styles.locationCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+          <Text style={[styles.locationKicker, { color: theme.accent }]}>Standort</Text>
+          <Text style={[styles.locationTitle, { color: theme.text }]}>Aus welcher Stadt kommst du?</Text>
+          <TextInput
+            value={postalCode}
+            onChangeText={onPostalCodeChange}
+            placeholder="PLZ"
+            placeholderTextColor={theme.muted}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            maxLength={5}
+            style={[styles.locationInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+          />
+          <TextInput
+            value={city}
+            onChangeText={onCityChange}
+            placeholder="Stadt"
+            placeholderTextColor={theme.muted}
+            autoCapitalize="words"
+            style={[styles.locationInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+          />
+          <Pressable
+            style={[styles.locationButton, { backgroundColor: theme.button }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
+            onPress={onSave}
+            disabled={postalCode.length < 5 || !city.trim() || busy}
+          >
+            <Text style={[styles.locationButtonText, { color: theme.inverse }]}>{busy ? "Speichern..." : "Speichern"}</Text>
+          </Pressable>
+          <Pressable style={styles.locationClose} onPress={onClose}>
+            <Text style={[styles.locationCloseText, { color: theme.muted }]}>Schliessen</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -255,6 +351,39 @@ async function saveReadNotifications(userId: string, readNotifications: Record<s
 
 function readNotificationsKey(userId: string): string {
   return `mcc:admin-notifications-read:${userId}`;
+}
+
+async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.zippopotam.us/de/${postalCode}`);
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { places?: Array<{ "place name"?: string }> };
+    return payload.places?.[0]?.["place name"] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function inferCityFromPostalCode(postalCode: string): string {
+  const exact: Record<string, string> = {
+    "10115": "Berlin",
+    "20095": "Hamburg",
+    "50667": "Koeln",
+    "60311": "Frankfurt am Main",
+    "70173": "Stuttgart",
+    "80331": "Muenchen",
+    "78462": "Konstanz",
+  };
+  if (exact[postalCode]) return exact[postalCode];
+  const prefix = Number(postalCode.slice(0, 2));
+  if (prefix <= 14) return "Berlin";
+  if (prefix <= 22) return "Hamburg";
+  if (prefix <= 42) return "Duesseldorf";
+  if (prefix <= 53) return "Koeln";
+  if (prefix <= 65) return "Frankfurt am Main";
+  if (prefix <= 79) return "Konstanz";
+  if (prefix <= 89) return "Muenchen";
+  return "";
 }
 
 function isNotificationVisible(id: string, readNotifications: Record<string, number>): boolean {
@@ -351,6 +480,41 @@ const styles = StyleSheet.create({
   },
   notificationTitle: { fontSize: 16, fontWeight: "900" },
   notificationEmpty: { fontSize: 14, fontWeight: "800", lineHeight: 20 },
+  locationOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 14,
+    paddingBottom: 92,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  locationCard: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 430,
+    gap: 12,
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: "#000000",
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+  },
+  locationKicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  locationTitle: { fontSize: 25, fontWeight: "900", lineHeight: 29 },
+  locationInput: {
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    fontSize: 17,
+    paddingHorizontal: 14,
+    outlineStyle: "none",
+  } as object,
+  locationButton: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
+  locationButtonText: { fontSize: 15, fontWeight: "900" },
+  locationClose: { alignItems: "center", paddingVertical: 5 },
+  locationCloseText: { fontSize: 14, fontWeight: "900" },
+  disabled: { opacity: 0.42 },
   notificationRow: { alignItems: "center", borderTopWidth: 1, flexDirection: "row", gap: 10, paddingTop: 10 },
   notificationDot: { backgroundColor: "#4da3ff", borderRadius: 999, height: 8, width: 8 },
   notificationDotRead: { opacity: 0.28 },

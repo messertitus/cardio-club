@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SearchField } from "../../../src/components/FormControls";
+import { SportIconBadge } from "../../../src/components/SportIcon";
 import { Button, Card, EmptyState, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
@@ -51,7 +52,6 @@ export default function VoteOnSportsScreen() {
     [user?.id, votes],
   );
   const myVoteBySport = useMemo(() => new Map(myVotes.map((vote) => [vote.sport_id, vote])), [myVotes]);
-  const usedRankBySport = useMemo(() => new Map(myVotes.map((vote) => [vote.vote_rank, vote.sport_id])), [myVotes]);
   const myAttendance = useMemo(() => attendance.find((entry) => entry.user_id === user?.id) ?? null, [attendance, user?.id]);
   const canVote = myAttendance?.status === "going" || myAttendance?.status === "maybe";
   const filteredProposals = useMemo(() => {
@@ -266,21 +266,23 @@ export default function VoteOnSportsScreen() {
         return (
           <Card key={proposal.id}>
             <Pill>{countVotes(proposal.sport_id)} gewichtete Stimmen</Pill>
-            <Text style={ui.cardTitle}>{sport?.name ?? proposal.sport_id}</Text>
+            <View style={styles.sportTitleRow}>
+              <SportIconBadge sport={sport} size={36} />
+              <Text style={[ui.cardTitle, styles.sportTitleText]}>{sport?.name ?? proposal.sport_id}</Text>
+            </View>
             <Text style={ui.body}>{sport ? `${sport.category} · ${sport.intensity_level}` : "Vorgeschlagene Sportart"}</Text>
             <Text style={ui.body}>{profileSummary(sportProfiles, proposal.sport_id)}</Text>
             {myNoGo ? <Text style={ui.body}>Dein No-Go ist gespeichert.</Text> : null}
             {myVote ? <Text style={ui.body}>Deine Auswahl: {rankLabel(myVote.vote_rank as VoteRank)}</Text> : null}
             {[1, 2, 3].map((rank) => {
               const typedRank = rank as VoteRank;
-              const rankUsedByOtherSport = usedRankBySport.get(typedRank) && usedRankBySport.get(typedRank) !== proposal.sport_id;
 
               return (
                 <Button
                   key={rank}
                   label={rankLabel(typedRank)}
                   variant={myVote?.vote_rank === typedRank ? "primary" : "secondary"}
-                  disabled={Boolean(!canVote || rankUsedByOtherSport || myNoGo)}
+                  disabled={Boolean(!canVote || myNoGo)}
                   onPress={() => setRankedVote(proposal.sport_id, typedRank)}
                 />
               );
@@ -298,6 +300,11 @@ export default function VoteOnSportsScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  sportTitleRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  sportTitleText: { flex: 1, minWidth: 0 },
+});
 
 function attendanceLabel(status?: AttendanceStatus): string {
   if (status === "going") return "Dabei";
