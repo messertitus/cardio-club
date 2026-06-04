@@ -1,14 +1,19 @@
 import type { ClubMemberRole, Row, SportIntensityLevel } from "./database.types";
+import { removeLocalCache } from "./localCache";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
+
+const ACTIVE_SPORTS_CACHE_KEY = "mcc.cache.activeSportsWithProfiles.v2";
 
 export type MccSportAdminInput = {
   sportId?: string | null;
   name: string;
   description?: string | null;
   category: string;
+  iconName?: string | null;
   intensityLevel: SportIntensityLevel;
-  combinableTags: string[];
+  combinableTags?: string[];
+  isActive?: boolean;
 };
 
 export type MccSportContact = Row<"sport_contacts"> & {
@@ -178,18 +183,50 @@ export async function upsertMccSport(supabase: AppSupabaseClient, input: MccSpor
   const { data, error } = await supabase.rpc("admin_upsert_sport", {
     target_sport_id: input.sportId ?? null,
     sport_name: input.name.trim(),
-    sport_category: input.category.trim() || "cardio",
+    sport_category: input.category.trim() || "unknown",
     sport_intensity: input.intensityLevel,
     sport_location_type: "flexible",
-    sport_tags: input.combinableTags.map((tag) => tag.trim()).filter(Boolean),
+    sport_tags: (input.combinableTags ?? []).map((tag) => tag.trim()).filter(Boolean),
     sport_description: input.description?.trim() || null,
     sport_location_description: null,
+    sport_is_active: input.isActive ?? true,
   });
 
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Sportart konnte nicht gespeichert werden.") };
   }
 
+  const { data: updatedSport, error: iconError } = await supabase
+    .from("sports")
+    .update({ icon_name: input.iconName?.trim() || null })
+    .eq("id", data.id)
+    .select()
+    .single();
+
+  if (iconError || !updatedSport) {
+    return { data: null, error: fromPostgrestError(iconError, "Sport-Icon konnte nicht gespeichert werden.") };
+  }
+
+  await removeLocalCache([ACTIVE_SPORTS_CACHE_KEY]);
+  return ok(updatedSport);
+}
+
+export async function setMccSportActive(
+  supabase: AppSupabaseClient,
+  input: { sportId: string; isActive: boolean },
+): Promise<ServiceResult<Row<"sports">>> {
+  const { data, error } = await supabase
+    .from("sports")
+    .update({ is_active: input.isActive })
+    .eq("id", input.sportId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Sportart konnte nicht geändert werden.") };
+  }
+
+  await removeLocalCache([ACTIVE_SPORTS_CACHE_KEY]);
   return ok(data);
 }
 
@@ -200,5 +237,6 @@ export async function deleteMccSport(supabase: AppSupabaseClient, sportId: strin
     return { data: null, error: fromPostgrestError(error, "Sportart konnte nicht gelöscht werden.") };
   }
 
+  await removeLocalCache([ACTIVE_SPORTS_CACHE_KEY]);
   return ok({ deleted: true });
 }

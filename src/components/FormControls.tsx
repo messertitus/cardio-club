@@ -1,7 +1,24 @@
-import { useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Image,
+  Modal,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+} from "react-native";
 import { useTheme } from "../context/ThemeContext";
-import { buildMapsSearchUrl, cleanLocationText, extractCoordinatesFromMapsText } from "../lib/locationSelection";
+
+type Coordinates = { latitude: number; longitude: number };
+type LocationSearchResult = Coordinates & { label: string };
+
+const DEFAULT_MAP_CENTER: Coordinates = { latitude: 47.6618, longitude: 9.1752 };
+const MAP_ZOOM = 16;
+const TILE_SIZE = 256;
 
 export function LabeledInput({
   label,
@@ -11,11 +28,12 @@ export function LabeledInput({
   ...props
 }: TextInputProps & { label: string; required?: boolean; helper?: string; error?: string | null }) {
   const { theme } = useTheme();
+  void required;
+
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
-        <Text style={[styles.required, { color: required ? theme.accent : theme.muted }]}>{required ? "Pflicht" : "Optional"}</Text>
       </View>
       {helper ? <Text style={[styles.helper, { color: theme.muted }]}>{helper}</Text> : null}
       <TextInput
@@ -88,41 +106,45 @@ export function MapLocationPicker({
   label,
   location,
   mapUrl,
+  latitude,
+  longitude,
   onLocationChange,
   onMapUrlChange,
   onCoordinatesChange,
+  showNameInput = true,
+  onConfirmed,
   required,
   error,
 }: {
   label: string;
   location: string;
   mapUrl: string;
+  latitude?: number | null;
+  longitude?: number | null;
   onLocationChange: (value: string) => void;
   onMapUrlChange: (value: string) => void;
   onCoordinatesChange: (coordinates: { latitude: number | null; longitude: number | null }) => void;
+  showNameInput?: boolean;
+  onConfirmed?: () => void;
   required?: boolean;
   error?: string | null;
 }) {
   const { theme } = useTheme();
   const [searchText, setSearchText] = useState(location);
-  const [results, setResults] = useState<Array<{ label: string; latitude: number; longitude: number }>>([]);
+  const [results, setResults] = useState<LocationSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [mapCenter, setMapCenter] = useState<Coordinates>(() => coordinatesFromProps(latitude, longitude) ?? DEFAULT_MAP_CENTER);
+  const [selectedCoordinates, setSelectedCoordinates] = useState<Coordinates | null>(() => coordinatesFromProps(latitude, longitude));
+  const [mapNotice, setMapNotice] = useState<string | null>(null);
+  void mapUrl;
 
-  function applyMapText(value: string) {
-    onMapUrlChange(value);
-    const coordinates = extractCoordinatesFromMapsText(value);
-    if (coordinates) {
-      onCoordinatesChange(coordinates);
-    }
-    const nextLocation = cleanLocationText(value);
-    if (nextLocation && !location.trim()) {
-      onLocationChange(nextLocation);
-    }
-  }
-
-  async function openMaps() {
-    await Linking.openURL(buildMapsSearchUrl(location));
-  }
+  useEffect(() => {
+    const coordinates = coordinatesFromProps(latitude, longitude);
+    if (!coordinates) return;
+    setSelectedCoordinates(coordinates);
+    setMapCenter(coordinates);
+  }, [latitude, longitude]);
 
   async function searchLocation() {
     const query = (searchText || location).trim();
@@ -143,27 +165,73 @@ export function MapLocationPicker({
     }
   }
 
-  function selectResult(result: { label: string; latitude: number; longitude: number }) {
-    onLocationChange(result.label);
-    onCoordinatesChange({ latitude: result.latitude, longitude: result.longitude });
-    onMapUrlChange(`https://www.openstreetmap.org/?mlat=${result.latitude}&mlon=${result.longitude}#map=18/${result.latitude}/${result.longitude}`);
-    setSearchText(result.label);
+  function selectResult(result: LocationSearchResult) {
+    const displayName = shortLocationName(result.label);
+    const coordinates = { latitude: result.latitude, longitude: result.longitude };
+    onLocationChange(displayName);
+    setSelectedCoordinates(coordinates);
+    setMapCenter(coordinates);
+    setMapOpen(true);
+    setMapNotice(null);
+    setSearchText(displayName);
     setResults([]);
+  }
+
+  function openMapPicker() {
+    const coordinates = selectedCoordinates ?? coordinatesFromProps(latitude, longitude);
+    if (coordinates) {
+      setSelectedCoordinates(coordinates);
+      setMapCenter(coordinates);
+    }
+    setMapOpen(true);
+    setMapNotice(null);
+  }
+
+  function pickOnMap(coordinates: Coordinates) {
+    setSelectedCoordinates(coordinates);
+    if (!location.trim() && searchText.trim()) {
+      onLocationChange(shortLocationName(searchText));
+    }
+  }
+
+  function confirmMapSelection() {
+    if (!selectedCoordinates) {
+      setMapNotice("Setze zuerst eine Markierung in der Karte.");
+      return;
+    }
+    onCoordinatesChange(selectedCoordinates);
+    onMapUrlChange(buildOsmMarkerUrl(selectedCoordinates));
+    if (!location.trim()) {
+      setMapNotice("Koordinaten übernommen. Bitte gib noch einen kurzen Standortnamen ein.");
+    } else {
+      setMapNotice("Koordinaten übernommen.");
+    }
+    setMapOpen(false);
+    onConfirmed?.();
   }
 
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
-      <Text style={[styles.required, { color: required ? theme.accent : theme.muted }]}>{required ? "Pflicht" : "Optional"}</Text>
       </View>
-      <Text style={[styles.helper, { color: theme.muted }]}>Suche den Ort, wähle den passenden Kartentreffer aus und bestätige ihn. Koordinaten werden intern übernommen.</Text>
-      <LabeledInput label="Standortname" required={required} value={location} onChangeText={onLocationChange} placeholder="z. B. Stadtgarten Konstanz, Basketballplatz" error={error} />
+      <Text style={[styles.helper, { color: theme.muted }]}>Online suchen oder direkt in der Karte markieren. Danach bestätigst du die exakte Stelle.</Text>
+      {showNameInput ? (
+        <LabeledInput
+          label="Kurzname des Standorts"
+          required={required}
+          value={location}
+          onChangeText={onLocationChange}
+          placeholder="z. B. Hörnle, Schänzleplatz, Uni-Sporthalle"
+          error={error}
+        />
+      ) : null}
+      <Text style={[styles.mapSectionLabel, { color: theme.text }]}>Online suchen</Text>
       <View style={styles.mapSearchRow}>
         <TextInput
           value={searchText}
           onChangeText={setSearchText}
-          placeholder="Ort auf Karte suchen"
+          placeholder="z. B. Hörnle Konstanz oder Stadtgarten Basketballplatz"
           placeholderTextColor={theme.muted}
           style={[styles.mapSearchInput, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]}
         />
@@ -174,21 +242,269 @@ export function MapLocationPicker({
       {results.map((result) => (
         <Pressable key={`${result.latitude}-${result.longitude}-${result.label}`} style={[styles.mapResult, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => selectResult(result)}>
           <Text style={[styles.mapResultText, { color: theme.text }]} numberOfLines={2}>{result.label}</Text>
-          <Text style={[styles.mapResultMeta, { color: theme.muted }]}>Übernehmen</Text>
+          <Text style={[styles.mapResultMeta, { color: theme.muted }]}>Übernehmen als {shortLocationName(result.label)}</Text>
         </Pressable>
       ))}
-      <Pressable style={[styles.mapGhostButton, { borderColor: theme.border }]} onPress={openMaps}>
-        <Text style={[styles.mapGhostText, { color: theme.muted }]}>In Karten-App öffnen</Text>
+      <Pressable style={[styles.mapGhostButton, { borderColor: theme.border }]} onPress={openMapPicker}>
+        <MaterialCommunityIcons name="map-marker-plus" size={18} color={theme.text} />
+        <Text style={[styles.mapGhostText, { color: theme.text }]}>{selectedCoordinates ? "Markierung prüfen" : "In Karte markieren"}</Text>
       </Pressable>
+      {mapOpen ? (
+        <MapPickerModal
+          center={mapCenter}
+          marker={selectedCoordinates}
+          onCenterChange={setMapCenter}
+          onPick={pickOnMap}
+          onUse={confirmMapSelection}
+          onClose={() => setMapOpen(false)}
+        />
+      ) : null}
+      {selectedCoordinates ? (
+        <Text style={[styles.helper, { color: theme.muted }]}>
+          Markiert: {selectedCoordinates.latitude.toFixed(5)}, {selectedCoordinates.longitude.toFixed(5)}
+        </Text>
+      ) : null}
+      {mapNotice ? <Text style={[styles.helper, { color: mapNotice.startsWith("Koordinaten") || mapNotice.startsWith("Treffer") ? theme.accent : "#ffb5a8" }]}>{mapNotice}</Text> : null}
     </View>
   );
+}
+
+function MapPickerModal({
+  center,
+  marker,
+  onCenterChange,
+  onPick,
+  onUse,
+  onClose,
+}: {
+  center: Coordinates;
+  marker: Coordinates | null;
+  onCenterChange: (coordinates: Coordinates) => void;
+  onPick: (coordinates: Coordinates) => void;
+  onUse: () => void;
+  onClose: () => void;
+}) {
+  const { theme } = useTheme();
+  const [size, setSize] = useState({ width: 0, height: 380 });
+  const [zoom, setZoom] = useState(MAP_ZOOM);
+  const dragStartRef = useRef<{ center: Coordinates; zoom: number; distance: number | null; x: number; y: number } | null>(null);
+  const mapMovedRef = useRef(false);
+  const lastTouchCountRef = useRef(0);
+  const width = size.width || 360;
+  const height = size.height;
+  const tiles = useMemo(() => mapTiles(center, width, height, zoom), [center, height, width, zoom]);
+  const markerStyle = marker ? markerScreenStyle(center, marker, width, height, zoom) : null;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (event, gesture) => event.nativeEvent.touches.length > 1 || Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2,
+        onPanResponderGrant: (event) => {
+          mapMovedRef.current = false;
+          lastTouchCountRef.current = event.nativeEvent.touches.length || 1;
+          dragStartRef.current = {
+            center,
+            zoom,
+            distance: touchDistance(event.nativeEvent.touches),
+            x: event.nativeEvent.locationX,
+            y: event.nativeEvent.locationY,
+          };
+        },
+        onPanResponderMove: (event, gesture) => {
+          const start = dragStartRef.current;
+          if (!start) return;
+          const touchCount = event.nativeEvent.touches.length;
+          lastTouchCountRef.current = Math.max(lastTouchCountRef.current, touchCount || 1);
+          if (touchCount > 1 || Math.abs(gesture.dx) > 8 || Math.abs(gesture.dy) > 8) {
+            mapMovedRef.current = true;
+          }
+          const currentDistance = touchDistance(event.nativeEvent.touches);
+          if (currentDistance && start.distance) {
+            const ratio = currentDistance / start.distance;
+            if (ratio > 1.18) {
+              setZoom((current) => Math.min(19, current + 1));
+              dragStartRef.current = { ...start, distance: currentDistance };
+              return;
+            }
+            if (ratio < 0.82) {
+              setZoom((current) => Math.max(3, current - 1));
+              dragStartRef.current = { ...start, distance: currentDistance };
+              return;
+            }
+          }
+          const startPixel = worldPixel(start.center, start.zoom);
+          onCenterChange(coordinatesFromWorldPixel(startPixel.x - gesture.dx, startPixel.y - gesture.dy, start.zoom));
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          const start = dragStartRef.current;
+          dragStartRef.current = null;
+          if (!start) return;
+          if (!mapMovedRef.current && lastTouchCountRef.current <= 1 && Math.abs(gesture.dx) <= 4 && Math.abs(gesture.dy) <= 4) {
+            onPick(coordinatesFromScreen(center, start.x, start.y, width, height, zoom));
+          }
+          mapMovedRef.current = false;
+          lastTouchCountRef.current = 0;
+        },
+      }),
+    [center, height, onCenterChange, onPick, width, zoom],
+  );
+
+  function zoomBy(delta: number) {
+    setZoom((current) => Math.max(3, Math.min(19, current + delta)));
+  }
+
+  function handleWheel(event: { nativeEvent?: { deltaY?: number }; deltaY?: number; preventDefault?: () => void }) {
+    const deltaY = event.nativeEvent?.deltaY ?? event.deltaY ?? 0;
+    if (!deltaY) return;
+    event.preventDefault?.();
+    zoomBy(deltaY < 0 ? 1 : -1);
+  }
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.mapModalOverlay}>
+        <View style={[styles.mapModalCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+          <View style={styles.inlineMapHeader}>
+            <View style={styles.inlineMapTitleWrap}>
+              <Text style={[styles.inlineMapTitle, { color: theme.text }]}>Wo genau ist der Standort?</Text>
+              <Text style={[styles.inlineMapHelper, { color: theme.muted }]}>Tippen setzt die Markierung. Ziehen verschiebt die Karte, Mausrad oder zwei Finger zoomen.</Text>
+            </View>
+            <Pressable style={[styles.inlineMapClose, { backgroundColor: theme.softSurface }]} onPress={onClose}>
+              <MaterialCommunityIcons name="close" size={19} color={theme.text} />
+            </Pressable>
+          </View>
+          <View
+            style={[styles.inlineMapCanvas, { borderColor: theme.border, backgroundColor: theme.softSurface }]}
+            onLayout={(event) => {
+              const nextWidth = Math.max(260, event.nativeEvent.layout.width);
+              setSize({ width: nextWidth, height: 380 });
+            }}
+            {...panResponder.panHandlers}
+            {...({ onWheel: handleWheel } as object)}
+          >
+            {tiles.map((tile) => (
+              <Image key={`${tile.x}-${tile.y}-${zoom}`} source={{ uri: tile.url }} style={[styles.mapTile, { left: tile.left, top: tile.top }]} />
+            ))}
+            <View style={[styles.mapCrosshairHorizontal, { backgroundColor: theme.border }]} />
+            <View style={[styles.mapCrosshairVertical, { backgroundColor: theme.border }]} />
+            {markerStyle ? (
+              <View style={[styles.mapMarker, markerStyle]}>
+                <MaterialCommunityIcons name="map-marker" size={34} color={theme.accent} />
+              </View>
+            ) : null}
+            <View style={styles.mapZoomControls}>
+              <Pressable style={[styles.mapZoomButton, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => zoomBy(1)}>
+                <MaterialCommunityIcons name="plus" size={18} color={theme.text} />
+              </Pressable>
+              <Pressable style={[styles.mapZoomButton, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => zoomBy(-1)}>
+                <MaterialCommunityIcons name="minus" size={18} color={theme.text} />
+              </Pressable>
+            </View>
+          </View>
+          {marker ? (
+            <Text style={[styles.inlineMapHelper, { color: theme.muted }]}>
+              Markierung: {marker.latitude.toFixed(5)}, {marker.longitude.toFixed(5)}
+            </Text>
+          ) : (
+            <Text style={[styles.inlineMapHelper, { color: "#ffb5a8" }]}>Tippe einmal auf die Karte, bevor du uebernimmst.</Text>
+          )}
+          <Pressable style={[styles.mapUseButton, { backgroundColor: theme.button, opacity: marker ? 1 : 0.44 }]} onPress={onUse} disabled={!marker}>
+            <Text style={[styles.mapUseButtonText, { color: theme.inverse }]}>Markierung übernehmen</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function touchDistance(touches: ReadonlyArray<{ pageX: number; pageY: number }>): number | null {
+  if (touches.length < 2) return null;
+  const [first, second] = touches;
+  return Math.hypot(first.pageX - second.pageX, first.pageY - second.pageY);
+}
+
+function coordinatesFromProps(latitude?: number | null, longitude?: number | null): Coordinates | null {
+  return typeof latitude === "number" && typeof longitude === "number" && Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null;
+}
+
+function buildOsmMarkerUrl(coordinates: Coordinates): string {
+  return `https://www.openstreetmap.org/?mlat=${coordinates.latitude}&mlon=${coordinates.longitude}#map=18/${coordinates.latitude}/${coordinates.longitude}`;
+}
+
+function worldPixel(coordinates: Coordinates, zoom: number): { x: number; y: number } {
+  const scale = TILE_SIZE * 2 ** zoom;
+  const latitude = Math.max(-85.0511, Math.min(85.0511, coordinates.latitude));
+  const sin = Math.sin((latitude * Math.PI) / 180);
+  return {
+    x: ((coordinates.longitude + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale,
+  };
+}
+
+function coordinatesFromWorldPixel(x: number, y: number, zoom: number): Coordinates {
+  const scale = TILE_SIZE * 2 ** zoom;
+  const longitude = (x / scale) * 360 - 180;
+  const latitudeRadians = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / scale)));
+  return {
+    latitude: (latitudeRadians * 180) / Math.PI,
+    longitude,
+  };
+}
+
+function coordinatesFromScreen(center: Coordinates, screenX: number, screenY: number, width: number, height: number, zoom: number): Coordinates {
+  const centerPixel = worldPixel(center, zoom);
+  return coordinatesFromWorldPixel(centerPixel.x + screenX - width / 2, centerPixel.y + screenY - height / 2, zoom);
+}
+
+function markerScreenStyle(center: Coordinates, marker: Coordinates, width: number, height: number, zoom: number) {
+  const centerPixel = worldPixel(center, zoom);
+  const markerPixel = worldPixel(marker, zoom);
+  return {
+    left: width / 2 + markerPixel.x - centerPixel.x - 17,
+    top: height / 2 + markerPixel.y - centerPixel.y - 34,
+  };
+}
+
+function mapTiles(center: Coordinates, width: number, height: number, zoom: number): Array<{ x: number; y: number; left: number; top: number; url: string }> {
+  const centerPixel = worldPixel(center, zoom);
+  const centerTileX = Math.floor(centerPixel.x / TILE_SIZE);
+  const centerTileY = Math.floor(centerPixel.y / TILE_SIZE);
+  const horizontalRadius = Math.ceil(width / TILE_SIZE / 2) + 1;
+  const verticalRadius = Math.ceil(height / TILE_SIZE / 2) + 1;
+  const tileCount = 2 ** zoom;
+  const tiles: Array<{ x: number; y: number; left: number; top: number; url: string }> = [];
+
+  for (let xOffset = -horizontalRadius; xOffset <= horizontalRadius; xOffset += 1) {
+    for (let yOffset = -verticalRadius; yOffset <= verticalRadius; yOffset += 1) {
+      const rawX = centerTileX + xOffset;
+      const rawY = centerTileY + yOffset;
+      if (rawY < 0 || rawY >= tileCount) continue;
+      const wrappedX = ((rawX % tileCount) + tileCount) % tileCount;
+      tiles.push({
+        x: wrappedX,
+        y: rawY,
+        left: width / 2 + rawX * TILE_SIZE - centerPixel.x,
+        top: height / 2 + rawY * TILE_SIZE - centerPixel.y,
+        url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${rawY}.png`,
+      });
+    }
+  }
+
+  return tiles;
+}
+
+function shortLocationName(value: string): string {
+  const parts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const [first, second] = parts;
+  if (!first) return value.trim();
+  const candidate = /^\d+$/.test(first) && second ? second : first;
+  return candidate.length > 42 ? `${candidate.slice(0, 39).trim()}...` : candidate;
 }
 
 const styles = StyleSheet.create({
   field: { gap: 7 },
   labelRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 10 },
   label: { flex: 1, fontSize: 13, fontWeight: "900" },
-  required: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   helper: { fontSize: 12, fontWeight: "700", lineHeight: 17 },
   input: {
     minHeight: 52,
@@ -211,6 +527,7 @@ const styles = StyleSheet.create({
   detailValue: { fontSize: 14, fontWeight: "800", lineHeight: 19 },
   searchField: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", minHeight: 48, paddingHorizontal: 12 },
   searchInput: { flex: 1, fontSize: 15, fontWeight: "800", outlineStyle: "none" } as object,
+  mapSectionLabel: { fontSize: 12, fontWeight: "900", marginTop: 2 },
   mapSearchRow: { flexDirection: "row", gap: 8 },
   mapSearchInput: {
     flex: 1,
@@ -224,9 +541,42 @@ const styles = StyleSheet.create({
   } as object,
   mapButton: { alignItems: "center", borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
   mapButtonText: { fontSize: 13, fontWeight: "900" },
-  mapGhostButton: { alignItems: "center", borderRadius: 18, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 11 },
+  mapGhostButton: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 8, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 11 },
   mapGhostText: { fontSize: 12, fontWeight: "900" },
   mapResult: { borderRadius: 18, borderWidth: 1, gap: 4, padding: 12 },
   mapResultText: { fontSize: 13, fontWeight: "900", lineHeight: 18 },
   mapResultMeta: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
+  mapModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 14,
+    backgroundColor: "rgba(0,0,0,0.58)",
+  },
+  mapModalCard: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 720,
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 12,
+    padding: 12,
+    shadowColor: "#000000",
+    shadowOpacity: 0.28,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 18 },
+  },
+  inlineMapHeader: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  inlineMapTitleWrap: { flex: 1, minWidth: 0, gap: 2 },
+  inlineMapTitle: { fontSize: 14, fontWeight: "900" },
+  inlineMapHelper: { fontSize: 12, fontWeight: "700", lineHeight: 16 },
+  inlineMapClose: { alignItems: "center", borderRadius: 999, height: 34, justifyContent: "center", width: 34 },
+  inlineMapCanvas: { borderRadius: 18, borderWidth: 1, height: 380, overflow: "hidden", position: "relative" },
+  mapTile: { height: TILE_SIZE, position: "absolute", width: TILE_SIZE },
+  mapCrosshairHorizontal: { height: 1, left: "48%", opacity: 0.45, position: "absolute", right: "48%", top: "50%" },
+  mapCrosshairVertical: { bottom: "48%", left: "50%", opacity: 0.45, position: "absolute", top: "48%", width: 1 },
+  mapMarker: { height: 34, position: "absolute", width: 34 },
+  mapZoomControls: { gap: 8, position: "absolute", right: 12, top: 12 },
+  mapZoomButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 38, justifyContent: "center", width: 38 },
+  mapUseButton: { alignItems: "center", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13 },
+  mapUseButtonText: { fontSize: 12, fontWeight: "900" },
 });

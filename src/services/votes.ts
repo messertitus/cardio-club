@@ -21,7 +21,7 @@ export async function voteForSport(
   input: VoteForSportInput,
 ): Promise<ServiceResult<Row<"sport_votes">>> {
   if (!isVoteRank(input.rank)) {
-    return fail("Bitte wähle Rang 1, 2 oder 3.");
+    return fail("Bitte waehle Rang 1, 2 oder 3.");
   }
 
   const eventResult = await getVoteEvent(supabase, input.eventId);
@@ -51,19 +51,23 @@ export async function voteForSport(
   }
 
   const duplicateSport = existingVotes.data.find((vote) => vote.sport_id === input.sportId);
-
-  if (duplicateSport && duplicateSport.vote_rank !== input.rank) {
-    return fail("Du hast für diese Sportart bereits abgestimmt.");
-  }
-
   const duplicateRank = existingVotes.data.find((vote) => vote.vote_rank === input.rank && vote.sport_id !== input.sportId);
 
-  if (duplicateRank) {
-    return fail(`Rang ${input.rank} ist bereits vergeben. Entferne diese Stimme zuerst.`);
+  if (!duplicateSport && !duplicateRank && existingVotes.data.length >= MAX_VOTES_PER_EVENT) {
+    return fail("Du kannst pro Woche fuer maximal drei Sportarten abstimmen.");
   }
 
-  if (!duplicateSport && existingVotes.data.length >= MAX_VOTES_PER_EVENT) {
-    return fail("Du kannst pro Woche für maximal drei Sportarten abstimmen.");
+  if (duplicateRank) {
+    const { error: deleteError } = await supabase
+      .from("sport_votes")
+      .delete()
+      .eq("event_id", input.eventId)
+      .eq("sport_id", duplicateRank.sport_id)
+      .eq("user_id", input.userId);
+
+    if (deleteError) {
+      return { data: null, error: fromPostgrestError(deleteError, "Rang konnte nicht neu vergeben werden.") };
+    }
   }
 
   const { data, error } = await supabase

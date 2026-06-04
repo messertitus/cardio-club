@@ -11,7 +11,7 @@ import {
 } from "../lib/fairConstellationSelection";
 import type { Row } from "./database.types";
 import { replaceEventActivitiesFromDecision } from "./eventActivities";
-import { mapSportProfile } from "./sportProfiles";
+import { listSportProfilesForSports, mapSportProfile } from "./sportProfiles";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 import { fetchEventWeatherSnapshot } from "./weather";
@@ -378,7 +378,7 @@ async function fetchSports(
     return ok([]);
   }
 
-  const { data, error } = await supabase.from("sports").select().in("id", sportIds);
+  const { data, error } = await supabase.from("sports").select().in("id", sportIds).eq("is_active", true);
 
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Could not load sports.") };
@@ -391,21 +391,7 @@ async function fetchSportProfiles(
   supabase: AppSupabaseClient,
   sportIds: string[],
 ): Promise<ServiceResult<Row<"sport_profiles">[]>> {
-  if (sportIds.length === 0) {
-    return ok([]);
-  }
-
-  const { data, error } = await supabase
-    .from("sport_profiles")
-    .select()
-    .in("sport_id", sportIds)
-    .eq("is_active", true);
-
-  if (error || !data) {
-    return { data: null, error: fromPostgrestError(error, "Could not load sport profiles.") };
-  }
-
-  return ok(data);
+  return listSportProfilesForSports(supabase, sportIds);
 }
 
 async function fetchPreviousSelectedSportId(

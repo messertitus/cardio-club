@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect, router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -24,7 +25,7 @@ export default function MembersScreen() {
   const [members, setMembers] = useState<MccMember[]>([]);
   const [openedUserId, setOpenedUserId] = useState<string | null>(null);
   const [locationFilterOpen, setLocationFilterOpen] = useState(false);
-  const [selectedCity, setSelectedCity] = useState("Konstanz");
+  const [selectedCity, setSelectedCity] = useState("Alle");
   const [memberSearch, setMemberSearch] = useState("");
   const [startingChatUserId, setStartingChatUserId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export default function MembersScreen() {
     const query = memberSearch.trim().toLowerCase();
     return members.filter((member) => {
       const cityMatches = selectedCity === "Alle" || (member.city ?? "Stadt noch offen") === selectedCity;
-      const searchMatches = !query || [member.displayName, member.city, member.favoriteSports, member.contactSports.join(" ")].filter(Boolean).join(" ").toLowerCase().includes(query);
+      const searchMatches = !query || [member.displayName, member.city, member.phone, roleLabels[member.role]].filter(Boolean).join(" ").toLowerCase().includes(query);
       return cityMatches && searchMatches;
     });
   }, [memberSearch, members, selectedCity]);
@@ -88,10 +89,10 @@ export default function MembersScreen() {
             titleMeta={`${filteredMembers.length}`}
             showBack={false}
             showTheme
-            actions={<HeaderIconButton label={locationFilterOpen ? "×" : "!"} open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />}
+            actions={<HeaderIconButton open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />}
           />
           {message ? <Text style={styles.notice}>{message}</Text> : null}
-          <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied oder Sportart suchen" />
+          <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied, Stadt oder Rolle suchen" />
           {filteredMembers.length === 0 ? <Text style={[styles.detail, { color: theme.muted }]}>Keine Mitglieder für diesen Filter.</Text> : null}
           {filteredMembers.map((member) => {
             const opened = openedUserId === member.userId;
@@ -107,8 +108,12 @@ export default function MembersScreen() {
                     <Text style={[styles.detail, { color: theme.muted }]}>{member.city ?? "Stadt noch offen"}</Text>
                   </View>
                   <View style={styles.badges}>
+                    {member.role === "admin" && member.userId !== user.id ? (
+                      <Pressable style={[styles.badgeStrong, { backgroundColor: theme.button }]} onPress={() => void contactAdmin(member)} disabled={startingChatUserId === member.userId}>
+                        <Text style={[styles.badgeStrongText, { color: theme.inverse }]}>{startingChatUserId === member.userId ? "..." : "Kontakt"}</Text>
+                      </Pressable>
+                    ) : null}
                     <Text style={[styles.badge, { backgroundColor: theme.surface, color: theme.text }]}>{roleLabels[member.role]}</Text>
-                    {member.contactSports.length > 0 ? <Text style={[styles.badgeStrong, { backgroundColor: theme.button, color: theme.inverse }]}>AP</Text> : null}
                   </View>
                 </View>
                 {opened ? (
@@ -117,7 +122,7 @@ export default function MembersScreen() {
                     <ProfileLine label="Rolle" value={roleLabels[member.role]} />
                     <ProfileLine label="Lieblingssportarten" value={member.favoriteSports ?? "Noch offen"} />
                     <ProfileLine label="Alter" value={member.birthDate ? formatAge(member.birthDate) : "Noch offen"} />
-                    <ProfileLine label="Ansprechpartner" value={member.contactSports.length > 0 ? member.contactSports.join(", ") : "Kein Sportprofil"} />
+                    <ProfileLine label="Sportprofil-Kontakt" value={formatContactSports(member.contactSports)} />
                     <ProfileLine label="Ideen" value={`${member.stats.ideasSuggested}`} />
                     <ProfileLine label="Teilnahmen" value={`${member.stats.plannedAttendances} geplant, ${member.stats.actualAttendances} bestätigt`} />
                     <ProfileLine label="Verlässlichkeit" value={member.stats.reliabilityPercent === null ? "Noch offen" : `${member.stats.reliabilityPercent}% (${member.stats.noShows} No-Shows)`} />
@@ -138,7 +143,6 @@ export default function MembersScreen() {
             {cityOptions.map((city) => {
               const active = selectedCity === city;
               const cityMembers = membersForCity(members, city);
-              const preview = cityMembers.slice(0, 3).map((member) => member.displayName).join(", ");
               return (
                 <Pressable
                   key={city}
@@ -151,7 +155,7 @@ export default function MembersScreen() {
                   <View style={styles.filterRowText}>
                     <Text style={[styles.filterCity, { color: active ? theme.inverse : theme.text }]}>{city}</Text>
                     <Text style={[styles.filterPreview, { color: active ? theme.inverse : theme.muted }]} numberOfLines={1}>
-                      {preview || "Noch keine Mitglieder"}
+                      {cityMembers.length === 1 ? "1 Mitglied" : `${cityMembers.length} Mitglieder`}
                     </Text>
                   </View>
                   <Text style={[styles.filterCount, { color: active ? theme.inverse : theme.muted }]}>{cityMembers.length}</Text>
@@ -166,11 +170,11 @@ export default function MembersScreen() {
   );
 }
 
-function HeaderIconButton({ label, open, onPress }: { label: string; open: boolean; onPress: () => void }) {
+function HeaderIconButton({ open, onPress }: { open: boolean; onPress: () => void }) {
   const { theme } = useTheme();
   return (
     <Pressable style={[styles.headerIconButton, { borderColor: open ? theme.accent : theme.border, backgroundColor: theme.softSurface }]} onPress={onPress}>
-      <Text style={[styles.headerIconText, { color: open ? theme.accent : theme.text }]}>{label}</Text>
+      <MaterialCommunityIcons name={open ? "close" : "filter-variant"} size={22} color={open ? theme.accent : theme.text} />
     </Pressable>
   );
 }
@@ -187,6 +191,13 @@ function ProfileLine({ label, value }: { label: string; value: string }) {
       <Text style={styles.profileValue}>{value}</Text>
     </View>
   );
+}
+
+function formatContactSports(labels: string[]): string {
+  if (labels.length === 0) return "Kein Sportprofil";
+  const visible = labels.slice(0, 4);
+  const rest = labels.length - visible.length;
+  return rest > 0 ? `${visible.join(", ")} + ${rest} weitere` : visible.join(", ");
 }
 
 function formatJoinedAt(value: string): string {
@@ -221,7 +232,6 @@ const styles = StyleSheet.create({
     width: 42,
     position: "relative",
   },
-  headerIconText: { fontSize: 18, fontWeight: "900", lineHeight: 20 },
   filterPanel: { borderRadius: 22, borderWidth: 1, gap: 8, maxWidth: 360, padding: 10, position: "absolute", right: 16, top: 72, width: "82%", zIndex: 20 },
   filterPanelTitle: { fontSize: 13, fontWeight: "900", paddingHorizontal: 4 },
   filterRow: { alignItems: "center", borderRadius: 16, flexDirection: "row", gap: 10, justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10 },
@@ -249,6 +259,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   badgeStrong: {
+    alignItems: "center",
     overflow: "hidden",
     borderRadius: 999,
     fontSize: 12,
@@ -256,6 +267,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
+  badgeStrongText: { fontSize: 12, fontWeight: "900" },
   detailPanel: { gap: 9, borderTopWidth: 1, paddingTop: 11 },
   profileLine: { gap: 2 },
   profileLabel: { color: "#728197", fontSize: 11, fontWeight: "900", textTransform: "uppercase" },

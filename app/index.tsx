@@ -1,11 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect, router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, KeyboardAvoidingView, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { SearchField } from "../src/components/FormControls";
+import { MapRouteButton } from "../src/components/MapRouteButton";
 import { MotionPressable, Reveal } from "../src/components/Motion";
+import { SportIconBadge } from "../src/components/SportIcon";
 import { ThemeToggle } from "../src/components/ThemeToggle";
 import { LoadingState, Screen } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -93,10 +96,10 @@ export default function HomeScreen() {
     if (!user) return;
     const cacheKey = `${EVENT_CACHE_PREFIX}${user.id}`;
     const cached = await AsyncStorage.getItem(cacheKey);
-    if (cached && !state) {
+    if (cached) {
       try {
         const cachedState = normalizeEventState(JSON.parse(cached) as Partial<MccEventState>);
-        setState(cachedState);
+        setState((current) => current ?? cachedState);
       } catch {
         await AsyncStorage.removeItem(cacheKey);
       }
@@ -113,7 +116,7 @@ export default function HomeScreen() {
     setNotice(null);
     setState(result.data);
     await AsyncStorage.setItem(cacheKey, JSON.stringify(result.data));
-  }, [state, user]);
+  }, [user]);
 
   useEffect(() => {
     void load();
@@ -162,6 +165,13 @@ export default function HomeScreen() {
   const eventDate = state?.event.starts_at ? new Date(state.event.starts_at) : null;
   const brandLogo = mode === "dark" ? darkLogo : lightLogo;
 
+  function applyLocalState(nextState: MccEventState) {
+    setState(nextState);
+    if (user) {
+      void AsyncStorage.setItem(`${EVENT_CACHE_PREFIX}${user.id}`, JSON.stringify(nextState));
+    }
+  }
+
   async function chooseAttendance(status: AttendanceStatus) {
     if (!user || !state) return;
     const previousState = state;
@@ -177,14 +187,16 @@ export default function HomeScreen() {
       created_at: state.myAttendance?.created_at ?? new Date().toISOString(),
     };
 
-    setNotice(null);
-    setState({
+    const nextState = {
       ...state,
       attendance: [optimisticAttendance, ...state.attendance.filter((row) => row.user_id !== user.id)],
       myAttendance: optimisticAttendance,
       myVotes: status === "not_going" ? [] : state.myVotes,
       votes: status === "not_going" ? state.votes.filter((vote) => vote.user_id !== user.id) : state.votes,
-    });
+    };
+
+    setNotice(null);
+    applyLocalState(nextState);
     setManualStep(status === "not_going" ? "overview" : "sports");
 
     const result = await saveMccAttendance(supabase, { eventId: state.event.id, userId: user.id, status });
@@ -209,25 +221,24 @@ export default function HomeScreen() {
 
     const existing = state.myVotes.find((vote) => vote.sport_id === sportId);
     if (existing) {
-      setNotice(null);
-      setState({
+      const nextState = {
         ...state,
         myVotes: state.myVotes.filter((vote) => vote.sport_id !== sportId),
         votes: state.votes.filter((vote) => !(vote.user_id === user.id && vote.sport_id === sportId)),
-      });
+      };
+      setNotice(null);
+      applyLocalState(nextState);
       const result = await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId });
-      if (result.error) setNotice(result.error.message);
-      void load();
+      if (result.error) {
+        setNotice(result.error.message);
+        void load();
+      }
       return;
     }
 
     const usedRanks = new Set(state.myVotes.map((vote) => vote.vote_rank));
     const rank = voteRanks.find((candidate) => !usedRanks.has(candidate)) ?? 3;
     const replaced = state.myVotes.find((vote) => vote.vote_rank === rank);
-
-    if (replaced) {
-      await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId: replaced.sport_id });
-    }
 
     const optimisticVote = {
       id: `optimistic-${sportId}`,
@@ -241,18 +252,38 @@ export default function HomeScreen() {
     const nextMyVotes = [...state.myVotes.filter((vote) => vote.sport_id !== sportId && vote.sport_id !== replaced?.sport_id), optimisticVote].sort(
       (a, b) => a.vote_rank - b.vote_rank,
     );
-
-    setNotice(null);
-    setState({
+    const hasProposal = state.proposals.some((proposal) => proposal.sport_id === sportId);
+    const optimisticProposal = {
+      id: `optimistic-proposal-${sportId}`,
+      event_id: state.event.id,
+      sport_id: sportId,
+      proposed_by: user.id,
+      note: null,
+      created_at: new Date().toISOString(),
+    };
+    const nextState = {
       ...state,
+      proposals: hasProposal ? state.proposals : [optimisticProposal, ...state.proposals],
       myVotes: nextMyVotes,
       votes: [
         ...state.votes.filter((vote) => !(vote.user_id === user.id && (vote.sport_id === sportId || vote.sport_id === replaced?.sport_id))),
         optimisticVote,
       ],
-    });
+    };
 
-    if (!state.proposals.some((proposal) => proposal.sport_id === sportId)) {
+    setNotice(null);
+    applyLocalState(nextState);
+
+    if (replaced) {
+      const clearResult = await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId: replaced.sport_id });
+      if (clearResult.error) {
+        setNotice(clearResult.error.message);
+        void load();
+        return;
+      }
+    }
+
+    if (!hasProposal) {
       const proposalResult = await proposeSport(supabase, { eventId: state.event.id, sportId, proposedBy: user.id, note: null });
       if (proposalResult.error) {
         setNotice(proposalResult.error.message);
@@ -262,8 +293,10 @@ export default function HomeScreen() {
     }
 
     const result = await saveMccVoteRank(supabase, { eventId: state.event.id, userId: user.id, sportId, rank });
-    if (result.error) setNotice(result.error.message);
-    void load();
+    if (result.error) {
+      setNotice(result.error.message);
+      void load();
+    }
   }
 
   async function toggleNoGo(sportId: string) {
@@ -272,33 +305,116 @@ export default function HomeScreen() {
     setNotice(null);
 
     if (existing) {
+      const nextState = {
+        ...state,
+        myNoGos: state.myNoGos.filter((noGo) => noGo.sport_id !== sportId),
+        noGos: state.noGos.filter((noGo) => !(noGo.user_id === user.id && noGo.sport_id === sportId)),
+      };
+      applyLocalState(nextState);
       const result = await clearMccNoGo(supabase, { eventId: state.event.id, userId: user.id, sportId });
-      if (result.error) setNotice(result.error.message);
-      void load();
+      if (result.error) {
+        setNotice(result.error.message);
+        void load();
+      }
       return;
     }
 
     const existingVote = state.myVotes.find((vote) => vote.sport_id === sportId);
+    const optimisticNoGo = {
+      id: `optimistic-nogo-${sportId}`,
+      event_id: state.event.id,
+      sport_id: sportId,
+      user_id: user.id,
+      reason: null,
+      created_at: new Date().toISOString(),
+    };
+    const nextState = {
+      ...state,
+      myVotes: existingVote ? state.myVotes.filter((vote) => vote.sport_id !== sportId) : state.myVotes,
+      votes: existingVote ? state.votes.filter((vote) => !(vote.user_id === user.id && vote.sport_id === sportId)) : state.votes,
+      myNoGos: [optimisticNoGo, ...state.myNoGos.filter((noGo) => noGo.sport_id !== sportId)],
+      noGos: [optimisticNoGo, ...state.noGos.filter((noGo) => !(noGo.user_id === user.id && noGo.sport_id === sportId))],
+    };
+    applyLocalState(nextState);
+
     if (existingVote) {
-      await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId });
+      const clearResult = await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId });
+      if (clearResult.error) {
+        setNotice(clearResult.error.message);
+        void load();
+        return;
+      }
     }
 
     const result = await saveMccNoGo(supabase, { eventId: state.event.id, userId: user.id, sportId });
-    if (result.error) setNotice(result.error.message);
-    void load();
+    if (result.error) {
+      setNotice(result.error.message);
+      void load();
+    }
   }
 
   async function setRank(sportId: string, rank: VoteRank) {
     if (!user || !state || !canInfluenceDecision(state.myAttendance?.status) || isDecided) return;
+    if (state.myNoGos.some((noGo) => noGo.sport_id === sportId)) return;
+
     const replaced = state.myVotes.find((vote) => vote.vote_rank === rank && vote.sport_id !== sportId);
+    const currentVote = state.myVotes.find((vote) => vote.sport_id === sportId);
+    const hasProposal = state.proposals.some((proposal) => proposal.sport_id === sportId);
+    const updatedVote = currentVote
+      ? { ...currentVote, vote_rank: rank, weight: rank === 1 ? 1 : rank === 2 ? 0.6 : 0.3 }
+      : {
+          id: `optimistic-${sportId}`,
+          event_id: state.event.id,
+          sport_id: sportId,
+          user_id: user.id,
+          weight: rank === 1 ? 1 : rank === 2 ? 0.6 : 0.3,
+          vote_rank: rank,
+          created_at: new Date().toISOString(),
+        };
+    const optimisticProposal = {
+      id: `optimistic-proposal-${sportId}`,
+      event_id: state.event.id,
+      sport_id: sportId,
+      proposed_by: user.id,
+      note: null,
+      created_at: new Date().toISOString(),
+    };
+
+    const nextState = {
+      ...state,
+      proposals: hasProposal ? state.proposals : [optimisticProposal, ...state.proposals],
+      myVotes: [...state.myVotes.filter((vote) => vote.sport_id !== sportId && vote.sport_id !== replaced?.sport_id), updatedVote].sort((a, b) => a.vote_rank - b.vote_rank),
+      votes: [
+        ...state.votes.filter((vote) => !(vote.user_id === user.id && (vote.sport_id === sportId || vote.sport_id === replaced?.sport_id))),
+        updatedVote,
+      ],
+    };
+    setNotice(null);
+    applyLocalState(nextState);
 
     if (replaced) {
-      await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId: replaced.sport_id });
+      const clearResult = await clearMccVote(supabase, { eventId: state.event.id, userId: user.id, sportId: replaced.sport_id });
+      if (clearResult.error) {
+        setNotice(clearResult.error.message);
+        void load();
+        return;
+      }
+    }
+
+    if (!hasProposal) {
+      const proposalResult = await proposeSport(supabase, { eventId: state.event.id, sportId, proposedBy: user.id, note: null });
+      if (proposalResult.error) {
+        setNotice(proposalResult.error.message);
+        void load();
+        return;
+      }
     }
 
     const result = await saveMccVoteRank(supabase, { eventId: state.event.id, userId: user.id, sportId, rank });
-    if (result.error) setNotice(result.error.message);
-    void load();
+    if (result.error) {
+      setNotice(result.error.message);
+      void load();
+    }
   }
 
   async function updatePostalCode(value: string) {
@@ -424,12 +540,12 @@ export default function HomeScreen() {
                 <Text style={[styles.panelTitle, { color: theme.text }]}>Wähle deinen Mix</Text>
                 <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart oder Standort suchen" />
                 <View style={styles.voteStack}>
-                  {selectableSports.map((sport) => {
+                  {selectableSports.map((sport, index) => {
                     const vote = state.myVotes.find((row) => row.sport_id === sport.id);
                     const noGo = state.myNoGos.some((row) => row.sport_id === sport.id);
                     const profileHint = profileSummary(state, sport.id);
                     return (
-                      <Reveal key={sport.id} index={selectableSports.indexOf(sport)}>
+                      <Reveal key={sport.id} index={index}>
                       <MotionPressable
                         key={sport.id}
                         style={[
@@ -439,8 +555,8 @@ export default function HomeScreen() {
                           noGo && { borderColor: "#ff8d7a", backgroundColor: "rgba(255,126,106,0.14)" },
                         ]}
                         pressedStyle={styles.pressed}
-                        onPress={() => chooseSport(sport.id)}
                       >
+                        <SportIconBadge sport={sport} size={36} />
                         <View style={styles.sportTextWrap}>
                           <Text style={[styles.sportName, { color: vote ? theme.inverse : theme.text }]}>{sport.name}</Text>
                           <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>
@@ -448,30 +564,29 @@ export default function HomeScreen() {
                           </Text>
                           {profileHint ? <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>{profileHint}</Text> : null}
                         </View>
-                        {noGo ? (
-                          <Pressable style={styles.noGoButton} onPress={() => toggleNoGo(sport.id)}>
-                            <Text style={styles.noGoButtonText}>No-Go</Text>
+                        <View style={styles.voteControls}>
+                          {noGo ? null : (
+                            <View style={styles.rankPicker}>
+                              {voteRanks.map((rank) => (
+                                <Pressable
+                                  key={rank}
+                                  style={[styles.rankDot, vote?.vote_rank === rank && styles.rankDotActive]}
+                                  onPress={() => setRank(sport.id, rank)}
+                                >
+                                  <Text style={[styles.rankText, vote?.vote_rank === rank && styles.rankTextActive]}>{rank}</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          )}
+                          {vote ? (
+                            <Pressable style={styles.removeVoteButton} onPress={() => chooseSport(sport.id)}>
+                              <MaterialCommunityIcons name="close" size={16} color={vote ? theme.inverse : theme.text} />
+                            </Pressable>
+                          ) : null}
+                          <Pressable style={noGo ? styles.noGoButton : styles.noGoGhost} onPress={() => toggleNoGo(sport.id)}>
+                            <Text style={noGo ? styles.noGoButtonText : [styles.noGoGhostText, { color: theme.muted }]}>No-Go</Text>
                           </Pressable>
-                        ) : vote ? (
-                          <View style={styles.rankPicker}>
-                            {voteRanks.map((rank) => (
-                              <Pressable
-                                key={rank}
-                                style={[styles.rankDot, vote.vote_rank === rank && styles.rankDotActive]}
-                                onPress={() => setRank(sport.id, rank)}
-                              >
-                                <Text style={[styles.rankText, vote.vote_rank === rank && styles.rankTextActive]}>{rank}</Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        ) : (
-                          <Text style={[styles.addMark, { color: theme.accent }]}>+</Text>
-                        )}
-                        {!vote && !noGo ? (
-                          <Pressable style={styles.noGoGhost} onPress={() => toggleNoGo(sport.id)}>
-                            <Text style={[styles.noGoGhostText, { color: noGo ? "#ff8d7a" : theme.muted }]}>No-Go</Text>
-                          </Pressable>
-                        ) : null}
+                        </View>
                       </MotionPressable>
                       </Reveal>
                     );
@@ -498,8 +613,11 @@ export default function HomeScreen() {
                       ))}
                     </View>
                     <Text style={[styles.body, { color: theme.muted }]}>{state.event.decision_reason ?? state.decisionText.simpleExplanation}</Text>
-                    {homeActivityLines(state).map((line) => (
-                      <Text key={line} style={[styles.body, { color: theme.text }]}>{line}</Text>
+                    {homeActivityRows(state).map((activity) => (
+                      <View key={activity.key} style={styles.activityRouteRow}>
+                        <Text style={[styles.body, styles.activityRouteText, { color: theme.text }]}>{activity.label}</Text>
+                        <MapRouteButton target={activity.mapTarget} compact />
+                      </View>
                     ))}
                   </>
                 ) : (
@@ -646,7 +764,7 @@ function Header() {
       <Image source={headerLogo} style={styles.logo} resizeMode="contain" />
       <View style={styles.headerActions}>
         <Pressable style={styles.historyButton} onPress={() => router.push("/events/history")}>
-          <Text style={styles.historyButtonText}>↺</Text>
+          <MaterialCommunityIcons name="history" size={27} color="#ffffff" />
         </Pressable>
         <ThemeToggle />
       </View>
@@ -740,17 +858,36 @@ function sportName(state: MccEventState, sportId: string): string {
   return state.sports.find((sport) => sport.id === sportId)?.name ?? "Sportart";
 }
 
-function homeActivityLines(state: MccEventState): string[] {
+function homeActivityRows(state: MccEventState): Array<{ key: string; label: string; mapTarget: { latitude?: number | null; longitude?: number | null; label?: string | null; mapUrl?: string | null } | null }> {
   if (state.eventActivities.length > 0) {
     return state.eventActivities.map((activity) => {
       const count = (activity.assigned_user_ids ?? []).length;
-      return `${activity.title}${activity.location ? ` · ${activity.location}` : ""}${count > 0 ? ` · ${count} Personen` : ""}`;
+      const profile = state.sportProfiles.find((entry) => entry.id === activity.sport_profile_id);
+      return {
+        key: activity.id,
+        label: `${activity.title}${activity.location ? ` · ${activity.location}` : ""}${count > 0 ? ` · ${count} Personen` : ""}`,
+        mapTarget: profile ? sportProfileMapTarget(profile) : activity.location ? { label: activity.location } : null,
+      };
     });
   }
 
-  return state.decisionText.activityRows.map((activity) =>
-    `${activity.sportName} · ${activity.profileName}${activity.locationName ? ` · ${activity.locationName}` : ""} · ${activity.participantCount} Personen`,
-  );
+  return state.decisionText.activityRows.map((activity) => {
+    const profile = state.sportProfiles.find((entry) => entry.id === activity.profileId);
+    return {
+      key: activity.profileId,
+      label: `${activity.sportName} · ${activity.profileName}${activity.locationName ? ` · ${activity.locationName}` : ""} · ${activity.participantCount} Personen`,
+      mapTarget: profile ? sportProfileMapTarget(profile) : activity.locationName ? { label: activity.locationName } : null,
+    };
+  });
+}
+
+function sportProfileMapTarget(profile: MccEventState["sportProfiles"][number]) {
+  return {
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    mapUrl: profile.map_url,
+    label: [profile.location_name, profile.location_city, profile.postal_code].filter(Boolean).join(" "),
+  };
 }
 
 function profileSummary(state: MccEventState, sportId: string): string {
@@ -830,7 +967,6 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   headerActions: { alignItems: "center", flexDirection: "row", gap: 8 },
   historyButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 999, height: 44, justifyContent: "center", width: 44 },
-  historyButtonText: { color: "#ffffff", fontSize: 24, fontWeight: "900", lineHeight: 26 },
   logo: { width: 50, height: 50 },
   menuButton: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 16, paddingVertical: 10 },
   menuButtonText: { color: "#ffffff", fontSize: 14, fontWeight: "900" },
@@ -882,11 +1018,13 @@ const styles = StyleSheet.create({
   sportMeta: { color: "#9aa7b8", fontSize: 13 },
   sportMetaActive: { color: "#d9ecff" },
   addMark: { color: "#4da3ff", fontSize: 26, fontWeight: "700" },
+  voteControls: { alignItems: "center", gap: 7 },
   rankPicker: { flexDirection: "row", gap: 6 },
   rankDot: { alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.12)" },
   rankDotActive: { backgroundColor: "#ffffff" },
   rankText: { color: "#d9ecff", fontWeight: "900" },
   rankTextActive: { color: "#05070b" },
+  removeVoteButton: { alignItems: "center", borderRadius: 999, height: 28, justifyContent: "center", width: 28 },
   noGoButton: { borderRadius: 999, backgroundColor: "rgba(255,126,106,0.22)", paddingHorizontal: 10, paddingVertical: 8 },
   noGoButtonText: { color: "#ffb5a8", fontSize: 12, fontWeight: "900" },
   noGoGhost: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6 },
@@ -922,6 +1060,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   lockedChatText: { color: "#9aa7b8", fontSize: 14, fontWeight: "900" },
+  activityRouteRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  activityRouteText: { flex: 1, minWidth: 0 },
   cityOverlay: {
     flex: 1,
     justifyContent: "flex-end",

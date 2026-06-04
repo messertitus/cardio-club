@@ -1,6 +1,10 @@
 import type { ClubMemberRole, Row } from "./database.types";
+import { readLocalCache, writeLocalCache } from "./localCache";
 import { fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
+
+const MEMBERS_CACHE_PREFIX = "mcc.cache.members.";
+const SHORT_CACHE_MS = 60_000;
 
 export type MccMember = {
   userId: string;
@@ -25,8 +29,12 @@ export type MccMemberStats = {
 
 export async function listMccMembers(
   supabase: AppSupabaseClient,
-  input: { clubId: string },
+  input: { clubId: string; bypassCache?: boolean },
 ): Promise<ServiceResult<MccMember[]>> {
+  const cacheKey = `${MEMBERS_CACHE_PREFIX}${input.clubId}`;
+  const cached = input.bypassCache ? null : await readLocalCache<MccMember[]>(cacheKey, SHORT_CACHE_MS);
+  if (cached) return ok(cached);
+
   const { data: memberships, error } = await supabase
     .from("club_members")
     .select()
@@ -60,20 +68,21 @@ export async function listMccMembers(
     return { data: null, error: stats.error };
   }
 
-  return ok(
-    memberships.map((membership) => ({
-      userId: membership.user_id,
-      role: membership.role,
-      joinedAt: membership.joined_at,
-      displayName: names.get(membership.user_id) ?? "Mitglied",
-      phone: phones.get(membership.user_id) ?? null,
-      city: cities.get(membership.user_id) ?? null,
-      favoriteSports: favoriteSports.get(membership.user_id) ?? null,
-      birthDate: birthDates.get(membership.user_id) ?? null,
-      contactSports: contactSports.data.get(membership.user_id) ?? [],
-      stats: stats.data.get(membership.user_id) ?? emptyStats(),
-    })),
-  );
+  const result = memberships.map((membership) => ({
+    userId: membership.user_id,
+    role: membership.role,
+    joinedAt: membership.joined_at,
+    displayName: names.get(membership.user_id) ?? "Mitglied",
+    phone: phones.get(membership.user_id) ?? null,
+    city: cities.get(membership.user_id) ?? null,
+    favoriteSports: favoriteSports.get(membership.user_id) ?? null,
+    birthDate: birthDates.get(membership.user_id) ?? null,
+    contactSports: contactSports.data.get(membership.user_id) ?? [],
+    stats: stats.data.get(membership.user_id) ?? emptyStats(),
+  }));
+
+  await writeLocalCache(cacheKey, result);
+  return ok(result);
 }
 
 async function loadContactSports(supabase: AppSupabaseClient, userIds: string[]): Promise<ServiceResult<Map<string, string[]>>> {
@@ -81,7 +90,7 @@ async function loadContactSports(supabase: AppSupabaseClient, userIds: string[])
 
   const { data: profiles, error } = await supabase
     .from("sport_profiles")
-    .select("ap_contact_id, name")
+    .select("id, sport_id, ap_contact_id, name, location_name")
     .in("ap_contact_id", userIds)
     .eq("is_active", true);
 
@@ -90,12 +99,46 @@ async function loadContactSports(supabase: AppSupabaseClient, userIds: string[])
   }
 
   const result = new Map<string, string[]>();
+  const profileIds = profiles.map((profile) => profile.id);
+  const linksResult = profileIds.length
+    ? await supabase.from("sport_profile_sports").select().in("profile_id", profileIds)
+    : { data: [] as Row<"sport_profile_sports">[], error: null };
+  const usableLinks = linksResult.error ? [] : linksResult.data ?? [];
+  const sportIds = [
+    ...new Set([
+      ...profiles.map((profile) => profile.sport_id),
+      ...usableLinks.map((link) => link.sport_id),
+    ]),
+  ];
+  const sportsResult = sportIds.length
+    ? await supabase.from("sports").select("id, name").in("id", sportIds)
+    : { data: [] as Array<Pick<Row<"sports">, "id" | "name">>, error: null };
+
+  if (sportsResult.error || !sportsResult.data) {
+    return { data: null, error: fromPostgrestError(sportsResult.error, "Profilkontakte konnten nicht geladen werden.") };
+  }
+
+  const sportNames = new Map(sportsResult.data.map((sport) => [sport.id, sport.name]));
+  const linksByProfileId = new Map<string, string[]>();
+  for (const link of usableLinks) {
+    const next = linksByProfileId.get(link.profile_id) ?? [];
+    next.push(link.sport_id);
+    linksByProfileId.set(link.profile_id, next);
+  }
 
   for (const profile of profiles) {
     if (!profile.ap_contact_id) continue;
     const next = result.get(profile.ap_contact_id) ?? [];
-    next.push(profile.name);
+    const linkedSportIds = linksByProfileId.get(profile.id) ?? [profile.sport_id];
+    const location = profile.location_name ?? profile.name;
+    for (const sportId of linkedSportIds) {
+      next.push(`${sportNames.get(sportId) ?? "Sportart"}: ${location}`);
+    }
     result.set(profile.ap_contact_id, next);
+  }
+
+  for (const [userId, labels] of result) {
+    result.set(userId, [...new Set(labels)].sort((a, b) => a.localeCompare(b)));
   }
 
   return ok(result);

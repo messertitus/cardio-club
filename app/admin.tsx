@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -5,7 +6,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { MapLocationPicker, SearchField } from "../src/components/FormControls";
+import { MapRouteButton } from "../src/components/MapRouteButton";
 import { PageHeader } from "../src/components/PageHeader";
+import { SPORT_ICON_OPTIONS, SportIconBadge } from "../src/components/SportIcon";
 import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
@@ -19,9 +22,11 @@ import {
   listInvitationTree,
   listMccMembers,
   listMccSports,
+  listSportProfileSportLinks,
   listProfileNameChangeRequests,
   listSportProfiles,
   reviewProfileNameChangeRequest,
+  setMccSportActive,
   setSportProfileActive,
   updateMccMemberDisplayName,
   updateMccMemberRole,
@@ -39,6 +44,21 @@ import {
 const roles: ClubMemberRole[] = ["member", "mod", "admin"];
 const intensityOptions: SportIntensityLevel[] = ["low", "medium", "high"];
 const locationOptions: SportLocationType[] = ["indoor", "outdoor", "water", "field", "flexible"];
+const defaultSportCategoryOptions = [
+  "ballsport",
+  "ausdauer",
+  "kraftsport",
+  "kampfsport",
+  "wassersport",
+  "wintersport",
+  "rueckschlagspiel",
+  "teamsport",
+  "individualsport",
+  "tanz",
+  "fitness",
+  "mobility",
+  "unbekannt",
+];
 
 type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests";
 type PendingConfirm = { title: string; detail: string; onConfirm: () => void } | null;
@@ -54,20 +74,22 @@ type SportDraft = {
   name: string;
   description: string;
   category: string;
+  iconName: string;
   intensityLevel: SportIntensityLevel;
-  combinableTags: string;
+  isActive: boolean;
 };
 
 const emptySportDraft: SportDraft = {
   name: "",
   description: "",
-  category: "cardio",
+  category: "unbekannt",
+  iconName: "",
   intensityLevel: "medium",
-  combinableTags: "",
+  isActive: true,
 };
 
 type ProfileDraft = {
-  sportId: string;
+  sportIds: string[];
   name: string;
   locationName: string;
   mapUrl: string;
@@ -101,7 +123,7 @@ type ProfileDraft = {
 };
 
 const emptyProfileDraft: ProfileDraft = {
-  sportId: "",
+  sportIds: [],
   name: "",
   locationName: "",
   mapUrl: "",
@@ -142,11 +164,14 @@ export default function AdminScreen() {
   const [members, setMembers] = useState<MccMember[]>([]);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
   const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);
+  const [sportProfileLinks, setSportProfileLinks] = useState<Row<"sport_profile_sports">[]>([]);
   const [invitationTree, setInvitationTree] = useState<InvitationTreeEntry[]>([]);
   const [nameRequests, setNameRequests] = useState<Row<"profile_change_requests">[]>([]);
   const [sportDraft, setSportDraft] = useState<SportDraft>(emptySportDraft);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [editingSportId, setEditingSportId] = useState<string | null>(null);
+  const [customCategoryOpen, setCustomCategoryOpen] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [profileSearch, setProfileSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
@@ -162,15 +187,18 @@ export default function AdminScreen() {
     const query = profileSearch.trim().toLowerCase();
     const map = new Map<string, Row<"sport_profiles">[]>();
     for (const profile of sportProfiles) {
-      const sport = sports.find((entry) => entry.id === profile.sport_id);
-      const haystack = [profile.name, profile.location_name, profile.location_city, profile.postal_code, sport?.name].filter(Boolean).join(" ").toLowerCase();
+      const linkedSportIds = sportIdsForProfile(profile, sportProfileLinks);
+      const sportNames = linkedSportIds.map((sportId) => sports.find((entry) => entry.id === sportId)?.name).filter(Boolean);
+      const haystack = [profile.name, profile.location_name, profile.location_city, profile.postal_code, ...sportNames].filter(Boolean).join(" ").toLowerCase();
       if (query && !haystack.includes(query)) continue;
-      const next = map.get(profile.sport_id) ?? [];
-      next.push(profile);
-      map.set(profile.sport_id, next);
+      for (const sportId of linkedSportIds) {
+        const next = map.get(sportId) ?? [];
+        next.push(profile);
+        map.set(sportId, next);
+      }
     }
     return map;
-  }, [profileSearch, sportProfiles, sports]);
+  }, [profileSearch, sportProfileLinks, sportProfiles, sports]);
 
   const filteredMembers = useMemo(() => {
     const query = memberSearch.trim().toLowerCase();
@@ -179,6 +207,10 @@ export default function AdminScreen() {
   }, [memberSearch, members]);
 
   const invitationRoots = useMemo(() => buildInvitationTree(invitationTree), [invitationTree]);
+  const sportCategoryOptions = useMemo(
+    () => [...new Set([...defaultSportCategoryOptions, ...sports.map((sport) => sport.category).filter(Boolean)])],
+    [sports],
+  );
 
   async function load() {
     if (!user) return;
@@ -197,22 +229,25 @@ export default function AdminScreen() {
       return;
     }
 
-    const [membersResult, sportsResult, profilesResult, invitationTreeResult, nameRequestsResult] = await Promise.all([
+    const [membersResult, sportsResult, profilesResult, profileLinksResult, invitationTreeResult, nameRequestsResult] = await Promise.all([
       listMccMembers(supabase, {
         clubId: eventResult.data.clubId,
+        bypassCache: true,
       }),
       listMccSports(supabase),
       listSportProfiles(supabase),
+      listSportProfileSportLinks(supabase),
       listInvitationTree(supabase),
       listProfileNameChangeRequests(supabase),
     ]);
     setBusy(false);
 
-    if (membersResult.error || sportsResult.error || profilesResult.error || invitationTreeResult.error || nameRequestsResult.error) {
+    if (membersResult.error || sportsResult.error || profilesResult.error || profileLinksResult.error || invitationTreeResult.error || nameRequestsResult.error) {
       setMessage(
         membersResult.error?.message ??
           sportsResult.error?.message ??
           profilesResult.error?.message ??
+          profileLinksResult.error?.message ??
           invitationTreeResult.error?.message ??
           nameRequestsResult.error?.message ??
           "Adminbereich konnte nicht geladen werden.",
@@ -224,11 +259,12 @@ export default function AdminScreen() {
     setMembers(membersResult.data);
     setSports(sportsResult.data);
     setSportProfiles(profilesResult.data);
+    setSportProfileLinks(profileLinksResult.data);
     setInvitationTree(invitationTreeResult.data);
     setNameRequests(nameRequestsResult.data);
     setProfileDraft((current) => ({
       ...current,
-      sportId: current.sportId || sportsResult.data[0]?.id || "",
+      sportIds: current.sportIds.length > 0 ? current.sportIds : sportsResult.data[0]?.id ? [sportsResult.data[0].id] : [],
     }));
   }
 
@@ -278,8 +314,9 @@ export default function AdminScreen() {
       name: sport.name,
       description: sport.description ?? "",
       category: sport.category,
+      iconName: sport.icon_name ?? "",
       intensityLevel: sport.intensity_level,
-      combinableTags: (sport.combinable_tags ?? []).join(", "),
+      isActive: sport.is_active,
     });
   }
 
@@ -294,8 +331,10 @@ export default function AdminScreen() {
       name: sportDraft.name,
       description: sportDraft.description,
       category: sportDraft.category,
+      iconName: sportDraft.iconName,
       intensityLevel: sportDraft.intensityLevel,
-      combinableTags: sportDraft.combinableTags.split(","),
+      combinableTags: [],
+      isActive: sportDraft.isActive,
     });
 
     if (result.error) {
@@ -310,7 +349,7 @@ export default function AdminScreen() {
   function editProfile(profile: Row<"sport_profiles">) {
     setEditingProfileId(profile.id);
     setProfileDraft({
-      sportId: profile.sport_id,
+      sportIds: sportIdsForProfile(profile, sportProfileLinks),
       name: profile.name,
       locationName: profile.location_name ?? "",
       mapUrl: profile.map_url ?? "",
@@ -346,14 +385,14 @@ export default function AdminScreen() {
 
   function resetProfileDraft() {
     setEditingProfileId(null);
-    setProfileDraft({ ...emptyProfileDraft, sportId: sports[0]?.id ?? "" });
+    setProfileDraft({ ...emptyProfileDraft, sportIds: sports[0]?.id ? [sports[0].id] : [] });
   }
 
   async function saveProfile() {
     if (!user) return;
     const result = await upsertSportProfile(supabase, {
       profileId: editingProfileId,
-      sportId: profileDraft.sportId,
+      sportIds: profileDraft.sportIds,
       name: profileDraft.name,
       locationName: profileDraft.locationName,
       mapUrl: profileDraft.mapUrl,
@@ -378,11 +417,11 @@ export default function AdminScreen() {
       reservationRequired: profileDraft.reservationRequired,
       lightingAvailable: profileDraft.lightingAvailable,
       weatherRules: {
-        requiresDry: profileDraft.requiresDry,
-        rainSensitive: profileDraft.rainSensitive,
-        heatSensitive: profileDraft.heatSensitive,
-        coldSensitive: profileDraft.coldSensitive,
-        thunderstormUnsafe: profileDraft.thunderstormUnsafe,
+        requiresDry: profileDraft.locationType === "indoor" ? false : profileDraft.requiresDry,
+        rainSensitive: profileDraft.locationType === "indoor" ? false : profileDraft.rainSensitive,
+        heatSensitive: profileDraft.locationType === "indoor" ? false : profileDraft.heatSensitive,
+        coldSensitive: profileDraft.locationType === "indoor" ? false : profileDraft.coldSensitive,
+        thunderstormUnsafe: profileDraft.locationType !== "indoor",
         maxPrecipitationMm: parseOptionalNumber(profileDraft.maxPrecipitationMm) ?? undefined,
         minTemperatureC: parseOptionalNumber(profileDraft.minTemperatureC) ?? undefined,
         maxTemperatureC: parseOptionalNumber(profileDraft.maxTemperatureC) ?? undefined,
@@ -420,6 +459,15 @@ export default function AdminScreen() {
 
   async function deleteSport(sport: Row<"sports">) {
     const result = await deleteMccSport(supabase, sport.id);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    await load();
+  }
+
+  async function toggleSportActive(sport: Row<"sports">) {
+    const result = await setMccSportActive(supabase, { sportId: sport.id, isActive: !sport.is_active });
     if (result.error) {
       setMessage(result.error.message);
       return;
@@ -482,14 +530,31 @@ export default function AdminScreen() {
               <View style={styles.formGrid}>
                 <AdminInput value={sportDraft.name} onChangeText={(name) => setSportDraft((draft) => ({ ...draft, name }))} placeholder="Name" />
                 <AdminInput value={sportDraft.description} onChangeText={(description) => setSportDraft((draft) => ({ ...draft, description }))} placeholder="Beschreibung" multiline />
-                <AdminInput value={sportDraft.category} onChangeText={(category) => setSportDraft((draft) => ({ ...draft, category }))} placeholder="Kategorie" />
-                <AdminInput
-                  value={sportDraft.combinableTags}
-                  onChangeText={(combinableTags) => setSportDraft((draft) => ({ ...draft, combinableTags }))}
-                  placeholder="Tags, getrennt mit Komma"
-                />
               </View>
+              <PickerGroup
+                label="Kategorie"
+                items={sportCategoryOptions.map((category) => ({ id: category, label: categoryLabel(category) }))}
+                selectedId={sportDraft.category}
+                onSelect={(category) => setSportDraft((draft) => ({ ...draft, category }))}
+              />
+              <View style={styles.roleRow}>
+                <Pressable style={[styles.roleButton, { backgroundColor: customCategoryOpen ? theme.button : theme.surface }]} onPress={() => setCustomCategoryOpen((open) => !open)}>
+                  <Text style={[styles.roleText, { color: customCategoryOpen ? theme.inverse : theme.text }]}>+ Kategorie</Text>
+                </Pressable>
+                <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => setIconPickerOpen(true)}>
+                  <View style={styles.inlineIconLabel}>
+                    <SportIconBadge sport={{ name: sportDraft.name, category: sportDraft.category, intensity_level: sportDraft.intensityLevel, icon_name: sportDraft.iconName }} size={28} />
+                    <Text style={[styles.roleText, { color: theme.text }]}>Icon waehlen</Text>
+                  </View>
+                </Pressable>
+              </View>
+              {customCategoryOpen ? (
+                <AdminInput value={sportDraft.category} onChangeText={(category) => setSportDraft((draft) => ({ ...draft, category }))} placeholder="Neue Kategorie, z. B. Praezisionssport" />
+              ) : null}
               <ChipGroup label="Schwierigkeit" options={intensityOptions} selected={sportDraft.intensityLevel} onSelect={(intensityLevel) => setSportDraft((draft) => ({ ...draft, intensityLevel }))} />
+              <Pressable style={[styles.roleButton, { backgroundColor: sportDraft.isActive ? theme.button : theme.surface, alignSelf: "flex-start" }]} onPress={() => setSportDraft((draft) => ({ ...draft, isActive: !draft.isActive }))}>
+                <Text style={[styles.roleText, { color: sportDraft.isActive ? theme.inverse : theme.text }]}>{sportDraft.isActive ? "Sportart aktiv" : "Sportart inaktiv"}</Text>
+              </Pressable>
               <View style={styles.roleRow}>
                 <Pressable
                   style={[styles.primaryButton, { backgroundColor: theme.button }]}
@@ -512,16 +577,22 @@ export default function AdminScreen() {
 
               {sports.map((sport) => (
                 <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
-                  <View>
+                  <View style={styles.sportTitleRow}>
+                    <SportIconBadge sport={sport} size={34} />
+                    <View style={styles.memberText}>
                     <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
                     {sport.description ? <Text style={[styles.muted, { color: theme.muted }]}>{sport.description}</Text> : null}
                     <Text style={[styles.muted, { color: theme.muted }]}>
-                      {sport.category} · {intensityLabel(sport.intensity_level)}
+                      {categoryLabel(sport.category)} · {intensityLabel(sport.intensity_level)} · {sport.is_active ? "aktiv" : "inaktiv"}
                     </Text>
+                  </View>
                   </View>
                   <View style={styles.roleRow}>
                     <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => editSport(sport)}>
                       <Text style={[styles.roleText, { color: theme.text }]}>Bearbeiten</Text>
+                    </Pressable>
+                    <Pressable style={[styles.roleButton, sport.is_active ? styles.dangerButton : { backgroundColor: theme.surface }]} onPress={() => void toggleSportActive(sport)}>
+                      <Text style={sport.is_active ? styles.dangerText : [styles.roleText, { color: theme.text }]}>{sport.is_active ? "Deaktivieren" : "Aktivieren"}</Text>
                     </Pressable>
                     <Pressable
                       style={[styles.roleButton, styles.dangerButton]}
@@ -544,35 +615,42 @@ export default function AdminScreen() {
           {isAdmin && activeSection === "profiles" ? (
             <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Sportprofile verwalten</Text>
-              <PickerGroup
-                label="Sportart"
-                items={sports.map((sport) => ({ id: sport.id, label: sport.name }))}
-                selectedId={profileDraft.sportId || sports[0]?.id || null}
-                onSelect={(sportId) => setProfileDraft((draft) => ({ ...draft, sportId }))}
+              <MultiPickerGroup
+                label="Sportarten"
+                items={sports.map((sport) => ({ id: sport.id, label: sport.name, inactive: !sport.is_active }))}
+                selectedIds={profileDraft.sportIds}
+                onToggle={(sportId) =>
+                  setProfileDraft((draft) => ({
+                    ...draft,
+                    sportIds: draft.sportIds.includes(sportId) ? draft.sportIds.filter((id) => id !== sportId) : [...draft.sportIds, sportId],
+                  }))
+                }
               />
               <View style={styles.formGrid}>
-                <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Profilname, z. B. Beachvolleyball im Stadtpark" />
+                <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Profilname, z. B. Hörnle Sportbereich" />
                 <MapLocationPicker
                   label="Standort"
                   required
                   location={profileDraft.locationName}
                   mapUrl={profileDraft.mapUrl}
+                  latitude={parseOptionalNumber(profileDraft.latitude)}
+                  longitude={parseOptionalNumber(profileDraft.longitude)}
                   onLocationChange={(locationName) => setProfileDraft((draft) => ({ ...draft, locationName }))}
                   onMapUrlChange={(mapUrl) => setProfileDraft((draft) => ({ ...draft, mapUrl }))}
                   onCoordinatesChange={({ latitude, longitude }) => setProfileDraft((draft) => ({ ...draft, latitude: latitude?.toString() ?? "", longitude: longitude?.toString() ?? "" }))}
                 />
                 <AdminInput value={profileDraft.locationCity} onChangeText={(locationCity) => setProfileDraft((draft) => ({ ...draft, locationCity }))} placeholder="Stadt optional, z. B. Konstanz" />
                 <AdminInput value={profileDraft.postalCode} onChangeText={(postalCode) => setProfileDraft((draft) => ({ ...draft, postalCode: postalCode.replace(/\D/g, '').slice(0, 5) }))} placeholder="PLZ optional" keyboardType="number-pad" inputMode="numeric" />
-                <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Pflicht: Mindestanzahl, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
-                <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Optional: Maximalanzahl, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
-                <AdminInput value={profileDraft.requiredEquipment} onChangeText={(requiredEquipment) => setProfileDraft((draft) => ({ ...draft, requiredEquipment }))} placeholder="Optional: Was müssen Mitglieder mitbringen? Komma getrennt" />
-                <AdminInput value={profileDraft.availableEquipment} onChangeText={(availableEquipment) => setProfileDraft((draft) => ({ ...draft, availableEquipment }))} placeholder="Optional: Was ist vor Ort vorhanden?" />
-                <AdminInput value={profileDraft.costNote} onChangeText={(costNote) => setProfileDraft((draft) => ({ ...draft, costNote }))} placeholder="Optional: Kostenhinweis" />
-                <AdminInput value={profileDraft.openingNotes} onChangeText={(openingNotes) => setProfileDraft((draft) => ({ ...draft, openingNotes }))} placeholder="Optional: Öffnungszeiten oder Zeitfenster" multiline />
-                <AdminInput value={profileDraft.transitNotes} onChangeText={(transitNotes) => setProfileDraft((draft) => ({ ...draft, transitNotes }))} placeholder="Optional: ÖPNV/Parken" multiline />
-                <AdminInput value={profileDraft.amenityNotes} onChangeText={(amenityNotes) => setProfileDraft((draft) => ({ ...draft, amenityNotes }))} placeholder="Toiletten/Wasser/Umkleiden" multiline />
-                <AdminInput value={profileDraft.locationRules} onChangeText={(locationRules) => setProfileDraft((draft) => ({ ...draft, locationRules }))} placeholder="Standortregeln" multiline />
-                <AdminInput value={profileDraft.safetyNotes} onChangeText={(safetyNotes) => setProfileDraft((draft) => ({ ...draft, safetyNotes }))} placeholder="Sicherheitsinformationen" multiline />
+                <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Mindestanzahl, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Maximalanzahl, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.requiredEquipment} onChangeText={(requiredEquipment) => setProfileDraft((draft) => ({ ...draft, requiredEquipment }))} placeholder="Mitzubringen, z. B. Schläger, Matte" />
+                <AdminInput value={profileDraft.availableEquipment} onChangeText={(availableEquipment) => setProfileDraft((draft) => ({ ...draft, availableEquipment }))} placeholder="Vor Ort vorhanden, z. B. Netz, Tore, Umkleiden" />
+                <AdminInput value={profileDraft.costNote} onChangeText={(costNote) => setProfileDraft((draft) => ({ ...draft, costNote }))} placeholder="Kosten, z. B. kostenlos oder 5 EUR Hallenanteil" />
+                <AdminInput value={profileDraft.openingNotes} onChangeText={(openingNotes) => setProfileDraft((draft) => ({ ...draft, openingNotes }))} placeholder="Öffnungszeiten oder Zeitfenster, z. B. ab 18 Uhr frei" multiline />
+                <AdminInput value={profileDraft.transitNotes} onChangeText={(transitNotes) => setProfileDraft((draft) => ({ ...draft, transitNotes }))} placeholder="Anreise, z. B. Buslinie, Radweg, Parkplätze" multiline />
+                <AdminInput value={profileDraft.amenityNotes} onChangeText={(amenityNotes) => setProfileDraft((draft) => ({ ...draft, amenityNotes }))} placeholder="Infrastruktur, z. B. Wasser, Toiletten, Umkleiden" multiline />
+                <AdminInput value={profileDraft.locationRules} onChangeText={(locationRules) => setProfileDraft((draft) => ({ ...draft, locationRules }))} placeholder="Standortregeln, z. B. Reservierung ab 6 Personen" multiline />
+                <AdminInput value={profileDraft.safetyNotes} onChangeText={(safetyNotes) => setProfileDraft((draft) => ({ ...draft, safetyNotes }))} placeholder="Sicherheit, z. B. rutschig bei Nässe" multiline />
               </View>
               <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
               <PickerGroup
@@ -597,23 +675,24 @@ export default function AdminScreen() {
                   <Text style={[styles.roleText, { color: profileDraft.lightingAvailable ? theme.inverse : theme.text }]}>Licht</Text>
                 </Pressable>
               </View>
-              <View style={styles.roleRow}>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.requiresDry ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, requiresDry: !draft.requiresDry }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.requiresDry ? theme.inverse : theme.text }]}>Trocken nötig</Text>
-                </Pressable>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.rainSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, rainSensitive: !draft.rainSensitive }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.rainSensitive ? theme.inverse : theme.text }]}>Regen sensibel</Text>
-                </Pressable>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.heatSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, heatSensitive: !draft.heatSensitive }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.heatSensitive ? theme.inverse : theme.text }]}>Hitze sensibel</Text>
-                </Pressable>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.coldSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, coldSensitive: !draft.coldSensitive }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.coldSensitive ? theme.inverse : theme.text }]}>Kälte sensibel</Text>
-                </Pressable>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.thunderstormUnsafe ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, thunderstormUnsafe: !draft.thunderstormUnsafe }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.thunderstormUnsafe ? theme.inverse : theme.text }]}>Gewitter blockt</Text>
-                </Pressable>
-              </View>
+              {profileDraft.locationType === "indoor" ? (
+                <Text style={[styles.muted, { color: theme.muted }]}>Indoor: Regen und Temperatur werden für die Entscheidung kaum gewichtet.</Text>
+              ) : (
+                <View style={styles.roleRow}>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.requiresDry ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, requiresDry: !draft.requiresDry }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.requiresDry ? theme.inverse : theme.text }]}>Trocken nötig</Text>
+                  </Pressable>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.rainSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, rainSensitive: !draft.rainSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.rainSensitive ? theme.inverse : theme.text }]}>Regen sensibel</Text>
+                  </Pressable>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.heatSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, heatSensitive: !draft.heatSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.heatSensitive ? theme.inverse : theme.text }]}>Soll eher kalt sein</Text>
+                  </Pressable>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.coldSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, coldSensitive: !draft.coldSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.coldSensitive ? theme.inverse : theme.text }]}>Soll eher warm sein</Text>
+                  </Pressable>
+                </View>
+              )}
               <View style={styles.roleRow}>
                 <Pressable
                   style={[styles.primaryButton, { backgroundColor: theme.button }]}
@@ -640,23 +719,33 @@ export default function AdminScreen() {
                 if (profileSearch.trim() && profiles.length === 0) return null;
                 return (
                   <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
-                    <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
+                    <View style={styles.sportTitleRow}>
+                      <SportIconBadge sport={sport} size={34} />
+                      <View style={styles.memberText}>
+                        <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
+                      </View>
+                    </View>
                     <Text style={[styles.muted, { color: theme.muted }]}>Abstrakte Sportart - darunter liegen konkrete Profile.</Text>
                     {profiles.length === 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Noch kein Sportprofil.</Text> : null}
                     {profiles.map((profile) => {
                       const apMember = members.find((member) => member.userId === profile.ap_contact_id);
+                      const creatorMember = members.find((member) => member.userId === profile.created_by);
                       const requiredEquipment = profile.required_equipment ?? [];
+                      const linkedSports = sportIdsForProfile(profile, sportProfileLinks).map((sportId) => sports.find((entry) => entry.id === sportId)?.name).filter(Boolean).join(", ");
                       return (
                         <View key={profile.id} style={[styles.profileChildCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-                          <View>
+                          <View style={styles.profileHeaderRow}>
+                          <View style={styles.profileText}>
                             <Text style={[styles.name, { color: theme.text }]}>{profile.name}</Text>
+                            <Text style={[styles.muted, { color: theme.accent }]}>{linkedSports || "Keine Sportart verknüpft"}</Text>
                             <Text style={[styles.muted, { color: theme.muted }]}>
                               {[profile.location_name ?? "Ort offen", profile.location_city, profile.postal_code].filter(Boolean).join(" - ")} - min. {profile.minimum_group_size}
                               {profile.maximum_group_size ? ` - max. ${profile.maximum_group_size}` : ""}
                             </Text>
                             <Text style={[styles.muted, { color: profile.is_active ? theme.accent : theme.muted }]}>
                               {profile.is_active ? "aktiv" : "inaktiv"} - {locationLabel(profile.location_type)}
-                              {apMember ? ` - Kontakt: ${apMember.displayName}` : " - Kontakt offen"}
+                              {creatorMember ? ` - Ersteller: ${creatorMember.displayName}` : " - Ersteller offen"}
+                              {apMember && apMember.userId !== creatorMember?.userId ? ` - AP: ${apMember.displayName}` : ""}
                             </Text>
                             {requiredEquipment.length > 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Mitbringen: {requiredEquipment.join(", ")}</Text> : null}
                             {profile.opening_notes || profile.transit_notes || profile.amenity_notes ? (
@@ -669,6 +758,8 @@ export default function AdminScreen() {
                                 {[profile.location_rules, profile.safety_notes].filter(Boolean).join(" - ")}
                               </Text>
                             ) : null}
+                          </View>
+                          <MapRouteButton target={profileMapTarget(profile)} compact />
                           </View>
                           <View style={styles.roleRow}>
                             <Pressable style={[styles.roleButton, { backgroundColor: theme.softSurface }]} onPress={() => editProfile(profile)}>
@@ -804,6 +895,16 @@ export default function AdminScreen() {
             </View>
           ) : null}
         </ScrollView>
+        {iconPickerOpen ? (
+          <SportIconPicker
+            draft={sportDraft}
+            onSelect={(iconName) => {
+              setSportDraft((current) => ({ ...current, iconName }));
+              setIconPickerOpen(false);
+            }}
+            onClose={() => setIconPickerOpen(false)}
+          />
+        ) : null}
         {pendingConfirm ? <ConfirmSheet confirm={pendingConfirm} onCancel={() => setPendingConfirm(null)} onConfirm={runConfirmedAction} /> : null}
         <BottomNav active="menu" />
       </View>
@@ -814,6 +915,37 @@ export default function AdminScreen() {
 function AdminInput(props: React.ComponentProps<typeof TextInput>) {
   const { theme } = useTheme();
   return <TextInput placeholderTextColor={theme.muted} style={[styles.input, props.multiline && styles.textArea, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]} {...props} />;
+}
+
+function SportIconPicker({ draft, onSelect, onClose }: { draft: SportDraft; onSelect: (iconName: string) => void; onClose: () => void }) {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.iconPickerOverlay} pointerEvents="box-none">
+      <Pressable style={styles.confirmScrim} onPress={onClose} />
+      <View style={[styles.iconPickerCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+        <View style={styles.contactRow}>
+          <View style={styles.memberText}>
+            <Text style={[styles.confirmTitle, { color: theme.text }]}>Welches Icon passt?</Text>
+            <Text style={[styles.muted, { color: theme.muted }]}>{draft.name || "Neue Sportart"}</Text>
+          </View>
+          <Pressable style={[styles.inlineCloseButton, { backgroundColor: theme.softSurface }]} onPress={onClose}>
+            <MaterialCommunityIcons name="close" size={18} color={theme.text} />
+          </Pressable>
+        </View>
+        <View style={styles.iconGrid}>
+          {SPORT_ICON_OPTIONS.map((option) => {
+            const active = draft.iconName === option.name;
+            return (
+              <Pressable key={option.name} style={[styles.iconOption, { borderColor: active ? theme.accent : theme.border, backgroundColor: active ? theme.button : theme.softSurface }]} onPress={() => onSelect(option.name)}>
+                <MaterialCommunityIcons name={option.name} size={23} color={active ? theme.inverse : theme.text} />
+                <Text style={[styles.iconOptionText, { color: active ? theme.inverse : theme.text }]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function InvitationTreeView({ nodes }: { nodes: InvitationTreeNode[] }) {
@@ -902,6 +1034,35 @@ function PickerGroup({
           return (
             <Pressable key={item.id} style={[styles.roleButton, { backgroundColor: active ? theme.button : theme.surface }]} onPress={() => onSelect(item.id)}>
               <Text style={[styles.roleText, { color: active ? theme.inverse : theme.text }]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function MultiPickerGroup({
+  label,
+  items,
+  selectedIds,
+  onToggle,
+}: {
+  label: string;
+  items: Array<{ id: string; label: string; inactive?: boolean }>;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}) {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.chipGroup}>
+      <Text style={[styles.muted, { color: theme.muted }]}>{label}</Text>
+      <View style={styles.roleRow}>
+        {items.map((item) => {
+          const active = selectedIds.includes(item.id);
+          return (
+            <Pressable key={item.id} style={[styles.roleButton, { backgroundColor: active ? theme.button : theme.surface, opacity: item.inactive && !active ? 0.55 : 1 }]} onPress={() => onToggle(item.id)}>
+              <Text style={[styles.roleText, { color: active ? theme.inverse : theme.text }]}>{item.label}{item.inactive ? " (inaktiv)" : ""}</Text>
             </Pressable>
           );
         })}
@@ -1003,6 +1164,46 @@ function buildCodeNode(
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function sportIdsForProfile(profile: Row<"sport_profiles">, links: Row<"sport_profile_sports">[]): string[] {
+  const linked = links.filter((link) => link.profile_id === profile.id).map((link) => link.sport_id);
+  return linked.length > 0 ? [...new Set(linked)] : [profile.sport_id];
+}
+
+function profileMapTarget(profile: Row<"sport_profiles">) {
+  return {
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    mapUrl: profile.map_url,
+    label: [profile.location_name, profile.location_city, profile.postal_code].filter(Boolean).join(" "),
+  };
+}
+
+function categoryLabel(value: string): string {
+  const labels: Record<string, string> = {
+    ballsport: "Ballsport",
+    ball: "Ballsport",
+    ausdauer: "Ausdauersport",
+    kraft: "Kraftsport",
+    kraftsport: "Kraftsport",
+    wasser: "Wasser",
+    wassersport: "Wassersport",
+    winter: "Winter",
+    wintersport: "Wintersport",
+    kampf: "Kampfsport",
+    kampfsport: "Kampfsport",
+    rueckschlagspiel: "Rückschlagspiel",
+    teamsport: "Teamsport",
+    individualsport: "Individualsport",
+    tanz: "Tanz",
+    fitness: "Fitness",
+    mobility: "Mobility",
+    unknown: "Unbekannt",
+    unbekannt: "Unbekannt",
+    cardio: "Ausdauersport",
+  };
+  return labels[value] ?? value;
 }
 
 function parseOptionalNumber(value: string): number | null {
@@ -1139,8 +1340,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: 12,
   },
+  sportTitleRow: { alignItems: "center", flexDirection: "row", gap: 10 },
   memberText: { flex: 1, minWidth: 0 },
   memberCard: { gap: 10, borderTopWidth: 1, paddingTop: 12 },
+  profileHeaderRow: { alignItems: "flex-start", flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  profileText: { flex: 1, minWidth: 0 },
   profileChildCard: { gap: 8, borderRadius: 18, borderWidth: 1, padding: 12 },
   contactRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
   treeList: { gap: 10 },
@@ -1161,6 +1365,34 @@ const styles = StyleSheet.create({
   roleRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   roleButton: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 8 },
   roleText: { fontSize: 12, fontWeight: "900" },
+  inlineIconLabel: { alignItems: "center", flexDirection: "row", gap: 7 },
+  inlineCloseButton: { alignItems: "center", borderRadius: 999, height: 34, justifyContent: "center", width: 34 },
+  iconPickerOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 36,
+    justifyContent: "center",
+    padding: 16,
+  },
+  iconPickerCard: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 520,
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 14,
+    padding: 16,
+    shadowColor: "#000000",
+    shadowOpacity: 0.24,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+  },
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  iconOption: { alignItems: "center", borderRadius: 16, borderWidth: 1, gap: 5, minWidth: 92, paddingHorizontal: 10, paddingVertical: 10 },
+  iconOptionText: { fontSize: 11, fontWeight: "900" },
   primaryButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11 },
   primaryText: { fontSize: 13, fontWeight: "900" },
   dangerButton: { backgroundColor: "rgba(255,126,106,0.16)" },
