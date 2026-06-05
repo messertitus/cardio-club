@@ -19,6 +19,8 @@ describe("buildDecisionPresentation", () => {
     expect(presentation.resultLabels).toContain("Single Event");
     expect(presentation.selectedSportName).toBe("Fußball · Stadtpark");
     expect(presentation.simpleExplanation).toContain("Single Event");
+    expect(presentation.decisionCharacter).toBe("clear_majority");
+    expect(presentation.noGoSummary).toBe("Keine No-Go-Konflikte.");
   });
 
   it("explains a multi-sport decision with two profiles", () => {
@@ -35,6 +37,8 @@ describe("buildDecisionPresentation", () => {
     expect(presentation.resultLabels).toContain("Fairness-Ausgleich");
     expect(presentation.secondarySportName).toBe("Laufen · Laufgruppe im Park");
     expect(presentation.simpleExplanation).toContain("Multi-Sport Event");
+    expect(presentation.scoreRows[0].standortKapazitaet).toBe(0);
+    expect(presentation.scoreRows[0].noGoDruck).toBe(0);
   });
 
   it("labels twin events and exposes the score breakdown", () => {
@@ -53,6 +57,52 @@ describe("buildDecisionPresentation", () => {
     expect(presentation.scoreRows[0].eventTyp).toBe("Twin Event");
     expect(presentation.scoreRows[0].minderheitenschutz).toBe(1);
   });
+
+  it("exposes why-not summaries for losing candidates", () => {
+    const baseActivity = activity("football", "football-park", "Stadtpark");
+    const losingActivity = activity("running", "running-park", "Parklauf");
+    const winnerScore = candidate("single", [baseActivity], breakdown({ preference: 4 }));
+    const loserScore = candidate("single", [losingActivity], breakdown({ preference: 2 }));
+    const presentation = buildDecisionPresentation(
+      {
+        mode: "single",
+        selectedSportId: "football",
+        selectedProfileId: "football-park",
+        activities: [baseActivity],
+        scores: [winnerScore, loserScore],
+        scoreBreakdown: winnerScore.scoreBreakdown,
+        decisionCharacter: "clear_majority",
+        explainability: {
+          voteSummaryBySport: [],
+          fairnessByUser: [],
+          noGoBreakdown: emptyNoGoBreakdown(),
+          rotationReasons: [],
+          weatherReasons: [],
+          practicalityReasons: [],
+          capacityReasons: [],
+          costReasons: [],
+        },
+        noGoBreakdown: emptyNoGoBreakdown(),
+        losingCandidateReasons: [
+          {
+            candidateId: loserScore.id,
+            mode: "single",
+            sportIds: ["running"],
+            sportNames: ["Running"],
+            finalScore: loserScore.finalScore,
+            scoreGapToWinner: 2,
+            keyReasons: ["Die Hauptaktivitaet hatte weniger aktuelle Unterstuetzung."],
+          },
+        ],
+        excludedProfiles: [],
+        reason: "raw reason",
+      },
+      sportNames,
+    );
+
+    expect(presentation.losingCandidateSummaries[0]).toContain("Laufen");
+    expect(presentation.losingCandidateSummaries[0]).toContain("weniger aktuelle Unterstuetzung");
+  });
 });
 
 function decision(
@@ -70,6 +120,19 @@ function decision(
     activities,
     scores: [score],
     scoreBreakdown,
+    decisionCharacter: mode === "multi_sport" ? "combined_event" : mode === "twin" ? "split_groups" : "clear_majority",
+    explainability: {
+      voteSummaryBySport: [],
+      fairnessByUser: [],
+      noGoBreakdown: emptyNoGoBreakdown(),
+      rotationReasons: [],
+      weatherReasons: [],
+      practicalityReasons: [],
+      capacityReasons: [],
+      costReasons: [],
+    },
+    noGoBreakdown: emptyNoGoBreakdown(),
+    losingCandidateReasons: [],
     excludedProfiles: [],
     reason: "raw reason",
   };
@@ -88,6 +151,17 @@ function candidate(
     scoreBreakdown,
     finalScore: Object.values(scoreBreakdown).reduce((total, value) => total + value, 0),
     reasonParts: [],
+    primaryVoteScore: scoreBreakdown.preference,
+    primaryVoteShare: 1,
+    voteScore: scoreBreakdown.preference,
+    voteShare: 1,
+    uniqueVoters: 2,
+    noGoBreakdown: emptyNoGoBreakdown(),
+    rotationReasons: [],
+    capacityReasons: [],
+    hasUnresolvedGoingNoGo: false,
+    hasHardWeatherRisk: false,
+    practicalityProblemScore: 0,
   };
 }
 
@@ -118,8 +192,21 @@ function breakdown(values: Partial<ScoreBreakdown>): ScoreBreakdown {
     togetherness: 0,
     weather: 0,
     practicality: 0,
+    locationCapacity: 0,
+    cost: 0,
     rotation: 0,
     reliability: 0,
+    noGoPressure: 0,
+    modeBonus: 0,
     ...values,
+  };
+}
+
+function emptyNoGoBreakdown() {
+  return {
+    unresolved: [],
+    resolvedByAlternative: [],
+    ignoredBecauseNotGoing: [],
+    summary: "Keine No-Go-Konflikte.",
   };
 }

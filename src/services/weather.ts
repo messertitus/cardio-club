@@ -24,11 +24,13 @@ export async function fetchEventWeatherSnapshot(
   }
 
   const snapshot: ProfileWeatherSnapshot = {};
-  const profilesWithCoordinates = profiles.filter(hasCoordinates);
+  const profilesWithWeatherLocation = profiles
+    .map((profile) => ({ profile, coordinates: coordinatesForProfile(profile) }))
+    .filter((entry): entry is { profile: SportProfile; coordinates: { latitude: number; longitude: number } } => Boolean(entry.coordinates));
 
   await Promise.all(
-    profilesWithCoordinates.map(async (profile) => {
-      const url = buildOpenMeteoUrl(profile.latitude as number, profile.longitude as number);
+    profilesWithWeatherLocation.map(async ({ profile, coordinates }) => {
+      const url = buildOpenMeteoUrl(coordinates.latitude, coordinates.longitude);
       try {
         const response = await fetcher(url);
         if (!response.ok) return;
@@ -93,4 +95,37 @@ function pickClosestWeather(payload: OpenMeteoResponse, startsAt: string): Weath
 
 function hasCoordinates(profile: SportProfile): boolean {
   return typeof profile.latitude === "number" && typeof profile.longitude === "number";
+}
+
+function coordinatesForProfile(profile: SportProfile): { latitude: number; longitude: number } | null {
+  if (hasCoordinates(profile)) {
+    return { latitude: profile.latitude as number, longitude: profile.longitude as number };
+  }
+
+  return coordinatesForPostalCode(profile.postalCode);
+}
+
+export function coordinatesForPostalCode(postalCode?: string | null): { latitude: number; longitude: number } | null {
+  const normalized = postalCode?.replace(/\D/g, "").slice(0, 5);
+  if (!normalized || normalized.length < 2) return null;
+
+  const exact: Record<string, { latitude: number; longitude: number }> = {
+    "78462": { latitude: 47.6603, longitude: 9.1758 },
+    "78464": { latitude: 47.6813, longitude: 9.1986 },
+    "78465": { latitude: 47.7352, longitude: 9.1311 },
+    "78467": { latitude: 47.6886, longitude: 9.1544 },
+    "79098": { latitude: 47.9978, longitude: 7.8522 },
+    "79100": { latitude: 47.9792, longitude: 7.8508 },
+    "79104": { latitude: 48.0114, longitude: 7.8603 },
+    "79110": { latitude: 48.0184, longitude: 7.7904 },
+  };
+  if (exact[normalized]) return exact[normalized];
+
+  const prefix = normalized.slice(0, 2);
+  const prefixCoordinates: Record<string, { latitude: number; longitude: number }> = {
+    "78": { latitude: 47.6779, longitude: 9.1732 },
+    "79": { latitude: 47.999, longitude: 7.8421 },
+  };
+
+  return prefixCoordinates[prefix] ?? null;
 }

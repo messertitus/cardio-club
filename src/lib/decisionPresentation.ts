@@ -5,8 +5,11 @@ export type SportNameMap = Map<string, string>;
 export type DecisionPresentation = {
   selectedSportName: string;
   secondarySportName?: string;
+  decisionCharacter: FairConstellationDecision["decisionCharacter"];
   resultLabels: string[];
   simpleExplanation: string;
+  noGoSummary?: string;
+  losingCandidateSummaries: string[];
   activityRows: Array<{
     sportId: string;
     sportName: string;
@@ -29,8 +32,12 @@ export type DecisionPresentation = {
     togetherness: number;
     wetter: number;
     machbarkeit: number;
+    standortKapazitaet: number;
+    kosten: number;
     rotation: number;
     verlaesslichkeit: number;
+    noGoDruck: number;
+    modusBonus: number;
     gesamt: number;
   }>;
 };
@@ -48,8 +55,11 @@ export function buildDecisionPresentation(
       : decision.secondarySportId
         ? nameForSport(decision.secondarySportId, sportNames)
         : undefined,
+    decisionCharacter: decision.decisionCharacter,
     resultLabels: getResultLabels(decision),
     simpleExplanation: getSimpleExplanation(decision, winner, sportNames),
+    noGoSummary: decision.noGoBreakdown.summary,
+    losingCandidateSummaries: decision.losingCandidateReasons.map((reason) => summarizeLosingCandidate(reason, sportNames)),
     activityRows: decision.activities.map((activity) => ({
       sportId: activity.sportId,
       sportName: nameForSport(activity.sportId, sportNames),
@@ -70,7 +80,7 @@ function getResultLabels(decision: FairConstellationDecision): string[] {
     return ["Keine Entscheidung"];
   }
 
-  const labels: string[] = [modeLabel(decision.mode)];
+  const labels: string[] = [modeLabel(decision.mode), characterLabel(decision.decisionCharacter)];
   const breakdown = decision.scoreBreakdown;
 
   if (breakdown && breakdown.fairness + breakdown.minorityProtection > 0.7) {
@@ -105,6 +115,14 @@ function getSimpleExplanation(
   const second = activityLabel(decision.activities[1], sportNames);
   const fairnessActive = winner.scoreBreakdown.fairness + winner.scoreBreakdown.minorityProtection > 0.7;
   const weatherActive = winner.scoreBreakdown.weather < 0;
+
+  if (decision.decisionCharacter === "majority_protected") {
+    return `${first} bleibt vorne, obwohl andere Sportarten Fairness-Punkte hatten. Die aktuelle Mehrheit war klar und es gab keine starken Gegenfaktoren.`;
+  }
+
+  if (decision.decisionCharacter === "fairness_adjusted") {
+    return `${first} wurde gewaehlt, weil es genug aktuelle Unterstuetzung und einen relevanten Fairness-Ausgleich gab.`;
+  }
 
   if (decision.mode === "single") {
     return `${first} wurde als Single Event gewählt, weil Zustimmung, Fairness, Wetter und Machbarkeit insgesamt am besten passen.`;
@@ -142,10 +160,34 @@ function mapScoreRow(score: CandidateScore, sportNames: SportNameMap) {
     togetherness: breakdown.togetherness,
     wetter: breakdown.weather,
     machbarkeit: breakdown.practicality,
+    standortKapazitaet: breakdown.locationCapacity,
+    kosten: breakdown.cost,
     rotation: breakdown.rotation,
     verlaesslichkeit: breakdown.reliability,
+    noGoDruck: breakdown.noGoPressure,
+    modusBonus: breakdown.modeBonus,
     gesamt: score.finalScore,
   };
+}
+
+function summarizeLosingCandidate(
+  reason: FairConstellationDecision["losingCandidateReasons"][number],
+  sportNames: SportNameMap,
+): string {
+  const sports = reason.sportIds.map((sportId) => nameForSport(sportId, sportNames)).join(" + ");
+  return `${sports}: ${reason.keyReasons.join(" ")}`;
+}
+
+function characterLabel(character: FairConstellationDecision["decisionCharacter"]): string {
+  if (character === "clear_majority") return "Klare Mehrheit";
+  if (character === "fairness_adjusted") return "Fairness-Ausgleich";
+  if (character === "majority_protected") return "Mehrheitsschutz";
+  if (character === "practicality_adjusted") return "Machbarkeit abgewogen";
+  if (character === "weather_adjusted") return "Wetter abgewogen";
+  if (character === "combined_event") return "Kombiniertes Event";
+  if (character === "split_groups") return "Getrennte Gruppen";
+  if (character === "fallback") return "Fallback";
+  return "Keine Entscheidung";
 }
 
 function activityLabel(

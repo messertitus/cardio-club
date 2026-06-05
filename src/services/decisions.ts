@@ -6,6 +6,7 @@ import {
   type ParticipationEntry,
   type PreferenceHistoryEntry,
   type ProfileWeatherSnapshot,
+  type RecentActivitySelection,
   type RecentSelection,
   type ReliabilityHistoryEntry,
 } from "../lib/fairConstellationSelection";
@@ -36,7 +37,7 @@ export type CreatedSubgroups = {
   subgroups: Row<"event_subgroups">[];
 };
 
-type RecentEventRow = Pick<Row<"weekly_events">, "id" | "week_start_date" | "selected_sport_id">;
+type RecentEventRow = Pick<Row<"weekly_events">, "id" | "week_start_date" | "selected_sport_id" | "decision_type">;
 
 export async function getEventDecisionPreview(
   supabase: AppSupabaseClient,
@@ -109,6 +110,10 @@ export async function finalizeEventDecision(
       decision_type: decision.mode,
       decision_reason: decision.reason,
       decision_scorecard: decision.scoreBreakdown ?? null,
+      decision_character: decision.decisionCharacter,
+      decision_explainability: decision.explainability,
+      losing_candidate_reasons: decision.losingCandidateReasons,
+      no_go_breakdown: decision.noGoBreakdown,
       weather_snapshot: decision.weatherSnapshot ?? null,
       activity_contact_id: primaryContactId,
       status: "decided",
@@ -199,8 +204,8 @@ async function buildDecisionInput(
       fetchVotes(supabase, event.id),
       fetchAttendance(supabase, event.id),
       fetchNoGos(supabase, event.id),
-      fetchPreviousSelectedSportId(supabase, event),
-      fetchRecentSelections(supabase, event),
+      fetchPreviousPrimarySportId(supabase, event),
+      fetchRecentActivities(supabase, event),
       fetchPreferenceHistory(supabase, event.club_id, event.week_start_date),
       fetchReliabilityHistory(supabase, event),
     ]);
@@ -239,11 +244,12 @@ async function buildDecisionInput(
       rank: vote.vote_rank,
       weight: vote.weight,
     })),
-    noGos: noGosResult.data.map((noGo) => ({ sportId: noGo.sport_id, userId: noGo.user_id })),
+    noGos: noGosResult.data.map((noGo) => ({ sportId: noGo.sport_id, userId: noGo.user_id, reason: noGo.reason })),
     attendance: attendanceResult.data.map(mapAttendance),
     previousWeekSportId: previousResult.data ?? undefined,
+    previousWeekPrimarySportId: previousResult.data ?? undefined,
     preferenceHistory: historyResult.data.map(mapPreferenceHistory),
-    recentSelections: recentResult.data.map(mapRecentSelection),
+    recentActivities: recentResult.data,
     reliabilityHistory: reliabilityResult.data,
     weatherSnapshot,
     options: input.options,
@@ -394,45 +400,113 @@ async function fetchSportProfiles(
   return listSportProfilesForSports(supabase, sportIds);
 }
 
-async function fetchPreviousSelectedSportId(
+async function fetchPreviousPrimarySportId(
   supabase: AppSupabaseClient,
   event: Row<"weekly_events">,
 ): Promise<ServiceResult<string | null>> {
-  const { data, error } = await supabase
+  const { data: recentEvents, error: recentEventsError } = await supabase
     .from("weekly_events")
-    .select("selected_sport_id")
+    .select("id, week_start_date, selected_sport_id, decision_type")
     .eq("club_id", event.club_id)
     .lt("week_start_date", event.week_start_date)
-    .not("selected_sport_id", "is", null)
-    .order("week_start_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    return { data: null, error: fromPostgrestError(error, "Could not load previous selected sport.") };
-  }
-
-  return ok(data?.selected_sport_id ?? null);
-}
-
-async function fetchRecentSelections(
-  supabase: AppSupabaseClient,
-  event: Row<"weekly_events">,
-): Promise<ServiceResult<Array<Row<"weekly_events"> & { sports: Pick<Row<"sports">, "category"> | null }>>> {
-  const { data, error } = await supabase
-    .from("weekly_events")
-    .select("*, sports:selected_sport_id(category)")
-    .eq("club_id", event.club_id)
-    .lt("week_start_date", event.week_start_date)
-    .not("selected_sport_id", "is", null)
     .order("week_start_date", { ascending: false })
     .limit(6);
 
-  if (error || !data) {
-    return { data: null, error: fromPostgrestError(error, "Could not load recent selections.") };
+  if (recentEventsError || !recentEvents) {
+    return { data: null, error: fromPostgrestError(recentEventsError, "Could not load previous selected sport.") };
   }
 
-  return ok(data as Array<Row<"weekly_events"> & { sports: Pick<Row<"sports">, "category"> | null }>);
+  const typedEvents = recentEvents as RecentEventRow[];
+  if (typedEvents.length === 0) return ok(null);
+
+  const { data: activities, error: activitiesError } = await supabase
+    .from("event_activities")
+    .select("event_id, sport_id, role")
+    .in("event_id", typedEvents.map((row) => row.id))
+    .eq("role", "primary");
+
+  if (activitiesError || !activities) {
+    return { data: null, error: fromPostgrestError(activitiesError, "Could not load previous event activities.") };
+  }
+
+  const primaryByEventId = new Map(activities.map((activity) => [activity.event_id, activity.sport_id]));
+  const previous = typedEvents.find((row) => primaryByEventId.has(row.id) || row.selected_sport_id);
+  return ok(previous ? primaryByEventId.get(previous.id) ?? previous.selected_sport_id ?? null : null);
+}
+
+async function fetchRecentActivities(
+  supabase: AppSupabaseClient,
+  event: Row<"weekly_events">,
+): Promise<ServiceResult<RecentActivitySelection[]>> {
+  const { data: events, error: eventsError } = await supabase
+    .from("weekly_events")
+    .select("id, week_start_date, selected_sport_id, decision_type")
+    .eq("club_id", event.club_id)
+    .lt("week_start_date", event.week_start_date)
+    .order("week_start_date", { ascending: false })
+    .limit(6);
+
+  if (eventsError || !events) {
+    return { data: null, error: fromPostgrestError(eventsError, "Could not load recent selections.") };
+  }
+
+  const typedEvents = events as RecentEventRow[];
+  if (typedEvents.length === 0) return ok([]);
+
+  const { data: activities, error: activitiesError } = await supabase
+    .from("event_activities")
+    .select("event_id, sport_id, role, activity_type")
+    .in("event_id", typedEvents.map((row) => row.id));
+
+  if (activitiesError || !activities) {
+    return { data: null, error: fromPostgrestError(activitiesError, "Could not load recent activities.") };
+  }
+
+  const sportIds = [
+    ...new Set([
+      ...activities.map((activity) => activity.sport_id),
+      ...typedEvents.map((row) => row.selected_sport_id).filter((sportId): sportId is string => Boolean(sportId)),
+    ]),
+  ];
+  const sportsResult = await fetchSports(supabase, sportIds);
+  if (sportsResult.error) return { data: null, error: sportsResult.error };
+  const sportsById = new Map(sportsResult.data.map((sport) => [sport.id, sport]));
+  const activitiesByEventId = groupBy(activities, (activity) => activity.event_id);
+  const recentActivities: RecentActivitySelection[] = [];
+
+  for (const recentEvent of typedEvents) {
+    const eventActivities = activitiesByEventId.get(recentEvent.id) ?? [];
+    if (eventActivities.length > 0) {
+      for (const activity of eventActivities) {
+        const sport = sportsById.get(activity.sport_id);
+        recentActivities.push({
+          eventId: recentEvent.id,
+          sportId: activity.sport_id,
+          sportName: sport?.name,
+          category: sport?.category,
+          weekStartDate: recentEvent.week_start_date,
+          role: activity.role,
+          activityType: activity.activity_type,
+        });
+      }
+      continue;
+    }
+
+    if (recentEvent.selected_sport_id) {
+      const sport = sportsById.get(recentEvent.selected_sport_id);
+      recentActivities.push({
+        eventId: recentEvent.id,
+        sportId: recentEvent.selected_sport_id,
+        sportName: sport?.name,
+        category: sport?.category,
+        weekStartDate: recentEvent.week_start_date,
+        role: "primary",
+        activityType: recentEvent.decision_type ?? "single",
+      });
+    }
+  }
+
+  return ok(recentActivities);
 }
 
 async function fetchPreferenceHistory(
@@ -514,11 +588,13 @@ async function persistPreferenceHistory(
   }
 
   const nonAttendingUsers = new Set(attendance.data.filter((row) => row.status === "not_going").map((row) => row.user_id));
-  const coveredSportIds = new Set(decision.activities.map((activity) => activity.sportId));
+  const coveredByUserAndSport = new Set(
+    decision.activities.flatMap((activity) => activity.assignedUserIds.map((userId) => `${userId}:${activity.sportId}`)),
+  );
   const rows = votes.data
     .filter((vote) => !nonAttendingUsers.has(vote.user_id))
     .map((vote) => {
-      const covered = coveredSportIds.has(vote.sport_id);
+      const covered = coveredByUserAndSport.has(`${vote.user_id}:${vote.sport_id}`);
       return {
         club_id: event.club_id,
         user_id: vote.user_id,
@@ -578,20 +654,21 @@ function mapPreferenceHistory(row: Row<"member_preference_history">): Preference
   };
 }
 
-function mapRecentSelection(
-  row: Row<"weekly_events"> & { sports: Pick<Row<"sports">, "category"> | null },
-): RecentSelection {
-  return {
-    sportId: row.selected_sport_id ?? "",
-    category: row.sports?.category ?? "unknown",
-    weekStartDate: row.week_start_date,
-  };
-}
-
 function asWeatherSnapshot(value: unknown): ProfileWeatherSnapshot | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
 
   return value as ProfileWeatherSnapshot;
+}
+
+function groupBy<T>(items: T[], keyForItem: (item: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyForItem(item);
+    const group = groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key, group);
+  }
+  return groups;
 }
