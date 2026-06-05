@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
@@ -138,6 +138,8 @@ export default function IdeasScreen() {
   const [rejectedOpen, setRejectedOpen] = useState(false);
   const [proposalOpen, setProposalOpen] = useState(false);
   const [requestSportOpen, setRequestSportOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
+  const confirmationPulse = useRef(new Animated.Value(0)).current;
 
   async function load() {
     if (!user) return;
@@ -170,6 +172,10 @@ export default function IdeasScreen() {
   useEffect(() => {
     if (user) void load();
   }, [user]);
+
+  useEffect(() => {
+    if (draft.costNote.trim()) setCostOpen(true);
+  }, [draft.costNote]);
 
   const filteredSports = useMemo(() => {
     const query = sportSearch.trim().toLowerCase();
@@ -236,6 +242,7 @@ export default function IdeasScreen() {
     setSubmitAttempted(true);
     const missing = requiredErrors(draft);
     if (Object.keys(missing).length > 0) {
+      setActiveStep(firstMissingStep(missing, draft));
       setMessage("Bitte ergänze die markierten Angaben.");
       return;
     }
@@ -322,13 +329,18 @@ export default function IdeasScreen() {
 
   function goToNextStep() {
     if (!canGoNext) return;
-    if (activeStep === "locationName" && !draft.location.trim()) {
-      setSubmitAttempted(true);
-      setMessage("Bitte gib einen kurzen Standortnamen ein.");
-      return;
-    }
+    goToStepWithFeedback(currentFlowSteps[activeStepIndex + 1].id);
+  }
+
+  function goToStepWithFeedback(step: IdeaFlowStep) {
     setMessage(null);
-    setActiveStep(currentFlowSteps[activeStepIndex + 1].id);
+    confirmationPulse.stopAnimation();
+    confirmationPulse.setValue(0);
+    Animated.sequence([
+      Animated.timing(confirmationPulse, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.delay(140),
+      Animated.timing(confirmationPulse, { toValue: 0, duration: 120, useNativeDriver: true }),
+    ]).start(() => setActiveStep(step));
   }
 
   function clearMessages() {
@@ -408,6 +420,26 @@ export default function IdeasScreen() {
                 </Pressable>
               </View>
               <Text style={[styles.wizardQuestion, { color: theme.text }]}>{stepQuestion(activeStep)}</Text>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.stepConfirmBadge,
+                  {
+                    backgroundColor: theme.button,
+                    opacity: confirmationPulse,
+                    transform: [
+                      {
+                        scale: confirmationPulse.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.86, 1],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons name="check" size={18} color={theme.inverse} />
+              </Animated.View>
               <View style={[styles.stepIntro, { backgroundColor: theme.softSurface }]}>
                 <Text style={[styles.stepIntroKicker, { color: theme.accent }]}>Schritt {activeStepIndex + 1} von {currentFlowSteps.length}</Text>
                 <Text style={[styles.stepIntroText, { color: theme.muted }]}>{stepHelper(activeStep)}</Text>
@@ -449,18 +481,17 @@ export default function IdeasScreen() {
                   />
                   {draft.locationMode === "fixed" ? (
                     <MapLocationPicker
-                      label="Exakter Ort"
                       required
                       location={draft.location}
                       mapUrl={draft.mapUrl}
                       latitude={draft.latitude}
                       longitude={draft.longitude}
-                      error={errors.location}
+                      error={errors.location ?? errors.coordinates}
                       onLocationChange={(location) => setDraft((current) => ({ ...current, location }))}
                       onMapUrlChange={(mapUrl) => setDraft((current) => ({ ...current, mapUrl }))}
                       onCoordinatesChange={({ latitude, longitude }) => setDraft((current) => ({ ...current, latitude, longitude }))}
                       showNameInput={false}
-                      onConfirmed={() => setActiveStep("locationName")}
+                      onConfirmed={() => goToStepWithFeedback("locationName")}
                     />
                   ) : (
                     <>
@@ -591,7 +622,6 @@ export default function IdeasScreen() {
                   <LabeledInput label="Regeln/Sicherheit" value={draft.safetyNotes} onChangeText={(safetyNotes) => setDraft((current) => ({ ...current, safetyNotes }))} placeholder="z. B. bei Nässe rutschig, Helm empfohlen" multiline />
                   <View style={styles.choiceGrid}>
                     <ToggleChip label="Reservierung nötig" value={draft.reservationRequired === true} onPress={() => setDraft((current) => ({ ...current, reservationRequired: current.reservationRequired === true ? null : true }))} />
-                    <ToggleChip label="Licht vorhanden" value={draft.lightingAvailable === true} onPress={() => setDraft((current) => ({ ...current, lightingAvailable: current.lightingAvailable === true ? null : true }))} />
                     <ToggleChip label="Ansprechpartner vor Ort nötig" value={draft.apRequired} onPress={() => setDraft((current) => ({ ...current, apRequired: !current.apRequired }))} />
                   </View>
                 </View>
@@ -605,8 +635,10 @@ export default function IdeasScreen() {
 
               {activeStep === "available" ? (
                 <View style={styles.formGrid}>
-                  <LabeledInput label="Was ist vor Ort vorhanden?" value={draft.availableEquipment} onChangeText={(availableEquipment) => setDraft((current) => ({ ...current, availableEquipment }))} placeholder="z. B. Netz, Tore, Matten, Baelle" />
-                  <LabeledInput label="Kosten" value={draft.costNote} onChangeText={(costNote) => setDraft((current) => ({ ...current, costNote }))} placeholder="z. B. kostenlos oder 5 EUR Hallenanteil" />
+                  <LabeledInput label="Was ist vor Ort vorhanden?" value={draft.availableEquipment} onChangeText={(availableEquipment) => setDraft((current) => ({ ...current, availableEquipment }))} placeholder="z. B. Netz, Tore, Matten, Bälle" />
+                  <View style={styles.choiceGrid}>
+                    <ToggleChip label="Licht vorhanden" value={draft.lightingAvailable === true} onPress={() => setDraft((current) => ({ ...current, lightingAvailable: current.lightingAvailable === true ? null : true }))} />
+                  </View>
                 </View>
               ) : null}
 
@@ -615,8 +647,24 @@ export default function IdeasScreen() {
                   <LabeledInput label="Wann ist der Standort nutzbar?" value={draft.openingNotes} onChangeText={(openingNotes) => setDraft((current) => ({ ...current, openingNotes }))} placeholder="z. B. frei zugänglich oder Mo-Fr bis 22 Uhr" multiline />
                   <View style={styles.choiceGrid}>
                     <ToggleChip label="Reservierung nötig" value={draft.reservationRequired === true} onPress={() => setDraft((current) => ({ ...current, reservationRequired: current.reservationRequired === true ? null : true }))} />
-                    <ToggleChip label="Licht vorhanden" value={draft.lightingAvailable === true} onPress={() => setDraft((current) => ({ ...current, lightingAvailable: current.lightingAvailable === true ? null : true }))} />
+                    <ToggleChip
+                      label="Kostenpflichtig"
+                      value={costOpen}
+                      onPress={() => {
+                        const nextOpen = !costOpen;
+                        setCostOpen(nextOpen);
+                        if (!nextOpen) setDraft((current) => ({ ...current, costNote: "" }));
+                      }}
+                    />
                   </View>
+                  {costOpen ? (
+                    <LabeledInput
+                      label="Preis pro Person"
+                      value={draft.costNote}
+                      onChangeText={(costNote) => setDraft((current) => ({ ...current, costNote }))}
+                      placeholder="z. B. 5 EUR Hallenanteil oder Eintritt nach Tarif"
+                    />
+                  ) : null}
                 </View>
               ) : null}
 
@@ -828,10 +876,10 @@ function stepHelper(step: IdeaFlowStep): string {
   if (step === "group") return "Die Gruppengröße hilft dem Algorithmus, faire und praktikable Konstellationen zu bauen.";
   if (step === "weather") return "Nur das eintragen, was für diesen Standort wirklich relevant ist. Indoor bleibt bewusst kurz.";
   if (step === "equipment") return "Alles, was die Gruppe selbst mitbringen sollte.";
-  if (step === "available") return "Alles, was am Ort schon vorhanden ist, plus grobe Kosten.";
-  if (step === "schedule") return "Zeitfenster, Licht und Reservierung, damit niemand vor verschlossener Tuer steht.";
+  if (step === "available") return "Alles, was am Ort schon vorhanden ist, inklusive Licht.";
+  if (step === "schedule") return "Zeitfenster und Reservierung, damit niemand vor verschlossener Tür steht.";
   if (step === "logistics") return "Anreise, Infrastruktur und Sicherheitsinfos für die spätere Eventplanung.";
-  return "Kontrolliere die Zusammenfassung und ergaenze nur noch einen kurzen Hinweis.";
+  return "Kontrolliere die Zusammenfassung und ergänze nur noch einen kurzen Hinweis.";
 }
 
 function stepQuestion(step: IdeaFlowStep): string {
@@ -1010,6 +1058,7 @@ function requiredErrors(draft: IdeaDraft): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!draft.sportId && !draft.requestedSportName.trim()) errors.sport = "Wähle eine Sportart aus oder frage eine neue an.";
   if (draft.locationMode === "fixed" && !draft.location.trim()) errors.location = "Kurzname des Standorts fehlt.";
+  if (draft.locationMode === "fixed" && (!Number.isFinite(draft.latitude) || !Number.isFinite(draft.longitude))) errors.coordinates = "Bitte markiere den Standort in der Karte.";
   if (draft.locationMode === "flexible" && !draft.locationCity.trim() && !draft.postalCode.trim()) errors.locationCity = "Stadt oder PLZ fehlt.";
   if (!draft.locationType) errors.locationType = "Profilart fehlt.";
   const min = parseOptionalInteger(draft.minimumGroupSize);
@@ -1017,6 +1066,16 @@ function requiredErrors(draft: IdeaDraft): Record<string, string> {
   if (!min || min < 1) errors.minimumGroupSize = "Mindestanzahl fehlt.";
   if (min && max && max < min) errors.maximumGroupSize = "Maximalanzahl muss größer sein.";
   return errors;
+}
+
+function firstMissingStep(errors: Record<string, string>, draft: IdeaDraft): IdeaFlowStep {
+  if (errors.coordinates) return "location";
+  if (errors.location) return draft.locationMode === "fixed" && Number.isFinite(draft.latitude) && Number.isFinite(draft.longitude) ? "locationName" : "location";
+  if (errors.locationCity) return "location";
+  if (errors.sport) return "sport";
+  if (errors.locationType) return "type";
+  if (errors.minimumGroupSize || errors.maximumGroupSize) return "group";
+  return "review";
 }
 
 function weatherRulesFromDraft(draft: IdeaDraft): Json {
@@ -1142,6 +1201,7 @@ const styles = StyleSheet.create({
   floatingCloseButton: { alignItems: "center", borderRadius: 999, height: 38, justifyContent: "center", position: "absolute", right: 12, top: 12, width: 38, zIndex: 3 },
   closeSheetButton: { alignItems: "center", borderRadius: 999, height: 38, justifyContent: "center", width: 38 },
   wizardQuestion: { minWidth: 0, paddingRight: 48, fontSize: 23, fontWeight: "900", lineHeight: 28 },
+  stepConfirmBadge: { alignItems: "center", borderRadius: 999, height: 34, justifyContent: "center", position: "absolute", right: 58, top: 14, width: 34, zIndex: 4 },
   stepIntro: { display: "none" },
   stepIntroKicker: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   stepIntroText: { fontSize: 13, fontWeight: "800", lineHeight: 18 },

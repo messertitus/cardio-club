@@ -432,17 +432,19 @@ export default function HomeScreen() {
     if (fallbackCity) setCity(fallbackCity);
   }
 
-  async function saveCity() {
-    if (!user || postalCode.length < 5 || !city.trim()) return;
+  async function saveCity(): Promise<boolean> {
+    if (!user || postalCode.length < 5 || !city.trim()) return false;
     setCityBusy(true);
     const result = await updateProfileCity(supabase, { userId: user.id, postalCode, city: city.trim() });
     setCityBusy(false);
     if (result.error) {
       setNotice(result.error.message);
-      return;
+      return false;
     }
     seenCityPromptUserIds.add(user.id);
+    setCitySkipped(true);
     setNeedsCity(false);
+    return true;
   }
 
   function skipCityPrompt() {
@@ -687,7 +689,7 @@ function CityPrompt({
   city: string;
   onPostalCodeChange: (value: string) => void;
   onCityChange: (value: string) => void;
-  onSave: () => void;
+  onSave: () => Promise<boolean>;
   onSkip: () => void;
   busy: boolean;
 }) {
@@ -741,7 +743,9 @@ function CityPrompt({
           />
           <Pressable
             style={[styles.cityButton, { backgroundColor: theme.button }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
-            onPress={onSave}
+            onPress={() => {
+              void onSave();
+            }}
             disabled={postalCode.length < 5 || !city.trim() || busy}
           >
             <Text style={[styles.cityButtonText, { color: theme.inverse }]}>{busy ? "Speichern..." : "Speichern"}</Text>
@@ -966,7 +970,7 @@ const styles = StyleSheet.create({
   },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   headerActions: { alignItems: "center", flexDirection: "row", gap: 8 },
-  historyButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 999, height: 44, justifyContent: "center", width: 44 },
+  historyButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", borderColor: "rgba(255,255,255,0.18)", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   logo: { width: 50, height: 50 },
   menuButton: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 16, paddingVertical: 10 },
   menuButtonText: { color: "#ffffff", fontSize: 14, fontWeight: "900" },

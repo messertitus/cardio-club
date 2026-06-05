@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -42,6 +43,8 @@ type DirectChatChannel = {
   id: string;
   kind: "direct";
   label: string;
+  personName: string;
+  roleLabel: string;
   directChat: DirectChatWithNames;
 };
 
@@ -237,9 +240,42 @@ export default function ChatScreen() {
       <BrandBackground />
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.content}>
-          <PageHeader title="Chat" showBack={false} showTheme />
+          <PageHeader
+            title="Chat"
+            showBack={false}
+            showTheme
+            actions={
+              directChannels.length > 0 ? (
+                <ContactMenuButton count={directChannels.length} open={adminChatsOpen} onPress={() => setAdminChatsOpen((open) => !open)} />
+              ) : null
+            }
+          />
           {notice ? <Text style={styles.notice}>{notice}</Text> : null}
           {busy ? <LoadingState /> : null}
+
+          {adminChatsOpen && directChannels.length > 0 ? (
+            <View style={[styles.contactPanel, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+              <Text style={[styles.channelSectionTitle, { color: theme.muted }]}>Kontakt aufnehmen</Text>
+              {directChannels.map((channel) => (
+                <Pressable
+                  key={channel.id}
+                  style={[styles.contactPanelRow, { borderTopColor: theme.border }]}
+                  onPress={() => {
+                    setAdminChatsOpen(false);
+                    void switchChannel(channel);
+                  }}
+                >
+                  <View style={[styles.contactAvatar, { backgroundColor: activeChannel?.id === channel.id ? theme.button : theme.surface }]}>
+                    <MaterialCommunityIcons name="account-question" size={18} color={activeChannel?.id === channel.id ? theme.inverse : theme.text} />
+                  </View>
+                  <View style={styles.directInfoText}>
+                    <Text style={[styles.memberName, { color: theme.text }]}>{channel.personName}</Text>
+                    <Text style={[styles.membersMeta, { color: theme.muted }]}>{channel.roleLabel}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
 
           {eventChatOpen && eventChannels.length > 0 ? (
             <View style={styles.channelBlock}>
@@ -287,7 +323,7 @@ export default function ChatScreen() {
               <View style={styles.directInfoText}>
                 <Text style={[styles.directTitle, { color: theme.text }]}>{activeChannel?.label}</Text>
                 <Text style={[styles.directMeta, { color: theme.muted }]}>
-                  {activeDirectChat.status === "closed" ? "geschlossen" : "offen"} · Admin: {activeDirectChat.adminName}
+                  {activeDirectChat.status === "closed" ? "geschlossen" : "offen"} · Kontakt: {activeDirectChat.adminName}
                 </Text>
               </View>
               {activeDirectChat.admin_id === user.id && activeDirectChat.status === "open" ? (
@@ -337,25 +373,6 @@ export default function ChatScreen() {
               <Text style={[styles.sendText, { color: theme.inverse }]}>Senden</Text>
             </Pressable>
           </Animated.View>
-
-          {directChannels.length > 0 ? (
-            <View style={[styles.directBlock, { borderTopColor: theme.border }]}>
-              <Pressable style={[styles.adminChatHeader, { backgroundColor: theme.softSurface, borderColor: theme.border }]} onPress={() => setAdminChatsOpen((open) => !open)}>
-                <View>
-                  <Text style={[styles.membersTitle, { color: theme.text }]}>Admin-Chats</Text>
-                  <Text style={[styles.membersMeta, { color: theme.muted }]}>{directChannels.length} Direktchat{directChannels.length === 1 ? "" : "s"}</Text>
-                </View>
-                <Text style={[styles.itemArrow, { color: theme.muted }]}>{adminChatsOpen ? "×" : "+"}</Text>
-              </Pressable>
-              {adminChatsOpen ? (
-                <View style={styles.channelRow}>
-                  {directChannels.map((channel) => (
-                    <ChannelChip key={channel.id} channel={channel} active={activeChannel?.id === channel.id} onPress={() => void switchChannel(channel)} />
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          ) : null}
         </KeyboardAvoidingView>
         <BottomNav active="chat" />
       </View>
@@ -380,12 +397,32 @@ function ChannelChip({ channel, active, onPress }: { channel: ChatChannel; activ
 }
 
 function buildDirectChannels(directChats: DirectChatWithNames[], userId: string | null): DirectChatChannel[] {
-  return directChats.map((chat) => ({
-    id: `direct:${chat.id}`,
-    kind: "direct",
-    label: userId === chat.admin_id ? `Admin · ${chat.requesterName}` : `Admin · ${chat.adminName}`,
-    directChat: chat,
-  }));
+  return directChats.map((chat) => {
+    const userIsAdmin = userId === chat.admin_id;
+    const personName = userIsAdmin ? chat.requesterName : chat.adminName;
+    return {
+      id: `direct:${chat.id}`,
+      kind: "direct",
+      label: personName,
+      personName,
+      roleLabel: userIsAdmin ? "Anfrage" : "Admin",
+      directChat: chat,
+    };
+  });
+}
+
+function ContactMenuButton({ count, open, onPress }: { count: number; open: boolean; onPress: () => void }) {
+  const { theme } = useTheme();
+  return (
+    <Pressable style={[styles.contactButton, { borderColor: theme.border, backgroundColor: open ? theme.button : theme.softSurface }]} onPress={onPress}>
+      <MaterialCommunityIcons name={open ? "close" : "account-question"} size={19} color={open ? theme.inverse : theme.text} />
+      {count > 0 ? (
+        <View style={[styles.contactBadge, { backgroundColor: theme.accent }]}>
+          <Text style={[styles.contactBadgeText, { color: theme.inverse }]}>{count > 9 ? "9+" : count}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
 }
 
 function buildEventChannels(state: MccEventState | null): EventChatChannel[] {
@@ -420,6 +457,7 @@ function buildEventChannels(state: MccEventState | null): EventChatChannel[] {
 function isEventChatOpen(state: MccEventState | null, now = Date.now()): boolean {
   if (!state) return false;
   if (state.event.status === "completed") return true;
+  if (state.event.status !== "decided") return false;
   if (!state.event.starts_at) return false;
   return new Date(state.event.starts_at).getTime() <= now;
 }
@@ -521,6 +559,10 @@ const styles = StyleSheet.create({
   sendButton: { justifyContent: "center", borderRadius: 18, paddingHorizontal: 14, minHeight: 50 },
   sendButtonDisabled: { opacity: 0.4 },
   sendText: { color: "#05070b", fontWeight: "900" },
-  directBlock: { borderTopWidth: 1, gap: 8, paddingTop: 10 },
-  adminChatHeader: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", gap: 10, padding: 12 },
+  contactButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 40, justifyContent: "center", position: "relative", width: 40 },
+  contactBadge: { alignItems: "center", borderRadius: 999, minWidth: 17, paddingHorizontal: 4, position: "absolute", right: -4, top: -5 },
+  contactBadgeText: { fontSize: 10, fontWeight: "900", lineHeight: 15 },
+  contactPanel: { alignSelf: "flex-end", borderRadius: 18, borderWidth: 1, gap: 8, maxWidth: 360, padding: 12, width: "100%" },
+  contactPanelRow: { alignItems: "center", borderTopWidth: 1, flexDirection: "row", gap: 10, paddingTop: 8 },
+  contactAvatar: { alignItems: "center", borderRadius: 999, height: 34, justifyContent: "center", width: 34 },
 });

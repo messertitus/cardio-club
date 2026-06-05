@@ -54,7 +54,7 @@ export async function voteForSport(
   const duplicateRank = existingVotes.data.find((vote) => vote.vote_rank === input.rank && vote.sport_id !== input.sportId);
 
   if (!duplicateSport && !duplicateRank && existingVotes.data.length >= MAX_VOTES_PER_EVENT) {
-    return fail("Du kannst pro Woche fuer maximal drei Sportarten abstimmen.");
+    return fail("Du kannst pro Woche für maximal drei Sportarten abstimmen.");
   }
 
   if (duplicateRank) {
