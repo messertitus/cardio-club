@@ -80,15 +80,13 @@ describe("selectFairConstellation", () => {
         votes: [...votesFor("football", ["u1", "u2", "u3"]), ...votesFor("running", ["u4", "u5"])],
         noGos: [
           { sportId: "football", userId: "u4" },
-          { sportId: "football", userId: "u5" },
         ],
       }),
     );
 
     const footballCandidate = result.scores.find((score) => score.mode === "single" && score.activities[0]?.sportId === "football");
     expect(footballCandidate?.activities[0]?.assignedUserIds).not.toContain("u4");
-    expect(footballCandidate?.activities[0]?.assignedUserIds).not.toContain("u5");
-    expect(footballCandidate?.scoreBreakdown.reliability).toBeLessThan(0);
+    expect(footballCandidate?.scoreBreakdown.noGoPressure).toBeGreaterThan(0);
   });
 
   it("ignores not-going voters but keeps maybe voters with reduced weight", () => {
@@ -117,7 +115,7 @@ describe("selectFairConstellation", () => {
     expect(result.selectedSportId).toBe("running");
   });
 
-  it("reduces maybe vote influence in the preference score", () => {
+  it("counts maybe voters more strongly for preference than participation", () => {
     const result = selectFairConstellation(
       input({
         votes: votesFor("football", ["u1"]),
@@ -126,7 +124,8 @@ describe("selectFairConstellation", () => {
     );
 
     const footballCandidate = result.scores.find((score) => score.activities[0]?.sportId === "football");
-    expect(footballCandidate?.scoreBreakdown.preference).toBe(0.55);
+    expect(footballCandidate?.scoreBreakdown.preference).toBe(0.8);
+    expect(footballCandidate?.scoreBreakdown.participation).toBe(0.3);
   });
 
   it("excludes dangerous outdoor weather and keeps indoor alternatives viable", () => {
@@ -242,6 +241,225 @@ describe("selectFairConstellation", () => {
 
     const footballCandidate = result.scores.find((score) => score.activities[0]?.sportId === "football");
     expect(footballCandidate?.scoreBreakdown.reliability).toBeLessThan(0);
+  });
+
+  it("blocks previous primary sport as single but allows it as secondary", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [...votesFor("football", ["u1", "u2", "u3"]), ...votesFor("running", ["u4", "u5"])],
+        previousWeekPrimarySportId: "football",
+      }),
+    );
+
+    expect(result.mode).toBe("multi_sport");
+    expect(result.selectedSportId).toBe("running");
+    expect(result.secondarySportId).toBe("football");
+    expect(result.explainability.rotationReasons.some((reason) => reason.isHardBlockedAsPrimary)).toBe(false);
+  });
+
+  it("derives previous primary from recent event activities before legacy selected sport", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [...votesFor("football", ["u1", "u2", "u3"]), ...votesFor("running", ["u4", "u5"])],
+        previousWeekSportId: "running",
+        recentActivities: [
+          {
+            eventId: "last-week",
+            sportId: "football",
+            category: "field",
+            weekStartDate: "2026-05-28",
+            role: "primary",
+            activityType: "multi_sport",
+          },
+          {
+            eventId: "last-week",
+            sportId: "running",
+            category: "endurance",
+            weekStartDate: "2026-05-28",
+            role: "secondary",
+            activityType: "multi_sport",
+          },
+        ],
+      }),
+    );
+
+    expect(result.selectedSportId).toBe("running");
+    expect(result.secondarySportId).toBe("football");
+  });
+
+  it("does not apply fairness debt when the user did not currently vote for that sport", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [...votesFor("football", ["u1", "u2"]), ...votesFor("running", ["u3"])],
+        preferenceHistory: ignoredHistory("u3", "football", 4),
+      }),
+    );
+
+    const footballCandidate = result.scores.find((score) => score.activities[0]?.sportId === "football");
+    expect(footballCandidate?.scoreBreakdown.fairness).toBe(0);
+  });
+
+  it("protects a clear majority against small fairness debt", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [...votesFor("football", ["u1", "u2", "u3", "u4", "u5", "u6", "u7"]), ...votesFor("running", ["u8", "u9", "u10"])],
+        preferenceHistory: [...ignoredHistory("u8", "running", 2), ...ignoredHistory("u9", "running", 2)],
+      }),
+    );
+
+    expect(result.selectedSportId).toBe("football");
+    expect(result.decisionCharacter).toBe("majority_protected");
+  });
+
+  it("requires minimum winner support unless low-vote fallback is active", () => {
+    const noFallback = selectFairConstellation(
+      input({
+        votes: votesFor("football", ["u1"]),
+        options: { lowVoteFallbackEnabled: false, minimumWinnerVoteScore: 2 },
+      }),
+    );
+    const fallback = selectFairConstellation(
+      input({
+        votes: votesFor("football", ["u1"]),
+        options: { lowVoteFallbackEnabled: true, lowVoteTotalThreshold: 2, minimumWinnerVoteScore: 2 },
+      }),
+    );
+
+    expect(noFallback.mode).toBe("none");
+    expect(fallback.selectedSportId).toBe("football");
+    expect(fallback.decisionCharacter).toBe("fallback");
+  });
+
+  it("hard-blocks a single candidate with too many going no-gos", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [...votesFor("football", ["u1", "u2", "u3", "u4"]), ...votesFor("running", ["u5", "u6"])],
+        noGos: [
+          { sportId: "football", userId: "u1" },
+          { sportId: "football", userId: "u2" },
+        ],
+      }),
+    );
+
+    expect(result.scores.some((score) => score.mode === "single" && score.activities[0]?.sportId === "football")).toBe(false);
+  });
+
+  it("marks no-gos as resolved by an alternative in multi-sport", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [...votesFor("football", ["u1", "u2", "u3", "u4", "u5"]), ...votesFor("running", ["u6", "u7"])],
+        noGos: [{ sportId: "football", userId: "u6" }],
+      }),
+    );
+
+    expect(result.mode).toBe("multi_sport");
+    expect(result.noGoBreakdown.resolvedByAlternative).toContainEqual(
+      expect.objectContaining({ userId: "u6", noGoSportId: "football", assignedSportId: "running" }),
+    );
+  });
+
+  it("scores site capacity over the combined same-site participant count", () => {
+    const result = selectFairConstellation(
+      input({
+        sportProfiles: [
+          { ...profile("football-shared", "football", "Shared field", 48, 7.8, "shared", "field"), minimumParticipants: 6 },
+          { ...profile("running-shared", "running", "Shared run", 48, 7.8002, "shared", "outdoor"), minimumParticipants: 6 },
+        ],
+        votes: [...votesFor("football", ["u1", "u2", "u3", "u4"]), ...votesFor("running", ["u5", "u6"])],
+      }),
+    );
+
+    expect(result.mode).toBe("multi_sport");
+    expect(result.scoreBreakdown?.locationCapacity).toBeGreaterThan(0);
+    expect(result.explainability.capacityReasons[0]?.assignedCount).toBe(6);
+  });
+
+  it("excludes critical AP profiles without AP and penalizes required AP profiles", () => {
+    const result = selectFairConstellation(
+      input({
+        sportProfiles: [
+          { ...profile("football-critical", "football", "Critical field", 48, 7.8, "field", "field"), apRequirementLevel: "critical" },
+          { ...profile("football-required", "football", "Required field", 48, 7.81, "field-2", "field"), apRequirementLevel: "required" },
+        ],
+        votes: votesFor("football", ["u1", "u2", "u3"]),
+      }),
+    );
+
+    expect(result.selectedProfileId).toBe("football-required");
+    expect(result.excludedProfiles.map((entry) => entry.profileId)).toContain("football-critical");
+    expect(result.scoreBreakdown?.practicality).toBeLessThan(0);
+  });
+
+  it("prefers structured low-cost profiles over expensive similar profiles", () => {
+    const result = selectFairConstellation(
+      input({
+        sportProfiles: [
+          { ...profile("badminton-free", "badminton", "Free hall", 48, 7.8, "hall-a", "indoor", 2), costRequired: false, costPerPerson: 0 },
+          { ...profile("badminton-pricey", "badminton", "Pricey hall", 48, 7.8001, "hall-b", "indoor", 2), costRequired: true, costPerPerson: 18 },
+        ],
+        votes: votesFor("badminton", ["u1", "u2"]),
+      }),
+    );
+
+    expect(result.selectedProfileId).toBe("badminton-free");
+    expect(result.explainability.costReasons.find((reason) => reason.profileId === "badminton-pricey")?.score).toBeLessThan(0);
+  });
+
+  it("penalizes wind-sensitive outdoor profiles and accepts postal-code weather locations", () => {
+    const result = selectFairConstellation(
+      input({
+        sportProfiles: [
+          {
+            ...profile("cycling-windy", "cycling", "Windy route", 0, 0, "route-a", "outdoor"),
+            latitude: null,
+            longitude: null,
+            postalCode: "78462",
+            weatherRules: { windSensitive: true, maxWindKmh: 20, thunderstormUnsafe: true },
+          },
+          profile("cycling-indoor", "cycling", "Indoor cycling", 48, 7.8, "hall", "indoor"),
+        ],
+        votes: votesFor("cycling", ["u1", "u2", "u3"]),
+        weatherSnapshot: {
+          "cycling-windy": { weatherCode: 2, precipitationMm: 0, windSpeedKmh: 45 },
+        },
+      }),
+    );
+
+    expect(result.selectedProfileId).toBe("cycling-indoor");
+    expect(result.explainability.weatherReasons.find((reason) => reason.profileId === "cycling-windy")?.reasons.join(" ")).toContain("Wind");
+  });
+
+  it("excludes outdoor profiles without coordinates or postal code", () => {
+    const result = selectFairConstellation(
+      input({
+        sportProfiles: [
+          {
+            ...profile("running-nowhere", "running", "Nowhere run", 0, 0, "nowhere", "outdoor"),
+            latitude: null,
+            longitude: null,
+            postalCode: null,
+          },
+        ],
+        votes: votesFor("running", ["u1", "u2"]),
+      }),
+    );
+
+    expect(result.mode).toBe("none");
+    expect(result.excludedProfiles.map((entry) => entry.profileId)).toContain("running-nowhere");
+  });
+
+  it("returns decision explainability and losing candidate reasons", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [...votesFor("football", ["u1", "u2", "u3"]), ...votesFor("running", ["u4", "u5"]), ...votesFor("badminton", ["u6", "u7"])],
+      }),
+    );
+
+    expect(result.decisionCharacter).not.toBe("no_valid_decision");
+    expect(result.explainability.voteSummaryBySport.length).toBeGreaterThan(0);
+    expect(result.explainability.fairnessByUser.length).toBeGreaterThan(0);
+    expect(result.noGoBreakdown.summary).toBeTruthy();
+    expect(result.losingCandidateReasons.length).toBeGreaterThan(0);
   });
 });
 

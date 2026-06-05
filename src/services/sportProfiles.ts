@@ -1,4 +1,4 @@
-import type { SportProfile, WeatherRules } from "../lib/fairConstellationSelection";
+import type { ApRequirementLevel, SportProfile, WeatherRules } from "../lib/fairConstellationSelection";
 import type { Row, SportLocationType } from "./database.types";
 import { readLocalCache, removeLocalCache, writeLocalCache } from "./localCache";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
@@ -25,9 +25,14 @@ export type SportProfileAdminInput = {
   isIndoor?: boolean;
   minimumGroupSize?: number | null;
   maximumGroupSize?: number | null;
+  minimumParticipants?: number | null;
+  maximumParticipants?: number | null;
   requiredEquipment?: string[];
   availableEquipment?: string[];
   costNote?: string | null;
+  costRequired?: boolean | null;
+  costPerPerson?: number | null;
+  costCurrency?: string | null;
   openingNotes?: string | null;
   lightingAvailable?: boolean | null;
   transitNotes?: string | null;
@@ -36,6 +41,7 @@ export type SportProfileAdminInput = {
   safetyNotes?: string | null;
   locationRules?: string | null;
   apRequired?: boolean;
+  apRequirementLevel?: ApRequirementLevel;
   apContactId?: string | null;
   weatherRules?: WeatherRules;
   isActive?: boolean;
@@ -163,8 +169,15 @@ export async function upsertSportProfile(
   if (input.maximumGroupSize && input.maximumGroupSize < input.minimumGroupSize) {
     return fail("Die Maximalanzahl muss groesser oder gleich der Mindestanzahl sein.");
   }
+  if (input.minimumParticipants && input.minimumParticipants < 1) {
+    return fail("Die Standort-Mindestanzahl muss mindestens 1 sein.");
+  }
+  if (input.maximumParticipants && input.minimumParticipants && input.maximumParticipants < input.minimumParticipants) {
+    return fail("Die Standort-Maximalanzahl muss groesser oder gleich der Standort-Mindestanzahl sein.");
+  }
 
   const apContactId = input.apContactId ?? input.createdBy ?? null;
+  const apRequirementLevel = input.apRequirementLevel ?? (input.apRequired ? "required" : "none");
 
   const { data, error } = await supabase
     .from("sport_profiles")
@@ -184,9 +197,14 @@ export async function upsertSportProfile(
         is_indoor: input.isIndoor ?? input.locationType === "indoor",
         minimum_group_size: input.minimumGroupSize,
         maximum_group_size: input.maximumGroupSize ?? null,
+        minimum_participants: input.minimumParticipants ?? input.minimumGroupSize,
+        maximum_participants: input.maximumParticipants ?? input.maximumGroupSize ?? null,
         required_equipment: input.requiredEquipment ?? [],
         available_equipment: input.availableEquipment ?? [],
         cost_note: input.costNote?.trim() || null,
+        cost_required: input.costRequired ?? Boolean(input.costNote?.trim()),
+        cost_per_person: input.costPerPerson ?? null,
+        cost_currency: input.costCurrency?.trim() || "EUR",
         opening_notes: input.openingNotes?.trim() || null,
         lighting_available: input.lightingAvailable ?? null,
         transit_notes: input.transitNotes?.trim() || null,
@@ -194,7 +212,8 @@ export async function upsertSportProfile(
         reservation_required: input.reservationRequired ?? null,
         safety_notes: input.safetyNotes?.trim() || null,
         location_rules: input.locationRules?.trim() || null,
-        ap_required: input.apRequired ?? false,
+        ap_required: apRequirementLevel !== "none",
+        ap_requirement_level: apRequirementLevel,
         ap_contact_id: apContactId,
         weather_rules: input.weatherRules ?? {},
         is_active: input.isActive ?? true,
@@ -281,6 +300,7 @@ export function mapSportProfile(row: Row<"sport_profiles">): SportProfile {
     sportId: row.sport_id,
     name: row.name,
     locationName: row.location_name,
+    postalCode: row.postal_code,
     venueGroupKey: row.venue_group_key,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -288,9 +308,14 @@ export function mapSportProfile(row: Row<"sport_profiles">): SportProfile {
     isIndoor: row.is_indoor,
     minimumGroupSize: row.minimum_group_size,
     maximumGroupSize: row.maximum_group_size,
+    minimumParticipants: row.minimum_participants,
+    maximumParticipants: row.maximum_participants,
     requiredEquipment: row.required_equipment,
     availableEquipment: row.available_equipment,
     costNote: row.cost_note,
+    costRequired: row.cost_required,
+    costPerPerson: row.cost_per_person,
+    costCurrency: row.cost_currency,
     openingNotes: row.opening_notes,
     lightingAvailable: row.lighting_available,
     transitNotes: row.transit_notes,
@@ -299,6 +324,7 @@ export function mapSportProfile(row: Row<"sport_profiles">): SportProfile {
     safetyNotes: row.safety_notes,
     locationRules: row.location_rules,
     apRequired: row.ap_required,
+    apRequirementLevel: row.ap_requirement_level,
     apContactId: row.ap_contact_id,
     weatherRules: isWeatherRules(row.weather_rules) ? row.weather_rules : {},
     isActive: row.is_active,
