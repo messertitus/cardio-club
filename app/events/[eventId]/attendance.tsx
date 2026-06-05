@@ -129,6 +129,7 @@ export default function AttendanceScreen() {
       <Card>
         <Text style={ui.cardTitle}>AP-Nachbereitung</Text>
         <Text style={ui.body}>Geplantes RSVP bleibt getrennt von der tatsächlichen Anwesenheit.</Text>
+        <Text style={ui.body}>Auch Personen mit "Nicht dabei" können hier als tatsächlich anwesend markiert werden.</Text>
         {!canReview ? <Text style={ui.body}>Die Prüfung ist nur für Admins, Event-Kontakt oder Profil-AP sichtbar, wenn diese Person selbst Dabei oder Vielleicht gesetzt hat.</Text> : null}
         {attendance.map((entry) => (
           <View key={entry.id} style={{ gap: 8 }}>
@@ -137,7 +138,7 @@ export default function AttendanceScreen() {
             </Text>
             {canReview ? (
               <>
-                <Button label="War da" variant="secondary" onPress={() => setActualStatus(entry, "present")} />
+                <Button label={entry.status === "not_going" ? "War doch da" : "War da"} variant="secondary" onPress={() => setActualStatus(entry, "present")} />
                 <Button label="Nicht erschienen" variant="secondary" onPress={() => setActualStatus(entry, "absent")} />
                 <Button label="Entschuldigt" variant="ghost" onPress={() => setActualStatus(entry, "excused")} />
               </>

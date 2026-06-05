@@ -173,6 +173,7 @@ export default function AdminScreen() {
   const [customCategoryOpen, setCustomCategoryOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [profileCostOpen, setProfileCostOpen] = useState(false);
   const [profileSearch, setProfileSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [editingMemberNameId, setEditingMemberNameId] = useState<string | null>(null);
@@ -211,6 +212,10 @@ export default function AdminScreen() {
     () => [...new Set([...defaultSportCategoryOptions, ...sports.map((sport) => sport.category).filter(Boolean)])],
     [sports],
   );
+
+  useEffect(() => {
+    if (profileDraft.costNote.trim()) setProfileCostOpen(true);
+  }, [profileDraft.costNote]);
 
   async function load() {
     if (!user) return;
@@ -348,6 +353,7 @@ export default function AdminScreen() {
 
   function editProfile(profile: Row<"sport_profiles">) {
     setEditingProfileId(profile.id);
+    setProfileCostOpen(Boolean(profile.cost_note));
     setProfileDraft({
       sportIds: sportIdsForProfile(profile, sportProfileLinks),
       name: profile.name,
@@ -385,6 +391,7 @@ export default function AdminScreen() {
 
   function resetProfileDraft() {
     setEditingProfileId(null);
+    setProfileCostOpen(false);
     setProfileDraft({ ...emptyProfileDraft, sportIds: sports[0]?.id ? [sports[0].id] : [] });
   }
 
@@ -615,19 +622,8 @@ export default function AdminScreen() {
           {isAdmin && activeSection === "profiles" ? (
             <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Sportprofile verwalten</Text>
-              <MultiPickerGroup
-                label="Sportarten"
-                items={sports.map((sport) => ({ id: sport.id, label: sport.name, inactive: !sport.is_active }))}
-                selectedIds={profileDraft.sportIds}
-                onToggle={(sportId) =>
-                  setProfileDraft((draft) => ({
-                    ...draft,
-                    sportIds: draft.sportIds.includes(sportId) ? draft.sportIds.filter((id) => id !== sportId) : [...draft.sportIds, sportId],
-                  }))
-                }
-              />
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wo ist der Standort?</Text>
               <View style={styles.formGrid}>
-                <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Profilname, z. B. Hörnle Sportbereich" />
                 <MapLocationPicker
                   label="Standort"
                   required
@@ -641,40 +637,32 @@ export default function AdminScreen() {
                 />
                 <AdminInput value={profileDraft.locationCity} onChangeText={(locationCity) => setProfileDraft((draft) => ({ ...draft, locationCity }))} placeholder="Stadt optional, z. B. Konstanz" />
                 <AdminInput value={profileDraft.postalCode} onChangeText={(postalCode) => setProfileDraft((draft) => ({ ...draft, postalCode: postalCode.replace(/\D/g, '').slice(0, 5) }))} placeholder="PLZ optional" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Anzeigename, z. B. Beachvolleyball: Hörnle" />
+              </View>
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welche Sportarten passen dazu?</Text>
+              <MultiPickerGroup
+                label="Sportarten"
+                items={sports.map((sport) => ({ id: sport.id, label: sport.name, inactive: !sport.is_active }))}
+                selectedIds={profileDraft.sportIds}
+                onToggle={(sportId) =>
+                  setProfileDraft((draft) => ({
+                    ...draft,
+                    sportIds: draft.sportIds.includes(sportId) ? draft.sportIds.filter((id) => id !== sportId) : [...draft.sportIds, sportId],
+                  }))
+                }
+              />
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welche Art von Profil ist das?</Text>
+              <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wie viele Personen passen gut dazu?</Text>
+              <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Mindestanzahl, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
                 <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Maximalanzahl, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
-                <AdminInput value={profileDraft.requiredEquipment} onChangeText={(requiredEquipment) => setProfileDraft((draft) => ({ ...draft, requiredEquipment }))} placeholder="Mitzubringen, z. B. Schläger, Matte" />
-                <AdminInput value={profileDraft.availableEquipment} onChangeText={(availableEquipment) => setProfileDraft((draft) => ({ ...draft, availableEquipment }))} placeholder="Vor Ort vorhanden, z. B. Netz, Tore, Umkleiden" />
-                <AdminInput value={profileDraft.costNote} onChangeText={(costNote) => setProfileDraft((draft) => ({ ...draft, costNote }))} placeholder="Kosten, z. B. kostenlos oder 5 EUR Hallenanteil" />
-                <AdminInput value={profileDraft.openingNotes} onChangeText={(openingNotes) => setProfileDraft((draft) => ({ ...draft, openingNotes }))} placeholder="Öffnungszeiten oder Zeitfenster, z. B. ab 18 Uhr frei" multiline />
-                <AdminInput value={profileDraft.transitNotes} onChangeText={(transitNotes) => setProfileDraft((draft) => ({ ...draft, transitNotes }))} placeholder="Anreise, z. B. Buslinie, Radweg, Parkplätze" multiline />
-                <AdminInput value={profileDraft.amenityNotes} onChangeText={(amenityNotes) => setProfileDraft((draft) => ({ ...draft, amenityNotes }))} placeholder="Infrastruktur, z. B. Wasser, Toiletten, Umkleiden" multiline />
-                <AdminInput value={profileDraft.locationRules} onChangeText={(locationRules) => setProfileDraft((draft) => ({ ...draft, locationRules }))} placeholder="Standortregeln, z. B. Reservierung ab 6 Personen" multiline />
-                <AdminInput value={profileDraft.safetyNotes} onChangeText={(safetyNotes) => setProfileDraft((draft) => ({ ...draft, safetyNotes }))} placeholder="Sicherheit, z. B. rutschig bei Nässe" multiline />
               </View>
-              <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
-              <PickerGroup
-                label="Profil-AP"
-                items={members.map((member) => ({ id: member.userId, label: member.displayName }))}
-                selectedId={profileDraft.apContactId || null}
-                onSelect={(apContactId) => setProfileDraft((draft) => ({ ...draft, apContactId }))}
-              />
-              {profileDraft.apContactId ? (
-                <Pressable style={[styles.roleButton, { backgroundColor: theme.surface, alignSelf: "flex-start" }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apContactId: "" }))}>
-                  <Text style={[styles.roleText, { color: theme.text }]}>Kein Profil-AP</Text>
-                </Pressable>
-              ) : null}
-              <View style={styles.roleRow}>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.apRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apRequired: !draft.apRequired }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.apRequired ? theme.inverse : theme.text }]}>Ansprechpartner vor Ort nötig</Text>
-                </Pressable>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.reservationRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, reservationRequired: !draft.reservationRequired }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.reservationRequired ? theme.inverse : theme.text }]}>Reservierung</Text>
-                </Pressable>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.lightingAvailable ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, lightingAvailable: !draft.lightingAvailable }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.lightingAvailable ? theme.inverse : theme.text }]}>Licht</Text>
-                </Pressable>
-              </View>
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welches Wetter ist relevant?</Text>
               {profileDraft.locationType === "indoor" ? (
                 <Text style={[styles.muted, { color: theme.muted }]}>Indoor: Regen und Temperatur werden für die Entscheidung kaum gewichtet.</Text>
               ) : (
@@ -693,6 +681,72 @@ export default function AdminScreen() {
                   </Pressable>
                 </View>
               )}
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Was sollte man mitbringen?</Text>
+              <View style={styles.formGrid}>
+                <AdminInput value={profileDraft.requiredEquipment} onChangeText={(requiredEquipment) => setProfileDraft((draft) => ({ ...draft, requiredEquipment }))} placeholder="z. B. Schläger, Matte, Trinkflasche" />
+              </View>
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Was ist vor Ort vorhanden?</Text>
+              <View style={styles.formGrid}>
+                <AdminInput value={profileDraft.availableEquipment} onChangeText={(availableEquipment) => setProfileDraft((draft) => ({ ...draft, availableEquipment }))} placeholder="z. B. Netz, Tore, Matten, Bälle" />
+                <View style={styles.roleRow}>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.lightingAvailable ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, lightingAvailable: !draft.lightingAvailable }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.lightingAvailable ? theme.inverse : theme.text }]}>Licht vorhanden</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wann kann man den Standort nutzen?</Text>
+              <View style={styles.formGrid}>
+                <AdminInput value={profileDraft.openingNotes} onChangeText={(openingNotes) => setProfileDraft((draft) => ({ ...draft, openingNotes }))} placeholder="Öffnungszeiten oder Zeitfenster, z. B. ab 18 Uhr frei" multiline />
+                <View style={styles.roleRow}>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.reservationRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, reservationRequired: !draft.reservationRequired }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.reservationRequired ? theme.inverse : theme.text }]}>Reservierung nötig</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.roleButton, { backgroundColor: profileCostOpen ? theme.button : theme.surface }]}
+                    onPress={() => {
+                      const nextOpen = !profileCostOpen;
+                      setProfileCostOpen(nextOpen);
+                      if (!nextOpen) setProfileDraft((draft) => ({ ...draft, costNote: "" }));
+                    }}
+                  >
+                    <Text style={[styles.roleText, { color: profileCostOpen ? theme.inverse : theme.text }]}>Kostenpflichtig</Text>
+                  </Pressable>
+                </View>
+                {profileCostOpen ? (
+                  <AdminInput value={profileDraft.costNote} onChangeText={(costNote) => setProfileDraft((draft) => ({ ...draft, costNote }))} placeholder="Preis pro Person, z. B. 5 EUR Hallenanteil" />
+                ) : null}
+              </View>
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wie kommt man hin und was muss man wissen?</Text>
+              <View style={styles.formGrid}>
+                <AdminInput value={profileDraft.transitNotes} onChangeText={(transitNotes) => setProfileDraft((draft) => ({ ...draft, transitNotes }))} placeholder="Anreise, z. B. Buslinie, Radweg, Parkplätze" multiline />
+                <AdminInput value={profileDraft.amenityNotes} onChangeText={(amenityNotes) => setProfileDraft((draft) => ({ ...draft, amenityNotes }))} placeholder="Infrastruktur, z. B. Wasser, Toiletten, Umkleiden" multiline />
+              </View>
+
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wer ist Ansprechpartner?</Text>
+              <PickerGroup
+                label="Profil-AP"
+                items={members.map((member) => ({ id: member.userId, label: member.displayName }))}
+                selectedId={profileDraft.apContactId || null}
+                onSelect={(apContactId) => setProfileDraft((draft) => ({ ...draft, apContactId }))}
+              />
+              {profileDraft.apContactId ? (
+                <Pressable style={[styles.roleButton, { backgroundColor: theme.surface, alignSelf: "flex-start" }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apContactId: "" }))}>
+                  <Text style={[styles.roleText, { color: theme.text }]}>Kein Profil-AP</Text>
+                </Pressable>
+              ) : null}
+              <View style={styles.roleRow}>
+                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.apRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apRequired: !draft.apRequired }))}>
+                  <Text style={[styles.roleText, { color: profileDraft.apRequired ? theme.inverse : theme.text }]}>Ansprechpartner vor Ort nötig</Text>
+                </Pressable>
+              </View>
+              <View style={styles.formGrid}>
+                <AdminInput value={profileDraft.locationRules} onChangeText={(locationRules) => setProfileDraft((draft) => ({ ...draft, locationRules }))} placeholder="Standortregeln, z. B. Reservierung ab 6 Personen" multiline />
+                <AdminInput value={profileDraft.safetyNotes} onChangeText={(safetyNotes) => setProfileDraft((draft) => ({ ...draft, safetyNotes }))} placeholder="Sicherheit, z. B. rutschig bei Nässe" multiline />
+              </View>
               <View style={styles.roleRow}>
                 <Pressable
                   style={[styles.primaryButton, { backgroundColor: theme.button }]}
@@ -932,7 +986,7 @@ function SportIconPicker({ draft, onSelect, onClose }: { draft: SportDraft; onSe
             <MaterialCommunityIcons name="close" size={18} color={theme.text} />
           </Pressable>
         </View>
-        <View style={styles.iconGrid}>
+        <ScrollView style={styles.iconScroll} contentContainerStyle={styles.iconGrid} showsVerticalScrollIndicator={false}>
           {SPORT_ICON_OPTIONS.map((option) => {
             const active = draft.iconName === option.name;
             return (
@@ -942,7 +996,7 @@ function SportIconPicker({ draft, onSelect, onClose }: { draft: SportDraft; onSe
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -1332,6 +1386,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   cardTitle: { fontSize: 21, fontWeight: "900" },
+  sectionQuestion: { fontSize: 16, fontWeight: "900", lineHeight: 21, marginTop: 4 },
   row: {
     alignItems: "center",
     flexDirection: "row",
@@ -1380,6 +1435,7 @@ const styles = StyleSheet.create({
   iconPickerCard: {
     alignSelf: "center",
     width: "100%",
+    maxHeight: "82%",
     maxWidth: 520,
     borderRadius: 24,
     borderWidth: 1,
@@ -1390,7 +1446,8 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 14 },
   },
-  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  iconScroll: { flexGrow: 0 },
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingBottom: 4 },
   iconOption: { alignItems: "center", borderRadius: 16, borderWidth: 1, gap: 5, minWidth: 92, paddingHorizontal: 10, paddingVertical: 10 },
   iconOptionText: { fontSize: 11, fontWeight: "900" },
   primaryButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11 },
