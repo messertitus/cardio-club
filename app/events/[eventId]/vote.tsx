@@ -6,9 +6,9 @@ import { SportIconBadge } from "../../../src/components/SportIcon";
 import { Button, Card, EmptyState, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
+import { supabase } from "../../../src/lib/supabase";
 import { excludeNonAttendingEntries, excludeNonAttendingVotes } from "../../../src/lib/votingEligibility";
 import type { VoteRank } from "../../../src/lib/votingRules";
-import { supabase } from "../../../src/lib/supabase";
 import {
   getEventDecisionPreview,
   listAttendance,
@@ -43,10 +43,7 @@ export default function VoteOnSportsScreen() {
 
   const sportsById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport])), [sports]);
   const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
-  const previewPresentation = useMemo(
-    () => (preview ? buildDecisionPresentation(preview, sportNames) : null),
-    [preview, sportNames],
-  );
+  const previewPresentation = useMemo(() => (preview ? buildDecisionPresentation(preview, sportNames) : null), [preview, sportNames]);
   const myVotes = useMemo(
     () => votes.filter((vote) => vote.user_id === user?.id).sort((a, b) => a.vote_rank - b.vote_rank),
     [user?.id, votes],
@@ -68,7 +65,7 @@ export default function VoteOnSportsScreen() {
   }, [proposalSearch, proposals, sportProfiles, sportsById]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [eventId]);
 
   async function load() {
@@ -116,10 +113,6 @@ export default function VoteOnSportsScreen() {
       return;
     }
 
-    if (noGos.some((noGo) => noGo.user_id === user.id && noGo.sport_id === sportId)) {
-      return;
-    }
-
     const result = await voteForSport(supabase, {
       eventId,
       sportId,
@@ -155,10 +148,6 @@ export default function VoteOnSportsScreen() {
       }
       await load();
       return;
-    }
-
-    if (myVoteBySport.has(sportId)) {
-      await removeVote(supabase, { eventId, sportId, userId: user.id });
     }
 
     const result = await setSportNoGo(supabase, { eventId, sportId, userId: user.id });
@@ -246,6 +235,7 @@ export default function VoteOnSportsScreen() {
       <Card>
         <Text style={ui.cardTitle}>Deine Stimmen</Text>
         <Text style={ui.body}>Maximal drei Stimmen pro Woche. Dieselbe Sportart kann nicht doppelt gewählt werden.</Text>
+        <Text style={ui.body}>Ein No-Go betrifft vor allem deine Zuordnung. Deine Präferenz kann trotzdem sichtbar bleiben.</Text>
         {!canVote ? <Text style={ui.body}>Abstimmen ist gesperrt, bis du Dabei oder Vielleicht gewählt hast.</Text> : null}
         {myVotes.length === 0 ? <Text style={ui.body}>Du hast noch nicht abgestimmt.</Text> : null}
         {myVotes.map((vote) => (
@@ -272,7 +262,7 @@ export default function VoteOnSportsScreen() {
             </View>
             <Text style={ui.body}>{sport ? `${sport.category} · ${sport.intensity_level}` : "Vorgeschlagene Sportart"}</Text>
             <Text style={ui.body}>{profileSummary(sportProfiles, proposal.sport_id)}</Text>
-            {myNoGo ? <Text style={ui.body}>Dein No-Go ist gespeichert.</Text> : null}
+            {myNoGo ? <Text style={ui.body}>Dein No-Go ist gespeichert. Deine Stimme bleibt als Wunsch sichtbar, falls du hier gewählt hast.</Text> : null}
             {myVote ? <Text style={ui.body}>Deine Auswahl: {rankLabel(myVote.vote_rank as VoteRank)}</Text> : null}
             {[1, 2, 3].map((rank) => {
               const typedRank = rank as VoteRank;
@@ -282,7 +272,7 @@ export default function VoteOnSportsScreen() {
                   key={rank}
                   label={rankLabel(typedRank)}
                   variant={myVote?.vote_rank === typedRank ? "primary" : "secondary"}
-                  disabled={Boolean(!canVote || myNoGo)}
+                  disabled={Boolean(!canVote)}
                   onPress={() => setRankedVote(proposal.sport_id, typedRank)}
                 />
               );

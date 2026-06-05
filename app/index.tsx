@@ -94,6 +94,7 @@ function normalizeEventState(input: Partial<MccEventState>): MccEventState {
     decisionText: input.decisionText ?? {
       selectedSportName: "Entscheidung steht",
       decisionCharacter: "no_valid_decision",
+      decisionCharacterLabel: "Keine Entscheidung",
       resultLabels: [],
       simpleExplanation: "Die aktuellen Eventdaten werden neu geladen.",
       noGoSummary: "Keine No-Go-Konflikte.",

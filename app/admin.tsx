@@ -36,6 +36,7 @@ import {
   type InvitationTreeEntry,
   type MccEventState,
   type MccMember,
+  type ApRequirementLevel,
   type Row,
   type SportIntensityLevel,
   type SportLocationType,
@@ -44,6 +45,7 @@ import {
 const roles: ClubMemberRole[] = ["member", "mod", "admin"];
 const intensityOptions: SportIntensityLevel[] = ["low", "medium", "high"];
 const locationOptions: SportLocationType[] = ["indoor", "outdoor", "water", "field", "flexible"];
+const apRequirementOptions: ApRequirementLevel[] = ["none", "required", "critical"];
 const defaultSportCategoryOptions = [
   "ballsport",
   "ausdauer",
@@ -102,6 +104,9 @@ type ProfileDraft = {
   maximumGroupSize: string;
   requiredEquipment: string;
   availableEquipment: string;
+  costRequired: boolean;
+  costPerPerson: string;
+  costCurrency: string;
   costNote: string;
   openingNotes: string;
   transitNotes: string;
@@ -109,6 +114,7 @@ type ProfileDraft = {
   safetyNotes: string;
   locationRules: string;
   apRequired: boolean;
+  apRequirementLevel: ApRequirementLevel;
   apContactId: string;
   reservationRequired: boolean;
   lightingAvailable: boolean;
@@ -117,7 +123,9 @@ type ProfileDraft = {
   heatSensitive: boolean;
   coldSensitive: boolean;
   thunderstormUnsafe: boolean;
+  windSensitive: boolean;
   maxPrecipitationMm: string;
+  maxWindKmh: string;
   minTemperatureC: string;
   maxTemperatureC: string;
 };
@@ -136,6 +144,9 @@ const emptyProfileDraft: ProfileDraft = {
   maximumGroupSize: "",
   requiredEquipment: "",
   availableEquipment: "",
+  costRequired: false,
+  costPerPerson: "",
+  costCurrency: "EUR",
   costNote: "",
   openingNotes: "",
   transitNotes: "",
@@ -143,6 +154,7 @@ const emptyProfileDraft: ProfileDraft = {
   safetyNotes: "",
   locationRules: "",
   apRequired: false,
+  apRequirementLevel: "none",
   apContactId: "",
   reservationRequired: false,
   lightingAvailable: false,
@@ -151,7 +163,9 @@ const emptyProfileDraft: ProfileDraft = {
   heatSensitive: false,
   coldSensitive: false,
   thunderstormUnsafe: true,
+  windSensitive: false,
   maxPrecipitationMm: "",
+  maxWindKmh: "",
   minTemperatureC: "",
   maxTemperatureC: "",
 };
@@ -214,8 +228,8 @@ export default function AdminScreen() {
   );
 
   useEffect(() => {
-    if (profileDraft.costNote.trim()) setProfileCostOpen(true);
-  }, [profileDraft.costNote]);
+    if (profileDraft.costRequired || profileDraft.costNote.trim() || profileDraft.costPerPerson.trim()) setProfileCostOpen(true);
+  }, [profileDraft.costNote, profileDraft.costPerPerson, profileDraft.costRequired]);
 
   async function load() {
     if (!user) return;
@@ -353,7 +367,7 @@ export default function AdminScreen() {
 
   function editProfile(profile: Row<"sport_profiles">) {
     setEditingProfileId(profile.id);
-    setProfileCostOpen(Boolean(profile.cost_note));
+    setProfileCostOpen(Boolean(profile.cost_required || profile.cost_note || profile.cost_per_person));
     setProfileDraft({
       sportIds: sportIdsForProfile(profile, sportProfileLinks),
       name: profile.name,
@@ -364,10 +378,13 @@ export default function AdminScreen() {
       latitude: profile.latitude?.toString() ?? "",
       longitude: profile.longitude?.toString() ?? "",
       locationType: profile.location_type,
-      minimumGroupSize: String(profile.minimum_group_size),
-      maximumGroupSize: profile.maximum_group_size?.toString() ?? "",
+      minimumGroupSize: String(profile.minimum_participants ?? profile.minimum_group_size),
+      maximumGroupSize: (profile.maximum_participants ?? profile.maximum_group_size)?.toString() ?? "",
       requiredEquipment: (profile.required_equipment ?? []).join(", "),
       availableEquipment: (profile.available_equipment ?? []).join(", "),
+      costRequired: Boolean(profile.cost_required),
+      costPerPerson: formatOptionalNumber(profile.cost_per_person),
+      costCurrency: profile.cost_currency ?? "EUR",
       costNote: profile.cost_note ?? "",
       openingNotes: profile.opening_notes ?? "",
       transitNotes: profile.transit_notes ?? "",
@@ -375,6 +392,7 @@ export default function AdminScreen() {
       safetyNotes: profile.safety_notes ?? "",
       locationRules: profile.location_rules ?? "",
       apRequired: profile.ap_required,
+      apRequirementLevel: profile.ap_requirement_level ?? (profile.ap_required ? "required" : "none"),
       apContactId: profile.ap_contact_id ?? "",
       reservationRequired: Boolean(profile.reservation_required),
       lightingAvailable: Boolean(profile.lighting_available),
@@ -383,7 +401,9 @@ export default function AdminScreen() {
       heatSensitive: weatherRuleBoolean(profile.weather_rules, "heatSensitive"),
       coldSensitive: weatherRuleBoolean(profile.weather_rules, "coldSensitive"),
       thunderstormUnsafe: weatherRuleBoolean(profile.weather_rules, "thunderstormUnsafe", true),
+      windSensitive: weatherRuleBoolean(profile.weather_rules, "windSensitive"),
       maxPrecipitationMm: formatOptionalNumber(weatherRuleNumber(profile.weather_rules, "maxPrecipitationMm")),
+      maxWindKmh: formatOptionalNumber(weatherRuleNumber(profile.weather_rules, "maxWindKmh")),
       minTemperatureC: formatOptionalNumber(weatherRuleNumber(profile.weather_rules, "minTemperatureC")),
       maxTemperatureC: formatOptionalNumber(weatherRuleNumber(profile.weather_rules, "maxTemperatureC")),
     });
@@ -397,6 +417,18 @@ export default function AdminScreen() {
 
   async function saveProfile() {
     if (!user) return;
+    const validationMessage = validateProfileDraft(profileDraft);
+    if (validationMessage) {
+      setMessage(validationMessage);
+      return;
+    }
+
+    const minimumParticipants = parseOptionalNumber(profileDraft.minimumGroupSize);
+    const maximumParticipants = parseOptionalNumber(profileDraft.maximumGroupSize);
+    const costPerPerson = parseOptionalNumber(profileDraft.costPerPerson);
+    const costRequired = profileCostOpen || profileDraft.costRequired;
+    const apRequirementLevel = profileDraft.apRequirementLevel;
+
     const result = await upsertSportProfile(supabase, {
       profileId: editingProfileId,
       sportIds: profileDraft.sportIds,
@@ -409,17 +441,23 @@ export default function AdminScreen() {
       longitude: parseOptionalNumber(profileDraft.longitude),
       locationType: profileDraft.locationType,
       isIndoor: profileDraft.locationType === "indoor",
-      minimumGroupSize: parseOptionalNumber(profileDraft.minimumGroupSize),
-      maximumGroupSize: parseOptionalNumber(profileDraft.maximumGroupSize),
+      minimumGroupSize: minimumParticipants,
+      maximumGroupSize: maximumParticipants,
+      minimumParticipants,
+      maximumParticipants,
       requiredEquipment: parseCsv(profileDraft.requiredEquipment),
       availableEquipment: parseCsv(profileDraft.availableEquipment),
+      costRequired,
+      costPerPerson: costRequired ? costPerPerson : null,
+      costCurrency: profileDraft.costCurrency.trim().toUpperCase() || "EUR",
       costNote: profileDraft.costNote,
       openingNotes: profileDraft.openingNotes,
       transitNotes: profileDraft.transitNotes,
       amenityNotes: profileDraft.amenityNotes,
       safetyNotes: profileDraft.safetyNotes,
       locationRules: profileDraft.locationRules,
-      apRequired: profileDraft.apRequired,
+      apRequired: apRequirementLevel !== "none",
+      apRequirementLevel,
       apContactId: profileDraft.apContactId || null,
       reservationRequired: profileDraft.reservationRequired,
       lightingAvailable: profileDraft.lightingAvailable,
@@ -429,7 +467,9 @@ export default function AdminScreen() {
         heatSensitive: profileDraft.locationType === "indoor" ? false : profileDraft.heatSensitive,
         coldSensitive: profileDraft.locationType === "indoor" ? false : profileDraft.coldSensitive,
         thunderstormUnsafe: profileDraft.locationType !== "indoor",
+        windSensitive: profileDraft.locationType === "indoor" ? false : profileDraft.windSensitive,
         maxPrecipitationMm: parseOptionalNumber(profileDraft.maxPrecipitationMm) ?? undefined,
+        maxWindKmh: parseOptionalNumber(profileDraft.maxWindKmh) ?? undefined,
         minTemperatureC: parseOptionalNumber(profileDraft.minTemperatureC) ?? undefined,
         maxTemperatureC: parseOptionalNumber(profileDraft.maxTemperatureC) ?? undefined,
       },
@@ -636,7 +676,7 @@ export default function AdminScreen() {
                   onCoordinatesChange={({ latitude, longitude }) => setProfileDraft((draft) => ({ ...draft, latitude: latitude?.toString() ?? "", longitude: longitude?.toString() ?? "" }))}
                 />
                 <AdminInput value={profileDraft.locationCity} onChangeText={(locationCity) => setProfileDraft((draft) => ({ ...draft, locationCity }))} placeholder="Stadt optional, z. B. Konstanz" />
-                <AdminInput value={profileDraft.postalCode} onChangeText={(postalCode) => setProfileDraft((draft) => ({ ...draft, postalCode: postalCode.replace(/\D/g, '').slice(0, 5) }))} placeholder="PLZ optional" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.postalCode} onChangeText={(postalCode) => setProfileDraft((draft) => ({ ...draft, postalCode: postalCode.replace(/\D/g, '').slice(0, 5) }))} placeholder="PLZ für Outdoor-Wetter, z. B. 78462" keyboardType="number-pad" inputMode="numeric" />
                 <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Anzeigename, z. B. Beachvolleyball: Hörnle" />
               </View>
 
@@ -656,17 +696,19 @@ export default function AdminScreen() {
               <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welche Art von Profil ist das?</Text>
               <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wie viele Personen passen gut dazu?</Text>
+              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welche Standortkapazität passt?</Text>
               <View style={styles.formGrid}>
-                <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Mindestanzahl, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
-                <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Maximalanzahl, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Standort-Minimum, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
+                <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Standort-Maximum, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
               </View>
 
               <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welches Wetter ist relevant?</Text>
               {profileDraft.locationType === "indoor" ? (
-                <Text style={[styles.muted, { color: theme.muted }]}>Indoor: Regen und Temperatur werden für die Entscheidung kaum gewichtet.</Text>
+                <Text style={[styles.muted, { color: theme.muted }]}>Indoor: Regen, Wind und Temperatur werden für die Entscheidung kaum gewichtet.</Text>
               ) : (
-                <View style={styles.roleRow}>
+                <View style={styles.formGrid}>
+                  {!draftHasWeatherLocation(profileDraft) ? <Text style={[styles.muted, { color: theme.accent }]}>Für Outdoor-Profile bitte Koordinaten oder PLZ hinterlegen.</Text> : null}
+                  <View style={styles.roleRow}>
                   <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.requiresDry ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, requiresDry: !draft.requiresDry }))}>
                     <Text style={[styles.roleText, { color: profileDraft.requiresDry ? theme.inverse : theme.text }]}>Trocken nötig</Text>
                   </Pressable>
@@ -679,6 +721,13 @@ export default function AdminScreen() {
                   <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.coldSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, coldSensitive: !draft.coldSensitive }))}>
                     <Text style={[styles.roleText, { color: profileDraft.coldSensitive ? theme.inverse : theme.text }]}>Soll eher warm sein</Text>
                   </Pressable>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.windSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, windSensitive: !draft.windSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.windSensitive ? theme.inverse : theme.text }]}>Wind sensibel</Text>
+                  </Pressable>
+                  </View>
+                  {profileDraft.windSensitive ? (
+                    <AdminInput value={profileDraft.maxWindKmh} onChangeText={(maxWindKmh) => setProfileDraft((draft) => ({ ...draft, maxWindKmh: maxWindKmh.replace(/[^\d,.]/g, '') }))} placeholder="Max. Wind in km/h, z. B. 35" keyboardType="decimal-pad" inputMode="decimal" />
+                  ) : null}
                 </View>
               )}
 
@@ -709,14 +758,24 @@ export default function AdminScreen() {
                     onPress={() => {
                       const nextOpen = !profileCostOpen;
                       setProfileCostOpen(nextOpen);
-                      if (!nextOpen) setProfileDraft((draft) => ({ ...draft, costNote: "" }));
+                      setProfileDraft((draft) => ({
+                        ...draft,
+                        costRequired: nextOpen,
+                        costPerPerson: nextOpen ? draft.costPerPerson : "",
+                        costCurrency: nextOpen ? draft.costCurrency || "EUR" : "EUR",
+                        costNote: nextOpen ? draft.costNote : "",
+                      }));
                     }}
                   >
                     <Text style={[styles.roleText, { color: profileCostOpen ? theme.inverse : theme.text }]}>Kostenpflichtig</Text>
                   </Pressable>
                 </View>
                 {profileCostOpen ? (
-                  <AdminInput value={profileDraft.costNote} onChangeText={(costNote) => setProfileDraft((draft) => ({ ...draft, costNote }))} placeholder="Preis pro Person, z. B. 5 EUR Hallenanteil" />
+                  <View style={styles.formGrid}>
+                    <AdminInput value={profileDraft.costPerPerson} onChangeText={(costPerPerson) => setProfileDraft((draft) => ({ ...draft, costPerPerson: costPerPerson.replace(/[^\d,.]/g, '') }))} placeholder="Kosten pro Person, z. B. 5" keyboardType="decimal-pad" inputMode="decimal" />
+                    <AdminInput value={profileDraft.costCurrency} onChangeText={(costCurrency) => setProfileDraft((draft) => ({ ...draft, costCurrency: costCurrency.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || "EUR" }))} placeholder="Währung, z. B. EUR" />
+                    <AdminInput value={profileDraft.costNote} onChangeText={(costNote) => setProfileDraft((draft) => ({ ...draft, costNote }))} placeholder="Kostenhinweis, z. B. Hallenanteil oder Buchung" />
+                  </View>
                 ) : null}
               </View>
 
@@ -738,11 +797,12 @@ export default function AdminScreen() {
                   <Text style={[styles.roleText, { color: theme.text }]}>Kein Profil-AP</Text>
                 </Pressable>
               ) : null}
-              <View style={styles.roleRow}>
-                <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.apRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apRequired: !draft.apRequired }))}>
-                  <Text style={[styles.roleText, { color: profileDraft.apRequired ? theme.inverse : theme.text }]}>Ansprechpartner vor Ort nötig</Text>
-                </Pressable>
-              </View>
+              <PickerGroup
+                label="AP-Pflicht"
+                items={apRequirementOptions.map((level) => ({ id: level, label: apRequirementLabel(level) }))}
+                selectedId={profileDraft.apRequirementLevel}
+                onSelect={(apRequirementLevel) => setProfileDraft((draft) => ({ ...draft, apRequirementLevel: apRequirementLevel as ApRequirementLevel, apRequired: apRequirementLevel !== "none" }))}
+              />
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.locationRules} onChangeText={(locationRules) => setProfileDraft((draft) => ({ ...draft, locationRules }))} placeholder="Standortregeln, z. B. Reservierung ab 6 Personen" multiline />
                 <AdminInput value={profileDraft.safetyNotes} onChangeText={(safetyNotes) => setProfileDraft((draft) => ({ ...draft, safetyNotes }))} placeholder="Sicherheit, z. B. rutschig bei Nässe" multiline />
@@ -786,6 +846,9 @@ export default function AdminScreen() {
                       const creatorMember = members.find((member) => member.userId === profile.created_by);
                       const requiredEquipment = profile.required_equipment ?? [];
                       const linkedSports = sportIdsForProfile(profile, sportProfileLinks).map((sportId) => sports.find((entry) => entry.id === sportId)?.name).filter(Boolean).join(", ");
+                      const missingWeatherLocation = profileNeedsWeatherLocation(profile.location_type) && !profileHasWeatherLocation(profile);
+                      const minimumParticipants = profile.minimum_participants ?? profile.minimum_group_size;
+                      const maximumParticipants = profile.maximum_participants ?? profile.maximum_group_size;
                       return (
                         <View key={profile.id} style={[styles.profileChildCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
                           <View style={styles.profileHeaderRow}>
@@ -793,8 +856,12 @@ export default function AdminScreen() {
                             <Text style={[styles.name, { color: theme.text }]}>{profile.name}</Text>
                             <Text style={[styles.muted, { color: theme.accent }]}>{linkedSports || "Keine Sportart verknüpft"}</Text>
                             <Text style={[styles.muted, { color: theme.muted }]}>
-                              {[profile.location_name ?? "Ort offen", profile.location_city, profile.postal_code].filter(Boolean).join(" - ")} - min. {profile.minimum_group_size}
-                              {profile.maximum_group_size ? ` - max. ${profile.maximum_group_size}` : ""}
+                              {[profile.location_name ?? "Ort offen", profile.location_city, profile.postal_code].filter(Boolean).join(" - ")} - Standort min. {minimumParticipants}
+                              {maximumParticipants ? ` - max. ${maximumParticipants}` : ""}
+                            </Text>
+                            {missingWeatherLocation ? <Text style={[styles.muted, { color: theme.accent }]}>Wetterdaten fehlen: bitte PLZ oder Koordinaten ergänzen.</Text> : null}
+                            <Text style={[styles.muted, { color: theme.muted }]}>
+                              AP: {apRequirementLabel(profile.ap_requirement_level)} - Kosten: {costProfileSummary(profile)}
                             </Text>
                             <Text style={[styles.muted, { color: profile.is_active ? theme.accent : theme.muted }]}>
                               {profile.is_active ? "aktiv" : "inaktiv"} - {locationLabel(profile.location_type)}
@@ -1265,6 +1332,62 @@ function parseOptionalNumber(value: string): number | null {
   if (!normalized) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function validateProfileDraft(draft: ProfileDraft): string | null {
+  if (profileNeedsWeatherLocation(draft.locationType) && !draftHasWeatherLocation(draft)) {
+    return "Outdoor-Profile brauchen Koordinaten oder eine PLZ, damit Wetterrisiken bewertet werden können.";
+  }
+
+  const minimumParticipants = parseOptionalNumber(draft.minimumGroupSize);
+  const maximumParticipants = parseOptionalNumber(draft.maximumGroupSize);
+  if (minimumParticipants && maximumParticipants && maximumParticipants < minimumParticipants) {
+    return "Das Standort-Maximum muss größer oder gleich dem Standort-Minimum sein.";
+  }
+
+  if (draft.costPerPerson.trim() && parseOptionalNumber(draft.costPerPerson) === null) {
+    return "Kosten pro Person müssen eine gültige Zahl sein.";
+  }
+
+  if (parseOptionalNumber(draft.costPerPerson) !== null && Number(parseOptionalNumber(draft.costPerPerson)) < 0) {
+    return "Kosten pro Person dürfen nicht negativ sein.";
+  }
+
+  if (draft.maxWindKmh.trim() && parseOptionalNumber(draft.maxWindKmh) === null) {
+    return "Maximaler Wind muss eine gültige Zahl sein.";
+  }
+
+  return null;
+}
+
+function draftHasWeatherLocation(draft: ProfileDraft): boolean {
+  return hasCoordinatePair(parseOptionalNumber(draft.latitude), parseOptionalNumber(draft.longitude)) || /^\d{5}$/.test(draft.postalCode.trim());
+}
+
+function profileHasWeatherLocation(profile: Row<"sport_profiles">): boolean {
+  return hasCoordinatePair(profile.latitude, profile.longitude) || /^\d{5}$/.test(profile.postal_code ?? "");
+}
+
+function hasCoordinatePair(latitude: number | null, longitude: number | null): boolean {
+  return typeof latitude === "number" && typeof longitude === "number" && Number.isFinite(latitude) && Number.isFinite(longitude);
+}
+
+function profileNeedsWeatherLocation(locationType: SportLocationType): boolean {
+  return locationType !== "indoor";
+}
+
+function apRequirementLabel(value: ApRequirementLevel): string {
+  if (value === "critical") return "kritisch";
+  if (value === "required") return "erforderlich";
+  return "nicht nötig";
+}
+
+function costProfileSummary(profile: Row<"sport_profiles">): string {
+  if (!profile.cost_required && !profile.cost_note && !profile.cost_per_person) {
+    return "keine Pflichtkosten";
+  }
+  const amount = typeof profile.cost_per_person === "number" ? `${profile.cost_per_person} ${profile.cost_currency ?? "EUR"} p. P.` : null;
+  return [amount, profile.cost_note || "kostenpflichtig"].filter(Boolean).join(" - ");
 }
 
 function parseCsv(value: string): string[] {
