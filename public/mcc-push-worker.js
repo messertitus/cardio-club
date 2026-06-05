@@ -1,3 +1,68 @@
+const MCC_CACHE_VERSION = "mcc-pwa-v1";
+const MCC_APP_SHELL = ["/", "/manifest.webmanifest", "/mcc-logo.png"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(MCC_CACHE_VERSION)
+      .then((cache) => cache.addAll(MCC_APP_SHELL))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== MCC_CACHE_VERSION)
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(MCC_CACHE_VERSION).then((cache) => cache.put("/", copy));
+          return response;
+        })
+        .catch(() => caches.match("/") || Response.error()),
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(request).then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(MCC_CACHE_VERSION).then((cache) => cache.put(request, copy));
+        }
+
+        return response;
+      });
+    }),
+  );
+});
+
 self.addEventListener("push", (event) => {
   const payload = event.data?.json?.() ?? {
     title: "Messers Cardio Club",
@@ -10,6 +75,8 @@ self.addEventListener("push", (event) => {
       data: payload.data ?? {},
       tag: payload.tag ?? "mcc-event-update",
       renotify: true,
+      icon: "/mcc-logo.png",
+      badge: "/mcc-logo.png",
     }),
   );
 });
