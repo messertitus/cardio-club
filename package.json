@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "export:web": "expo export -p web",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "pwa:build": "npm run export:web",
+    "pwa:serve": "npx serve dist"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",

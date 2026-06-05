@@ -1,0 +1,30 @@
+{
+  "name": "Messers Cardio Club",
+  "short_name": "MCC",
+  "description": "Messers Cardio Club als installierbare Web-App.",
+  "lang": "de-DE",
+  "dir": "ltr",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "theme_color": "#05070b",
+  "background_color": "#05070b",
+  "categories": ["sports", "social", "productivity"],
+  "icons": [
+    {
+      "src": "/mcc-logo.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/mcc-logo.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
