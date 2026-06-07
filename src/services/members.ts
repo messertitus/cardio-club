@@ -68,18 +68,20 @@ export async function listMccMembers(
     return { data: null, error: stats.error };
   }
 
-  const result = memberships.map((membership) => ({
-    userId: membership.user_id,
-    role: membership.role,
-    joinedAt: membership.joined_at,
-    displayName: names.get(membership.user_id) ?? "Mitglied",
-    phone: phones.get(membership.user_id) ?? null,
-    city: cities.get(membership.user_id) ?? null,
-    favoriteSports: favoriteSports.get(membership.user_id) ?? null,
-    birthDate: birthDates.get(membership.user_id) ?? null,
-    contactSports: contactSports.data.get(membership.user_id) ?? [],
-    stats: stats.data.get(membership.user_id) ?? emptyStats(),
-  }));
+  const result = memberships
+    .map((membership) => ({
+      userId: membership.user_id,
+      role: membership.role,
+      joinedAt: membership.joined_at,
+      displayName: names.get(membership.user_id) ?? "Mitglied",
+      phone: phones.get(membership.user_id) ?? null,
+      city: cities.get(membership.user_id) ?? null,
+      favoriteSports: favoriteSports.get(membership.user_id) ?? null,
+      birthDate: birthDates.get(membership.user_id) ?? null,
+      contactSports: contactSports.data.get(membership.user_id) ?? [],
+      stats: stats.data.get(membership.user_id) ?? emptyStats(),
+    }))
+    .filter((member) => member.displayName.trim().toLowerCase() !== "testuser");
 
   await writeLocalCache(cacheKey, result);
   return ok(result);

@@ -12,6 +12,7 @@ export type SportIdeaWithCreator = Row<"sport_ideas"> & {
   creatorName: string;
   creatorCity: string | null;
   sportName: string | null;
+  sportNames: string[];
 };
 
 export type SportIdeaInput = {
@@ -19,6 +20,7 @@ export type SportIdeaInput = {
   userId: string;
   name?: string | null;
   sportId?: string | null;
+  sportIds?: string[];
   profileName?: string | null;
   note?: string | null;
   locationMode?: SportIdeaLocationMode;
@@ -59,7 +61,7 @@ export async function listSportIdeas(supabase: AppSupabaseClient): Promise<Servi
   }
 
   const userIds = [...new Set(data.map((idea) => idea.suggested_by))];
-  const sportIds = [...new Set(data.map((idea) => idea.sport_id).filter((id): id is string => Boolean(id)))];
+  const sportIds = [...new Set(data.flatMap((idea) => ideaSportIds(idea)))];
   const [profilesResult, sportsResult] = await Promise.all([
     userIds.length ? supabase.from("profiles").select("id, display_name, city").in("id", userIds) : Promise.resolve({ data: [], error: null }),
     sportIds.length ? supabase.from("sports").select("id, name").in("id", sportIds) : Promise.resolve({ data: [], error: null }),
@@ -81,7 +83,8 @@ export async function listSportIdeas(supabase: AppSupabaseClient): Promise<Servi
         ...idea,
         creatorName: profile?.display_name ?? "Mitglied",
         creatorCity: profile?.city ?? null,
-        sportName: idea.sport_id ? sportNames.get(idea.sport_id) ?? null : null,
+        sportNames: ideaSportIds(idea).map((sportId) => sportNames.get(sportId)).filter((name): name is string => Boolean(name)),
+        sportName: ideaSportIds(idea).map((sportId) => sportNames.get(sportId)).filter(Boolean).join(", ") || null,
       };
     });
   await writeLocalCache(SPORT_IDEAS_CACHE_KEY, result);
@@ -214,11 +217,13 @@ export async function isCurrentUserAdmin(supabase: AppSupabaseClient, userId: st
 }
 
 function ideaPayload(input: SportIdeaInput, isDraft: boolean): Omit<Partial<Row<"sport_ideas">>, "id" | "suggested_by" | "created_at"> {
+  const sportIds = normalizeSportIds(input.sportIds ?? (input.sportId ? [input.sportId] : []));
   return {
     name: textOrNull(input.name),
     profile_name: textOrNull(input.profileName) ?? textOrNull(input.name),
     note: textOrNull(input.note),
-    sport_id: input.sportId || null,
+    sport_id: sportIds[0] ?? input.sportId ?? null,
+    sport_ids: sportIds,
     location_mode: input.locationMode ?? "fixed",
     location: textOrNull(input.location),
     postal_code: textOrNull(input.postalCode),
@@ -247,6 +252,14 @@ function ideaPayload(input: SportIdeaInput, isDraft: boolean): Omit<Partial<Row<
     status: "pending",
     review_note: textOrNull(input.reviewNote),
   };
+}
+
+function ideaSportIds(idea: Pick<Row<"sport_ideas">, "sport_id" | "sport_ids">): string[] {
+  return normalizeSportIds([...(idea.sport_ids ?? []), ...(idea.sport_id ? [idea.sport_id] : [])]);
+}
+
+function normalizeSportIds(sportIds: string[]): string[] {
+  return [...new Set(sportIds.map((sportId) => sportId.trim()).filter(Boolean))];
 }
 
 function validateIdeaForSubmit(input: SportIdeaInput): string | null {
