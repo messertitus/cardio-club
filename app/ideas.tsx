@@ -33,11 +33,34 @@ import {
 
 type IdeaFlowStep = "location" | "locationName" | "sport" | "type" | "group" | "weather" | "equipment" | "available" | "schedule" | "logistics" | "review";
 
+type SportSpecificDraft = {
+  locationType: SportLocationType | null;
+  minimumGroupSize: string;
+  maximumGroupSize: string;
+  requiredEquipment: string;
+  availableEquipment: string;
+  costNote: string;
+  openingNotes: string;
+  transitNotes: string;
+  amenityNotes: string;
+  reservationRequired: boolean | null;
+  lightingAvailable: boolean | null;
+  safetyNotes: string;
+  locationRules: string;
+  apRequired: boolean;
+  rainMode: "ok" | "sensitive" | "dry";
+  temperatureMode: "any" | "moderate" | "warm" | "cool";
+  thunderstormUnsafe: boolean;
+};
+
 type IdeaDraft = {
   ideaId: string | null;
   name: string;
   requestedSportName: string;
   sportId: string;
+  sportIds: string[];
+  activeSportId: string | null;
+  sportDetails: Record<string, SportSpecificDraft>;
   profileName: string;
   note: string;
   locationMode: SportIdeaLocationMode;
@@ -87,6 +110,9 @@ const emptyDraft: IdeaDraft = {
   name: "",
   requestedSportName: "",
   sportId: "",
+  sportIds: [],
+  activeSportId: null,
+  sportDetails: {},
   profileName: "",
   note: "",
   locationMode: "fixed",
@@ -139,6 +165,7 @@ export default function IdeasScreen() {
   const [proposalOpen, setProposalOpen] = useState(false);
   const [requestSportOpen, setRequestSportOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
+  const [costOpenBySport, setCostOpenBySport] = useState<Record<string, boolean>>({});
   const confirmationPulse = useRef(new Animated.Value(0)).current;
 
   async function load() {
@@ -189,6 +216,12 @@ export default function IdeasScreen() {
     });
   }, [sportProfileLinks, sportProfiles, sportSearch, sports]);
 
+  const selectedSportIds = useMemo(() => selectedSportIdsFromDraft(draft), [draft.sportId, draft.sportIds]);
+  const activeSportId = draft.activeSportId && selectedSportIds.includes(draft.activeSportId) ? draft.activeSportId : selectedSportIds[0] ?? null;
+  const activeSport = useMemo(() => sports.find((sport) => sport.id === activeSportId) ?? null, [activeSportId, sports]);
+  const activeSportDetail = useMemo(() => (activeSportId ? sportDetailForDraft(draft, activeSportId) : sportDetailForDraft(draft, null)), [activeSportId, draft]);
+  const activeCostOpen = activeSportId ? costOpenBySport[activeSportId] ?? Boolean(activeSportDetail.costNote.trim()) : costOpen || Boolean(activeSportDetail.costNote.trim());
+
   const sortedIdeas = useMemo(() => sortIdeasForUser(ideas, user?.id ?? null), [ideas, user?.id]);
   const queueIdeas = useMemo(() => sortedIdeas.filter((idea) => idea.is_draft || idea.status === "pending"), [sortedIdeas]);
   const approvedIdeas = useMemo(() => sortedIdeas.filter((idea) => !idea.is_draft && idea.status === "approved"), [sortedIdeas]);
@@ -224,14 +257,14 @@ export default function IdeasScreen() {
     if (!user || !canSaveDraft) return;
     clearMessages();
     setBusy(true);
-    const input = draftToInput(draft, user.id, persistedDraftStep(activeStep), sports);
+    const input = draftToInput(draft, user.id, persistedDraftStep(activeStep), sports, activeSportId ?? draft.sportId);
     const result = await saveSportIdeaDraft(supabase, input);
     setBusy(false);
     if (result.error) {
       setMessage(result.error.message);
       return;
     }
-    setDraft(ideaToDraft({ ...result.data, creatorName: "Du", creatorCity: null, sportName: selectedSportName(result.data.sport_id, sports) }));
+    setDraft(ideaToDraft({ ...result.data, creatorName: "Du", creatorCity: null, sportName: selectedSportNames(ideaSportIds(result.data), sports), sportNames: selectedSportNameList(ideaSportIds(result.data), sports) }));
     setSuccess("Entwurf gespeichert.");
     await load();
   }
@@ -242,22 +275,38 @@ export default function IdeasScreen() {
     setSubmitAttempted(true);
     const missing = requiredErrors(draft);
     if (Object.keys(missing).length > 0) {
+      const missingSportId = firstMissingSportId(draft);
+      if (missingSportId) setDraft((current) => ({ ...current, activeSportId: missingSportId }));
       setActiveStep(firstMissingStep(missing, draft));
       setMessage("Bitte ergänze die markierten Angaben.");
       return;
     }
     setBusy(true);
-    const result = await submitSportIdea(supabase, draftToInput(draft, user.id, "review", sports));
+    const sportIdsToSubmit = selectedSportIdsFromDraft(draft);
+    let firstError: string | null = null;
+    if (sportIdsToSubmit.length > 0) {
+      for (const sportId of sportIdsToSubmit) {
+        const inputDraft = { ...draft, ideaId: sportIdsToSubmit.length === 1 || sportId === draft.sportId ? draft.ideaId : null };
+        const result = await submitSportIdea(supabase, draftToInput(inputDraft, user.id, "review", sports, sportId));
+        if (result.error) {
+          firstError = result.error.message;
+          break;
+        }
+      }
+    } else {
+      const result = await submitSportIdea(supabase, draftToInput(draft, user.id, "review", sports));
+      firstError = result.error?.message ?? null;
+    }
     setBusy(false);
-    if (result.error) {
-      setMessage(result.error.message);
+    if (firstError) {
+      setMessage(firstError);
       return;
     }
     setDraft(emptyDraft);
     setProposalOpen(false);
     setSubmitAttempted(false);
     setActiveStep("location");
-    setSuccess("Idee eingereicht.");
+    setSuccess(sportIdsToSubmit.length > 1 ? `${sportIdsToSubmit.length} Ideen eingereicht.` : "Idee eingereicht.");
     await load();
   }
 
@@ -281,9 +330,11 @@ export default function IdeasScreen() {
   }
 
   async function createProfileFromIdea(idea: SportIdeaWithCreator): Promise<string | null> {
-    if (!idea.sport_id) return "Bitte wähle vor der Freigabe eine abstrakte Sportart aus.";
+    const sportIds = ideaSportIds(idea);
+    if (sportIds.length === 0) return "Bitte wähle vor der Freigabe mindestens eine abstrakte Sportart aus.";
     const result = await upsertSportProfile(supabase, {
-      sportId: idea.sport_id,
+      sportId: sportIds[0],
+      sportIds,
       name: idea.profile_name ?? idea.name ?? "",
       locationName: idea.location,
       mapUrl: idea.map_url,
@@ -329,7 +380,19 @@ export default function IdeasScreen() {
 
   function goToNextStep() {
     if (!canGoNext) return;
-    goToStepWithFeedback(currentFlowSteps[activeStepIndex + 1].id);
+    if (isSportSpecificStep(activeStep) && selectedSportIds.length > 1 && activeSportId) {
+      const currentSportIndex = selectedSportIds.indexOf(activeSportId);
+      const nextSportId = selectedSportIds[currentSportIndex + 1];
+      if (nextSportId) {
+        goToSportWithFeedback(nextSportId);
+        return;
+      }
+    }
+    const nextStep = currentFlowSteps[activeStepIndex + 1].id;
+    if (isSportSpecificStep(nextStep) && selectedSportIds.length > 1) {
+      setDraft((current) => ({ ...current, activeSportId: selectedSportIds[0] }));
+    }
+    goToStepWithFeedback(nextStep);
   }
 
   function goToStepWithFeedback(step: IdeaFlowStep) {
@@ -343,9 +406,81 @@ export default function IdeasScreen() {
     ]).start(() => setActiveStep(step));
   }
 
+  function goToSportWithFeedback(sportId: string) {
+    setMessage(null);
+    confirmationPulse.stopAnimation();
+    confirmationPulse.setValue(0);
+    Animated.sequence([
+      Animated.timing(confirmationPulse, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.delay(140),
+      Animated.timing(confirmationPulse, { toValue: 0, duration: 120, useNativeDriver: true }),
+    ]).start(() => setDraft((current) => ({ ...current, activeSportId: sportId })));
+  }
+
   function clearMessages() {
     setMessage(null);
     setSuccess(null);
+  }
+
+  function toggleSportChoice(sport: Row<"sports">) {
+    setRequestSportOpen(false);
+    setDraft((current) => {
+      const currentIds = selectedSportIdsFromDraft(current);
+      const isSelected = currentIds.includes(sport.id);
+      const nextIds = isSelected ? currentIds.filter((id) => id !== sport.id) : [...currentIds, sport.id];
+      const nextDetails = { ...current.sportDetails };
+      if (isSelected) {
+        delete nextDetails[sport.id];
+      } else if (!nextDetails[sport.id]) {
+        nextDetails[sport.id] = sportDetailForDraft(current, current.activeSportId ?? current.sportId);
+      }
+
+      const nextActiveSportId = isSelected
+        ? current.activeSportId === sport.id
+          ? nextIds[0] ?? null
+          : current.activeSportId
+        : sport.id;
+      const firstSportId = nextIds[0] ?? "";
+      const firstSportName = selectedSportName(firstSportId, sports) ?? "";
+
+      return {
+        ...current,
+        sportId: firstSportId,
+        sportIds: nextIds,
+        activeSportId: nextActiveSportId,
+        sportDetails: nextDetails,
+        requestedSportName: "",
+        name: nextIds.length > 1 ? `${nextIds.length} Sportarten` : firstSportName,
+      };
+    });
+  }
+
+  function selectActiveSport(sportId: string) {
+    setDraft((current) => ({ ...current, activeSportId: sportId }));
+  }
+
+  function updateActiveSportDetail(patch: Partial<SportSpecificDraft>) {
+    if (!activeSportId) {
+      setDraft((current) => ({ ...current, ...patch }));
+      return;
+    }
+    setDraft((current) => ({
+      ...current,
+      sportDetails: {
+        ...current.sportDetails,
+        [activeSportId]: { ...sportDetailForDraft(current, activeSportId), ...patch },
+      },
+    }));
+  }
+
+  function setActiveSportCostOpen(open: boolean) {
+    if (!activeSportId) {
+      setCostOpen(open);
+      if (!open) updateActiveSportDetail({ costNote: "" });
+      return;
+    }
+    setCostOpenBySport((current) => ({ ...current, [activeSportId]: open }));
+    if (!open) updateActiveSportDetail({ costNote: "" });
   }
 
   if (loading) return <LoadingState />;
@@ -419,7 +554,7 @@ export default function IdeasScreen() {
                   <MaterialCommunityIcons name="close" size={20} color={theme.text} />
                 </Pressable>
               </View>
-              <Text style={[styles.wizardQuestion, { color: theme.text }]}>{stepQuestion(activeStep)}</Text>
+              <WizardQuestion step={activeStep} sportName={activeSport?.name ?? null} />
               <Animated.View
                 pointerEvents="none"
                 style={[
@@ -467,6 +602,23 @@ export default function IdeasScreen() {
                   );
                 })}
               </View>
+              {selectedSportIds.length > 1 && activeStep !== "sport" ? (
+                <View style={[styles.subflowPanel, { backgroundColor: theme.softSurface }]}>
+                  <Text style={[styles.subflowKicker, { color: theme.muted }]}>Profilangaben pro Sportart</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subflowChipRow}>
+                    {selectedSportIds.map((sportId) => {
+                      const sport = sports.find((entry) => entry.id === sportId);
+                      const active = activeSportId === sportId;
+                      return (
+                        <Pressable key={sportId} style={[styles.subflowChip, { backgroundColor: active ? theme.button : theme.surface, borderColor: theme.border }]} onPress={() => selectActiveSport(sportId)}>
+                          {sport ? <SportIconBadge sport={sport} size={24} /> : null}
+                          <Text style={[styles.subflowChipText, { color: active ? theme.inverse : theme.text }]}>{sport?.name ?? "Sportart"}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              ) : null}
 
               {activeStep === "location" ? (
                 <View style={styles.formGrid}>
@@ -524,30 +676,44 @@ export default function IdeasScreen() {
                   <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart suchen" />
                   <View style={styles.choiceGrid}>
                     {filteredSports.map((sport) => {
-                      const active = draft.sportId === sport.id;
+                      const active = selectedSportIds.includes(sport.id);
                       return (
-                        <Pressable key={sport.id} style={[styles.choiceChip, { backgroundColor: active ? theme.button : theme.surface }]} onPress={() => {
-                          setRequestSportOpen(false);
-                          setDraft((current) => ({ ...current, sportId: sport.id, requestedSportName: "", name: sport.name }));
-                        }}>
+                        <Pressable key={sport.id} style={[styles.choiceChip, styles.sportChoiceChip, { backgroundColor: active ? theme.button : theme.surface }]} onPress={() => toggleSportChoice(sport)}>
+                          <SportIconBadge sport={sport} size={22} />
                           <Text style={[styles.choiceText, { color: active ? theme.inverse : theme.text }]}>{sport.name}</Text>
                         </Pressable>
                       );
                     })}
                     <Pressable style={[styles.choiceChip, styles.plusChoice, { backgroundColor: draft.requestedSportName ? theme.button : theme.surface }]} onPress={() => {
                       setRequestSportOpen(true);
-                      setDraft((current) => ({ ...current, sportId: "", name: "", requestedSportName: current.requestedSportName }));
+                      setDraft((current) => ({ ...current, sportId: "", sportIds: [], activeSportId: null, sportDetails: {}, name: "", requestedSportName: current.requestedSportName }));
                     }}>
                       <Text style={[styles.choiceText, { color: draft.requestedSportName ? theme.inverse : theme.text }]}>+</Text>
                     </Pressable>
                   </View>
                   {errors.sport ? <Text style={styles.notice}>{errors.sport}</Text> : null}
+                  {selectedSportIds.length > 0 ? (
+                    <View style={[styles.subflowPanel, { backgroundColor: theme.softSurface }]}>
+                      <Text style={[styles.subflowKicker, { color: theme.muted }]}>Ausgewählt</Text>
+                      <View style={styles.subflowChipRow}>
+                        {selectedSportIds.map((sportId) => {
+                          const sport = sports.find((entry) => entry.id === sportId);
+                          return (
+                            <Pressable key={sportId} style={[styles.subflowChip, { backgroundColor: activeSportId === sportId ? theme.button : theme.surface, borderColor: theme.border }]} onPress={() => selectActiveSport(sportId)}>
+                              {sport ? <SportIconBadge sport={sport} size={22} /> : null}
+                              <Text style={[styles.subflowChipText, { color: activeSportId === sportId ? theme.inverse : theme.text }]}>{sport?.name ?? "Sportart"}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
                   {requestSportOpen || draft.requestedSportName ? (
                     <LabeledInput
                       label="Neue Sportart anfragen"
                       required
                       value={draft.requestedSportName}
-                      onChangeText={(requestedSportName) => setDraft((current) => ({ ...current, requestedSportName, sportId: "", name: requestedSportName }))}
+                      onChangeText={(requestedSportName) => setDraft((current) => ({ ...current, requestedSportName, sportId: "", sportIds: [], activeSportId: null, sportDetails: {}, name: requestedSportName }))}
                       placeholder="z. B. Pickleball, Spikeball, Klettern"
                     />
                   ) : null}
@@ -557,8 +723,8 @@ export default function IdeasScreen() {
               {activeStep === "type" ? (
                 <View style={styles.formGrid}>
                   <SegmentedControl
-                    value={draft.locationType ?? "flexible"}
-                    onChange={(locationType) => setDraft((current) => ({ ...current, locationType }))}
+                    value={activeSportDetail.locationType ?? "flexible"}
+                    onChange={(locationType) => updateActiveSportDetail({ locationType })}
                     options={[
                       { value: "outdoor", label: "Outdoor", helper: "unter freiem Himmel" },
                       { value: "indoor", label: "Indoor", helper: "wetterunabhängig" },
@@ -573,22 +739,22 @@ export default function IdeasScreen() {
 
               {activeStep === "group" ? (
                 <View style={styles.formGrid}>
-                  <LabeledInput label="Mindestanzahl" required value={draft.minimumGroupSize} onChangeText={(minimumGroupSize) => setDraft((current) => ({ ...current, minimumGroupSize: digitsOnly(minimumGroupSize) }))} placeholder="z. B. 4" keyboardType="number-pad" inputMode="numeric" error={errors.minimumGroupSize} />
-                  <LabeledInput label="Maximalanzahl" value={draft.maximumGroupSize} onChangeText={(maximumGroupSize) => setDraft((current) => ({ ...current, maximumGroupSize: digitsOnly(maximumGroupSize) }))} placeholder="z. B. 12, leer lassen wenn offen" keyboardType="number-pad" inputMode="numeric" error={errors.maximumGroupSize} />
-                  <DetailLine label="Gruppe" value={groupLabel(draft)} />
+                  <LabeledInput label="Mindestanzahl" required value={activeSportDetail.minimumGroupSize} onChangeText={(minimumGroupSize) => updateActiveSportDetail({ minimumGroupSize: digitsOnly(minimumGroupSize) })} placeholder="z. B. 4" keyboardType="number-pad" inputMode="numeric" error={errors.minimumGroupSize} />
+                  <LabeledInput label="Maximalanzahl" value={activeSportDetail.maximumGroupSize} onChangeText={(maximumGroupSize) => updateActiveSportDetail({ maximumGroupSize: digitsOnly(maximumGroupSize) })} placeholder="z. B. 12, leer lassen wenn offen" keyboardType="number-pad" inputMode="numeric" error={errors.maximumGroupSize} />
+                  <DetailLine label="Gruppe" value={groupLabel(activeSportDetail)} />
                 </View>
               ) : null}
 
               {activeStep === "weather" ? (
                 <View style={styles.formGrid}>
-                  {draft.locationType === "indoor" ? (
+                  {activeSportDetail.locationType === "indoor" ? (
                     <Text style={[styles.ideaNote, { color: theme.muted }]}>Indoor-Profile werden wetterseitig stabil bewertet. Regen und Temperatur müssen hier nicht gepflegt werden.</Text>
                   ) : (
                     <>
                       <SegmentedControl
                         label="Regen"
-                        value={draft.rainMode}
-                        onChange={(rainMode) => setDraft((current) => ({ ...current, rainMode }))}
+                        value={activeSportDetail.rainMode}
+                        onChange={(rainMode) => updateActiveSportDetail({ rainMode })}
                         options={[
                           { value: "ok", label: "Regen egal", helper: "z. B. Laufgruppe" },
                           { value: "sensitive", label: "Lieber trocken", helper: "leichter Malus" },
@@ -597,8 +763,8 @@ export default function IdeasScreen() {
                       />
                       <SegmentedControl
                         label="Temperatur"
-                        value={draft.temperatureMode}
-                        onChange={(temperatureMode) => setDraft((current) => ({ ...current, temperatureMode }))}
+                        value={activeSportDetail.temperatureMode}
+                        onChange={(temperatureMode) => updateActiveSportDetail({ temperatureMode })}
                         options={[
                           { value: "any", label: "Egal", helper: "keine Gewichtung" },
                           { value: "moderate", label: "Mild", helper: "nicht heiß, nicht kalt" },
@@ -629,39 +795,37 @@ export default function IdeasScreen() {
 
               {activeStep === "equipment" ? (
                 <View style={styles.formGrid}>
-                  <LabeledInput label="Was sollte man mitbringen?" value={draft.requiredEquipment} onChangeText={(requiredEquipment) => setDraft((current) => ({ ...current, requiredEquipment }))} placeholder="z. B. Schläger, Matte, Trinkflasche" />
+                  <LabeledInput label="Was sollte man mitbringen?" value={activeSportDetail.requiredEquipment} onChangeText={(requiredEquipment) => updateActiveSportDetail({ requiredEquipment })} placeholder="z. B. Schläger, Matte, Trinkflasche" />
                 </View>
               ) : null}
 
               {activeStep === "available" ? (
                 <View style={styles.formGrid}>
-                  <LabeledInput label="Was ist vor Ort vorhanden?" value={draft.availableEquipment} onChangeText={(availableEquipment) => setDraft((current) => ({ ...current, availableEquipment }))} placeholder="z. B. Netz, Tore, Matten, Bälle" />
+                  <LabeledInput label="Was ist vor Ort vorhanden?" value={activeSportDetail.availableEquipment} onChangeText={(availableEquipment) => updateActiveSportDetail({ availableEquipment })} placeholder="z. B. Netz, Tore, Matten, Bälle" />
                   <View style={styles.choiceGrid}>
-                    <ToggleChip label="Licht vorhanden" value={draft.lightingAvailable === true} onPress={() => setDraft((current) => ({ ...current, lightingAvailable: current.lightingAvailable === true ? null : true }))} />
+                    <ToggleChip label="Licht vorhanden" value={activeSportDetail.lightingAvailable === true} onPress={() => updateActiveSportDetail({ lightingAvailable: activeSportDetail.lightingAvailable === true ? null : true })} />
                   </View>
                 </View>
               ) : null}
 
               {activeStep === "schedule" ? (
                 <View style={styles.formGrid}>
-                  <LabeledInput label="Wann ist der Standort nutzbar?" value={draft.openingNotes} onChangeText={(openingNotes) => setDraft((current) => ({ ...current, openingNotes }))} placeholder="z. B. frei zugänglich oder Mo-Fr bis 22 Uhr" multiline />
+                  <LabeledInput label="Wann ist der Standort nutzbar?" value={activeSportDetail.openingNotes} onChangeText={(openingNotes) => updateActiveSportDetail({ openingNotes })} placeholder="z. B. frei zugänglich oder Mo-Fr bis 22 Uhr" multiline />
                   <View style={styles.choiceGrid}>
-                    <ToggleChip label="Reservierung nötig" value={draft.reservationRequired === true} onPress={() => setDraft((current) => ({ ...current, reservationRequired: current.reservationRequired === true ? null : true }))} />
+                    <ToggleChip label="Reservierung nötig" value={activeSportDetail.reservationRequired === true} onPress={() => updateActiveSportDetail({ reservationRequired: activeSportDetail.reservationRequired === true ? null : true })} />
                     <ToggleChip
                       label="Kostenpflichtig"
-                      value={costOpen}
+                      value={activeCostOpen}
                       onPress={() => {
-                        const nextOpen = !costOpen;
-                        setCostOpen(nextOpen);
-                        if (!nextOpen) setDraft((current) => ({ ...current, costNote: "" }));
+                        setActiveSportCostOpen(!activeCostOpen);
                       }}
                     />
                   </View>
-                  {costOpen ? (
+                  {activeCostOpen ? (
                     <LabeledInput
                       label="Preis pro Person"
-                      value={draft.costNote}
-                      onChangeText={(costNote) => setDraft((current) => ({ ...current, costNote }))}
+                      value={activeSportDetail.costNote}
+                      onChangeText={(costNote) => updateActiveSportDetail({ costNote })}
                       placeholder="z. B. 5 EUR Hallenanteil oder Eintritt nach Tarif"
                     />
                   ) : null}
@@ -670,22 +834,40 @@ export default function IdeasScreen() {
 
               {activeStep === "logistics" ? (
                 <View style={styles.formGrid}>
-                  <LabeledInput label="Wie kommt man gut hin?" value={draft.transitNotes} onChangeText={(transitNotes) => setDraft((current) => ({ ...current, transitNotes }))} placeholder="z. B. Buslinie 9, Radweg, wenige Parkplätze" multiline />
-                  <LabeledInput label="Welche Infrastruktur gibt es?" value={draft.amenityNotes} onChangeText={(amenityNotes) => setDraft((current) => ({ ...current, amenityNotes }))} placeholder="z. B. Toiletten, Wasserstelle, Umkleiden" multiline />
-                  <LabeledInput label="Regeln oder Sicherheit" value={draft.safetyNotes} onChangeText={(safetyNotes) => setDraft((current) => ({ ...current, safetyNotes }))} placeholder="z. B. bei Nässe rutschig, Helm empfohlen" multiline />
+                  <LabeledInput label="Wie kommt man gut hin?" value={activeSportDetail.transitNotes} onChangeText={(transitNotes) => updateActiveSportDetail({ transitNotes })} placeholder="z. B. Buslinie 9, Radweg, wenige Parkplätze" multiline />
+                  <LabeledInput label="Welche Infrastruktur gibt es?" value={activeSportDetail.amenityNotes} onChangeText={(amenityNotes) => updateActiveSportDetail({ amenityNotes })} placeholder="z. B. Toiletten, Wasserstelle, Umkleiden" multiline />
+                  <LabeledInput label="Regeln oder Sicherheit" value={activeSportDetail.safetyNotes} onChangeText={(safetyNotes) => updateActiveSportDetail({ safetyNotes })} placeholder="z. B. bei Nässe rutschig, Helm empfohlen" multiline />
                   <View style={styles.choiceGrid}>
-                    <ToggleChip label="Ansprechpartner vor Ort nötig" value={draft.apRequired} onPress={() => setDraft((current) => ({ ...current, apRequired: !current.apRequired }))} />
+                    <ToggleChip label="Ansprechpartner vor Ort nötig" value={activeSportDetail.apRequired} onPress={() => updateActiveSportDetail({ apRequired: !activeSportDetail.apRequired })} />
                   </View>
                 </View>
               ) : null}
 
               {activeStep === "review" ? (
                 <View style={styles.formGrid}>
-                  <DetailLine label="Sportart" value={ideaNameFromDraft(draft, sports) || "Noch offen"} />
+                  <DetailLine label="Sportarten" value={ideaNameFromDraft(draft, sports) || "Noch offen"} />
                   <DetailLine label="Profil" value={buildProfileName(draft, sports)} />
                   <DetailLine label="Standort" value={draftLocationLabel(draft)} />
-                  <DetailLine label="Gruppe" value={groupLabel(draft)} />
-                  <DetailLine label="Wetter" value={weatherSummary(draft)} />
+                  {selectedSportIds.length > 1 ? (
+                    <View style={styles.reviewSportList}>
+                      {selectedSportIds.map((sportId) => {
+                        const detail = sportDetailForDraft(draft, sportId);
+                        const sport = sports.find((entry) => entry.id === sportId);
+                        return (
+                          <View key={sportId} style={[styles.reviewSportCard, { backgroundColor: theme.softSurface }]}>
+                            <Text style={[styles.reviewSportTitle, { color: theme.text }]}>{sport?.name ?? "Sportart"}</Text>
+                            <DetailLine label="Gruppe" value={groupLabel(detail)} />
+                            <DetailLine label="Wetter" value={weatherSummary(detail)} />
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <>
+                      <DetailLine label="Gruppe" value={groupLabel(activeSportDetail)} />
+                      <DetailLine label="Wetter" value={weatherSummary(activeSportDetail)} />
+                    </>
+                  )}
                   <LabeledInput label="Kurzbeschreibung" value={draft.note} onChangeText={(note) => setDraft((current) => ({ ...current, note }))} placeholder="Was muss man wissen?" multiline />
                 </View>
               ) : null}
@@ -799,6 +981,18 @@ function ToggleChip({ label, value, onPress }: { label: string; value: boolean; 
   );
 }
 
+function WizardQuestion({ step, sportName }: { step: IdeaFlowStep; sportName: string | null }) {
+  const { theme } = useTheme();
+  const question = stepQuestionParts(step, sportName);
+  return (
+    <Text style={[styles.wizardQuestion, { color: theme.text }]}>
+      {question.prefix}
+      {question.highlight ? <Text style={{ color: theme.accent }}>{question.highlight}</Text> : null}
+      {question.suffix}
+    </Text>
+  );
+}
+
 function DraftIconButton({ onPress }: { onPress: () => void }) {
   const { theme } = useTheme();
   return (
@@ -896,6 +1090,22 @@ function stepQuestion(step: IdeaFlowStep): string {
   return "Passt alles so?";
 }
 
+function stepQuestionParts(step: IdeaFlowStep, sportName: string | null): { prefix: string; highlight?: string; suffix: string } {
+  if (!sportName) return { prefix: stepQuestion(step), suffix: "" };
+  if (step === "type") return { prefix: "Welche Art von Profil ist ", highlight: sportName, suffix: "?" };
+  if (step === "group") return { prefix: "Wie viele Personen passen zu ", highlight: sportName, suffix: "?" };
+  if (step === "weather") return { prefix: "Welches Wetter ist für ", highlight: sportName, suffix: " relevant?" };
+  if (step === "equipment") return { prefix: "Was sollte man für ", highlight: sportName, suffix: " mitbringen?" };
+  if (step === "available") return { prefix: "Was ist für ", highlight: sportName, suffix: " vor Ort vorhanden?" };
+  if (step === "schedule") return { prefix: "Wann kann man ", highlight: sportName, suffix: " dort nutzen?" };
+  if (step === "logistics") return { prefix: "Wie kommt man zu ", highlight: sportName, suffix: " hin?" };
+  return { prefix: stepQuestion(step), suffix: "" };
+}
+
+function isSportSpecificStep(step: IdeaFlowStep): boolean {
+  return ["type", "group", "weather", "equipment", "available", "schedule", "logistics"].includes(step);
+}
+
 function persistedDraftStep(step: IdeaFlowStep): SportIdeaDraftStep {
   if (step === "location" || step === "locationName") return "location";
   if (step === "review") return "review";
@@ -968,7 +1178,7 @@ function IdeaDetails({ idea }: { idea: SportIdeaWithCreator }) {
   return (
     <View style={styles.formGrid}>
       <DetailLine label="Ersteller" value={idea.creatorName} />
-      <DetailLine label="Sportart" value={idea.sportName} />
+      <DetailLine label="Sportarten" value={ideaSportNames(idea)} />
       <DetailLine label="Profil" value={idea.profile_name} />
       <DetailLine label="Standort" value={ideaLocationLabel(idea)} />
       <DetailLine label="Gruppe" value={idea.minimum_group_size ? `${idea.minimum_group_size}${idea.maximum_group_size ? ` bis ${idea.maximum_group_size}` : "+"} Personen` : null} />
@@ -981,11 +1191,34 @@ function IdeaDetails({ idea }: { idea: SportIdeaWithCreator }) {
 
 function ideaToDraft(idea: Row<"sport_ideas"> & Partial<SportIdeaWithCreator>): IdeaDraft {
   const weather = weatherRules(idea.weather_rules);
+  const sportIds = ideaSportIds(idea);
+  const sportDetail: SportSpecificDraft = {
+    locationType: idea.location_type ?? null,
+    minimumGroupSize: idea.minimum_group_size ? String(idea.minimum_group_size) : "",
+    maximumGroupSize: idea.maximum_group_size ? String(idea.maximum_group_size) : "",
+    requiredEquipment: (idea.required_equipment ?? []).join(", "),
+    availableEquipment: (idea.available_equipment ?? []).join(", "),
+    costNote: idea.cost_note ?? "",
+    openingNotes: idea.opening_notes ?? "",
+    transitNotes: idea.transit_notes ?? "",
+    amenityNotes: idea.amenity_notes ?? "",
+    reservationRequired: idea.reservation_required,
+    lightingAvailable: idea.lighting_available,
+    safetyNotes: idea.safety_notes ?? "",
+    locationRules: idea.location_rules ?? "",
+    apRequired: idea.ap_required ?? false,
+    rainMode: weather.requiresDry ? "dry" : weather.rainSensitive ? "sensitive" : "ok",
+    temperatureMode: weather.heatSensitive && weather.coldSensitive ? "moderate" : weather.coldSensitive ? "warm" : weather.heatSensitive ? "cool" : "any",
+    thunderstormUnsafe: weather.thunderstormUnsafe ?? true,
+  };
   return {
     ideaId: idea.id,
     name: idea.name ?? "",
-    requestedSportName: idea.sport_id ? "" : idea.name ?? "",
-    sportId: idea.sport_id ?? "",
+    requestedSportName: sportIds.length > 0 ? "" : idea.name ?? "",
+    sportId: sportIds[0] ?? "",
+    sportIds,
+    activeSportId: sportIds[0] ?? null,
+    sportDetails: Object.fromEntries(sportIds.map((sportId) => [sportId, sportDetail])),
     profileName: idea.profile_name ?? idea.name ?? "",
     note: idea.note ?? "",
     locationMode: idea.location_mode ?? "fixed",
@@ -1017,14 +1250,17 @@ function ideaToDraft(idea: Row<"sport_ideas"> & Partial<SportIdeaWithCreator>): 
   };
 }
 
-function draftToInput(draft: IdeaDraft, userId: string, draftStep: SportIdeaDraftStep, sports: Row<"sports">[]) {
-  const name = ideaNameFromDraft(draft, sports);
-  const profileName = buildProfileName(draft, sports);
+function draftToInput(draft: IdeaDraft, userId: string, draftStep: SportIdeaDraftStep, sports: Row<"sports">[], sportIdOverride?: string | null) {
+  const sportId = sportIdOverride ?? draft.sportId;
+  const detail = sportDetailForDraft(draft, sportId);
+  const name = ideaNameFromDraft(draft, sports, sportIdOverride);
+  const profileName = buildProfileName(draft, sports, sportIdOverride);
   return {
     ideaId: draft.ideaId,
     userId: draft.suggestedBy ?? userId,
     name,
-    sportId: draft.sportId,
+    sportId,
+    sportIds: sportId ? [sportId] : draft.sportIds,
     profileName,
     note: draft.note,
     locationMode: draft.locationMode,
@@ -1035,37 +1271,52 @@ function draftToInput(draft: IdeaDraft, userId: string, draftStep: SportIdeaDraf
     latitude: draft.latitude,
     longitude: draft.longitude,
     preferredTime: draft.preferredTime,
-    locationType: draft.locationType,
-    minimumGroupSize: parseOptionalInteger(draft.minimumGroupSize),
-    maximumGroupSize: parseOptionalInteger(draft.maximumGroupSize),
-    requiredEquipment: parseCsv(draft.requiredEquipment),
-    availableEquipment: parseCsv(draft.availableEquipment),
-    costNote: draft.costNote,
-    openingNotes: draft.openingNotes,
-    transitNotes: draft.transitNotes,
-    amenityNotes: draft.amenityNotes,
-    reservationRequired: draft.reservationRequired,
-    lightingAvailable: draft.lightingAvailable,
-    safetyNotes: draft.safetyNotes,
-    locationRules: draft.locationRules,
-    apRequired: draft.apRequired,
-    weatherRules: weatherRulesFromDraft(draft),
+    locationType: detail.locationType,
+    minimumGroupSize: parseOptionalInteger(detail.minimumGroupSize),
+    maximumGroupSize: parseOptionalInteger(detail.maximumGroupSize),
+    requiredEquipment: parseCsv(detail.requiredEquipment),
+    availableEquipment: parseCsv(detail.availableEquipment),
+    costNote: detail.costNote,
+    openingNotes: detail.openingNotes,
+    transitNotes: detail.transitNotes,
+    amenityNotes: detail.amenityNotes,
+    reservationRequired: detail.reservationRequired,
+    lightingAvailable: detail.lightingAvailable,
+    safetyNotes: detail.safetyNotes,
+    locationRules: detail.locationRules,
+    apRequired: detail.apRequired,
+    weatherRules: weatherRulesFromDetail(detail),
     draftStep,
   };
 }
 
 function requiredErrors(draft: IdeaDraft): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (!draft.sportId && !draft.requestedSportName.trim()) errors.sport = "Wähle eine Sportart aus oder frage eine neue an.";
+  const selectedIds = selectedSportIdsFromDraft(draft);
+  if (selectedIds.length === 0 && !draft.requestedSportName.trim()) errors.sport = "Wähle mindestens eine Sportart aus oder frage eine neue an.";
   if (draft.locationMode === "fixed" && !draft.location.trim()) errors.location = "Kurzname des Standorts fehlt.";
   if (draft.locationMode === "fixed" && (!Number.isFinite(draft.latitude) || !Number.isFinite(draft.longitude))) errors.coordinates = "Bitte markiere den Standort in der Karte.";
   if (draft.locationMode === "flexible" && !draft.locationCity.trim() && !draft.postalCode.trim()) errors.locationCity = "Stadt oder PLZ fehlt.";
-  if (!draft.locationType) errors.locationType = "Profilart fehlt.";
-  const min = parseOptionalInteger(draft.minimumGroupSize);
-  const max = parseOptionalInteger(draft.maximumGroupSize);
-  if (!min || min < 1) errors.minimumGroupSize = "Mindestanzahl fehlt.";
-  if (min && max && max < min) errors.maximumGroupSize = "Maximalanzahl muss größer sein.";
+  const detailsToValidate = selectedIds.length > 0 ? selectedIds.map((sportId) => sportDetailForDraft(draft, sportId)) : [sportDetailForDraft(draft, null)];
+  for (const detail of detailsToValidate) {
+    if (!detail.locationType) errors.locationType = "Profilart fehlt.";
+    const min = parseOptionalInteger(detail.minimumGroupSize);
+    const max = parseOptionalInteger(detail.maximumGroupSize);
+    if (!min || min < 1) errors.minimumGroupSize = "Mindestanzahl fehlt.";
+    if (min && max && max < min) errors.maximumGroupSize = "Maximalanzahl muss größer sein.";
+    if (errors.locationType || errors.minimumGroupSize || errors.maximumGroupSize) break;
+  }
   return errors;
+}
+
+function firstMissingSportId(draft: IdeaDraft): string | null {
+  for (const sportId of selectedSportIdsFromDraft(draft)) {
+    const detail = sportDetailForDraft(draft, sportId);
+    const min = parseOptionalInteger(detail.minimumGroupSize);
+    const max = parseOptionalInteger(detail.maximumGroupSize);
+    if (!detail.locationType || !min || min < 1 || (min && max && max < min)) return sportId;
+  }
+  return null;
 }
 
 function firstMissingStep(errors: Record<string, string>, draft: IdeaDraft): IdeaFlowStep {
@@ -1078,18 +1329,18 @@ function firstMissingStep(errors: Record<string, string>, draft: IdeaDraft): Ide
   return "review";
 }
 
-function weatherRulesFromDraft(draft: IdeaDraft): Json {
-  if (draft.locationType === "indoor") {
+function weatherRulesFromDetail(detail: SportSpecificDraft): Json {
+  if (detail.locationType === "indoor") {
     return { thunderstormUnsafe: false };
   }
   return {
-    requiresDry: draft.rainMode === "dry",
-    rainSensitive: draft.rainMode === "sensitive" || draft.rainMode === "dry",
-    thunderstormUnsafe: draft.thunderstormUnsafe,
-    heatSensitive: draft.temperatureMode === "moderate" || draft.temperatureMode === "cool",
-    coldSensitive: draft.temperatureMode === "moderate" || draft.temperatureMode === "warm",
-    prefersWarm: draft.temperatureMode === "warm",
-    prefersCold: draft.temperatureMode === "cool",
+    requiresDry: detail.rainMode === "dry",
+    rainSensitive: detail.rainMode === "sensitive" || detail.rainMode === "dry",
+    thunderstormUnsafe: detail.thunderstormUnsafe,
+    heatSensitive: detail.temperatureMode === "moderate" || detail.temperatureMode === "cool",
+    coldSensitive: detail.temperatureMode === "moderate" || detail.temperatureMode === "warm",
+    prefersWarm: detail.temperatureMode === "warm",
+    prefersCold: detail.temperatureMode === "cool",
   };
 }
 
@@ -1106,6 +1357,15 @@ function weatherRulesForProfile(value: Json) {
     coldSensitive: Boolean(rules.coldSensitive),
     thunderstormUnsafe: rules.thunderstormUnsafe !== false,
   };
+}
+
+function ideaSportIds(idea: Pick<Row<"sport_ideas">, "sport_id" | "sport_ids">): string[] {
+  return [...new Set([...(idea.sport_ids ?? []), ...(idea.sport_id ? [idea.sport_id] : [])].filter(Boolean))];
+}
+
+function ideaSportNames(idea: SportIdeaWithCreator): string | null {
+  if (idea.sportNames.length > 0) return idea.sportNames.join(", ");
+  return idea.sportName;
 }
 
 function asFlowStep(value: string): IdeaFlowStep {
@@ -1127,16 +1387,60 @@ function digitsOnly(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function selectedSportIdsFromDraft(draft: IdeaDraft): string[] {
+  const ids = draft.sportIds.length > 0 ? draft.sportIds : draft.sportId ? [draft.sportId] : [];
+  return [...new Set(ids.filter(Boolean))];
+}
+
+function sportDetailForDraft(draft: IdeaDraft, sportId: string | null | undefined): SportSpecificDraft {
+  if (sportId && draft.sportDetails[sportId]) return draft.sportDetails[sportId];
+  return {
+    locationType: draft.locationType,
+    minimumGroupSize: draft.minimumGroupSize,
+    maximumGroupSize: draft.maximumGroupSize,
+    requiredEquipment: draft.requiredEquipment,
+    availableEquipment: draft.availableEquipment,
+    costNote: draft.costNote,
+    openingNotes: draft.openingNotes,
+    transitNotes: draft.transitNotes,
+    amenityNotes: draft.amenityNotes,
+    reservationRequired: draft.reservationRequired,
+    lightingAvailable: draft.lightingAvailable,
+    safetyNotes: draft.safetyNotes,
+    locationRules: draft.locationRules,
+    apRequired: draft.apRequired,
+    rainMode: draft.rainMode,
+    temperatureMode: draft.temperatureMode,
+    thunderstormUnsafe: draft.thunderstormUnsafe,
+  };
+}
+
 function selectedSportName(sportId: string | null, sports: Row<"sports">[]): string | null {
   return sports.find((sport) => sport.id === sportId)?.name ?? null;
 }
 
-function ideaNameFromDraft(draft: IdeaDraft, sports: Row<"sports">[]): string {
-  return selectedSportName(draft.sportId, sports) ?? (draft.requestedSportName.trim() || draft.name.trim());
+function selectedSportNameList(sportIds: string[], sports: Row<"sports">[]): string[] {
+  return sportIds.map((sportId) => selectedSportName(sportId, sports)).filter((name): name is string => Boolean(name));
 }
 
-function buildProfileName(draft: IdeaDraft, sports: Row<"sports">[]): string {
-  const sportName = ideaNameFromDraft(draft, sports) || "Sportart";
+function selectedSportNames(sportIds: string[], sports: Row<"sports">[]): string | null {
+  const names = selectedSportNameList(sportIds, sports);
+  return names.length > 0 ? names.join(", ") : null;
+}
+
+function ideaNameFromDraft(draft: IdeaDraft, sports: Row<"sports">[], sportIdOverride?: string | null): string {
+  if (sportIdOverride !== undefined) {
+    return selectedSportName(sportIdOverride, sports) ?? (draft.requestedSportName.trim() || draft.name.trim());
+  }
+  const selectedNames = selectedSportIdsFromDraft(draft)
+    .map((sportId) => selectedSportName(sportId, sports))
+    .filter((name): name is string => Boolean(name));
+  if (selectedNames.length > 1) return selectedNames.join(", ");
+  return selectedNames[0] ?? (draft.requestedSportName.trim() || draft.name.trim());
+}
+
+function buildProfileName(draft: IdeaDraft, sports: Row<"sports">[], sportIdOverride?: string | null): string {
+  const sportName = ideaNameFromDraft(draft, sports, sportIdOverride) || "Sportart";
   const location = draftLocationLabel(draft);
   if (!location || location === "Noch offen") return sportName;
   return `${sportName}: ${location}`;
@@ -1152,14 +1456,14 @@ function ideaLocationLabel(idea: SportIdeaWithCreator): string {
   return idea.location ?? idea.location_city ?? "Standort offen";
 }
 
-function groupLabel(draft: IdeaDraft): string {
+function groupLabel(draft: Pick<SportSpecificDraft, "minimumGroupSize" | "maximumGroupSize">): string {
   const min = parseOptionalInteger(draft.minimumGroupSize);
   const max = parseOptionalInteger(draft.maximumGroupSize);
   if (!min) return "Noch offen";
   return `${min}${max ? ` bis ${max}` : "+"} Personen`;
 }
 
-function weatherSummary(draft: IdeaDraft): string {
+function weatherSummary(draft: Pick<SportSpecificDraft, "locationType" | "rainMode" | "temperatureMode">): string {
   if (draft.locationType === "indoor") return "Indoor, wetterstabil";
   const rain = draft.rainMode === "dry" ? "nur trocken" : draft.rainMode === "sensitive" ? "Regen ungünstig" : "Regen okay";
   const temp = draft.temperatureMode === "moderate" ? "milde Temperaturen" : draft.temperatureMode === "warm" ? "soll warm sein" : draft.temperatureMode === "cool" ? "soll kalt sein" : "Temperatur flexibel";
@@ -1179,7 +1483,7 @@ const styles = StyleSheet.create({
   content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "900" },
   success: { color: "#5eead4", fontSize: 14, fontWeight: "900" },
-  modalRoot: { flex: 1, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 18, backgroundColor: "rgba(0,0,0,0.68)" },
+  modalRoot: { flex: 1, justifyContent: "center", paddingHorizontal: 10, paddingVertical: 12, backgroundColor: "rgba(0,0,0,0.68)" },
   modalSheet: {
     alignSelf: "center",
     borderRadius: 28,
@@ -1193,7 +1497,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.32,
     shadowRadius: 30,
   },
-  modalContent: { gap: 12, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 28 },
+  modalContent: { gap: 12, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 28 },
   card: { gap: 14, borderRadius: 24, borderWidth: 1, padding: 14 },
   createCard: { alignItems: "center", borderRadius: 24, borderWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", padding: 14 },
   formSheet: { position: "relative", shadowColor: "#000000", shadowOffset: { width: 0, height: 18 }, shadowOpacity: 0.18, shadowRadius: 24 },
@@ -1215,9 +1519,18 @@ const styles = StyleSheet.create({
   stepChip: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8 },
   stepText: { fontSize: 12, fontWeight: "900" },
   choiceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  choiceChip: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8 },
+  choiceChip: { borderRadius: 999, flexGrow: 1, minWidth: 96, paddingHorizontal: 11, paddingVertical: 8 },
+  sportChoiceChip: { alignItems: "center", flexDirection: "row", gap: 7 },
   plusChoice: { minWidth: 42, alignItems: "center" },
   choiceText: { fontSize: 12, fontWeight: "900" },
+  subflowPanel: { borderRadius: 18, gap: 8, padding: 10 },
+  subflowKicker: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
+  subflowChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  subflowChip: { alignItems: "center", borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 7, paddingHorizontal: 10, paddingVertical: 7 },
+  subflowChipText: { fontSize: 12, fontWeight: "900" },
+  reviewSportList: { gap: 8 },
+  reviewSportCard: { borderRadius: 16, gap: 8, padding: 10 },
+  reviewSportTitle: { fontSize: 14, fontWeight: "900" },
   actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hiddenActionRow: { display: "none" },
   wizardActions: { alignItems: "center", gap: 10 },

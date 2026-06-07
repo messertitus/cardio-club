@@ -644,6 +644,7 @@ export type Database = {
           location: string | null;
           preferred_time: string | null;
           sport_id: string | null;
+          sport_ids: string[];
           profile_name: string | null;
           location_mode: "fixed" | "flexible";
           postal_code: string | null;
@@ -682,6 +683,7 @@ export type Database = {
           location?: string | null;
           preferred_time?: string | null;
           sport_id?: string | null;
+          sport_ids?: string[];
           profile_name?: string | null;
           location_mode?: "fixed" | "flexible";
           postal_code?: string | null;
@@ -719,6 +721,7 @@ export type Database = {
           location?: string | null;
           preferred_time?: string | null;
           sport_id?: string | null;
+          sport_ids?: string[];
           profile_name?: string | null;
           location_mode?: "fixed" | "flexible";
           postal_code?: string | null;

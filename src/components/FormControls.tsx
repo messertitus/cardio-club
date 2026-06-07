@@ -19,6 +19,20 @@ type LocationSearchResult = Coordinates & { label: string };
 const DEFAULT_MAP_CENTER: Coordinates = { latitude: 47.6618, longitude: 9.1752 };
 const MAP_ZOOM = 16;
 const TILE_SIZE = 256;
+const LOCAL_LOCATION_ALIASES: Array<LocationSearchResult & { aliases: string[] }> = [
+  {
+    label: "Strandbad Horn / Hoernle, Eichhornstrasse 100, Konstanz",
+    latitude: 47.66606,
+    longitude: 9.21502,
+    aliases: ["strandbadhorn", "strandbadhoernle", "hoernle", "hornkonstanz"],
+  },
+  {
+    label: "Herose-Park, Konstanz",
+    latitude: 47.66964,
+    longitude: 9.1737,
+    aliases: ["herosepark", "heroseepark", "herospark"],
+  },
+];
 
 export function LabeledInput({
   label,
@@ -150,16 +164,18 @@ export function MapLocationPicker({
     const query = (searchText || location).trim();
     if (!query) return;
     setSearching(true);
+    setMapNotice(null);
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}`);
-      const payload = (await response.json()) as Array<{ display_name?: string; lat?: string; lon?: string }>;
-      setResults(
-        payload
-          .map((entry) => ({ label: entry.display_name ?? query, latitude: Number(entry.lat), longitude: Number(entry.lon) }))
-          .filter((entry) => Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)),
-      );
+      const found = await searchLocationVariants(query);
+      setResults(found);
+      if (found.length === 0) {
+        setMapNotice("Keine Treffer gefunden. Versuche einen genaueren Namen, Stadtteil oder die PLZ.");
+      } else {
+        setMapNotice(`${found.length} Treffer gefunden. Wähle den passenden Standort aus.`);
+      }
     } catch {
       setResults([]);
+      setMapNotice("Ortssuche gerade nicht erreichbar. Du kannst den Standort direkt in der Karte markieren.");
     } finally {
       setSearching(false);
     }
@@ -265,9 +281,82 @@ export function MapLocationPicker({
           Markiert: {selectedCoordinates.latitude.toFixed(5)}, {selectedCoordinates.longitude.toFixed(5)}
         </Text>
       ) : null}
-      {mapNotice ? <Text style={[styles.helper, { color: mapNotice.startsWith("Koordinaten") || mapNotice.startsWith("Treffer") ? theme.accent : "#ffb5a8" }]}>{mapNotice}</Text> : null}
+      {mapNotice ? <Text style={[styles.helper, { color: mapNotice.startsWith("Koordinaten") || mapNotice.includes("Treffer gefunden") ? theme.accent : "#ffb5a8" }]}>{mapNotice}</Text> : null}
     </View>
   );
+}
+
+async function searchLocationVariants(query: string): Promise<LocationSearchResult[]> {
+  const variants = queryVariants(query);
+  const seen = new Set<string>();
+  const results: LocationSearchResult[] = localLocationMatches(query);
+
+  for (const result of results) {
+    seen.add(`${result.latitude.toFixed(5)}:${result.longitude.toFixed(5)}`);
+  }
+
+  for (const variant of variants) {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(variant)}`);
+    if (!response.ok) continue;
+    const payload = (await response.json()) as Array<{ display_name?: string; lat?: string; lon?: string }>;
+    for (const entry of payload) {
+      const result = { label: entry.display_name ?? variant, latitude: Number(entry.lat), longitude: Number(entry.lon) };
+      const key = `${result.latitude.toFixed(5)}:${result.longitude.toFixed(5)}`;
+      if (!Number.isFinite(result.latitude) || !Number.isFinite(result.longitude) || seen.has(key)) continue;
+      seen.add(key);
+      results.push(result);
+    }
+    if (results.length > 0) break;
+  }
+
+  return results.slice(0, 5);
+}
+
+function queryVariants(query: string): string[] {
+  const normalized = query.trim();
+  const aliases = localSearchAliases(normalized);
+  const ascii = normalized
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/Ä/g, "Ae")
+    .replace(/Ö/g, "Oe")
+    .replace(/Ü/g, "Ue")
+    .replace(/ß/g, "ss");
+  const base = [normalized, ascii, ...aliases].filter(Boolean);
+  const withLocalContext = base.flatMap((entry) => [entry, `${entry} Konstanz`, `${entry} Baden-Württemberg`, `${entry} Deutschland`]);
+  return [...new Set(withLocalContext)];
+}
+
+function localLocationMatches(query: string): LocationSearchResult[] {
+  const key = compactLocationKey(query);
+  if (!key) return [];
+
+  return LOCAL_LOCATION_ALIASES.filter((entry) => entry.aliases.some((alias) => key.includes(alias) || alias.includes(key))).map(
+    ({ aliases: _aliases, ...result }) => result,
+  );
+}
+
+function localSearchAliases(query: string): string[] {
+  const key = compactLocationKey(query);
+  if (!key) return [];
+
+  return LOCAL_LOCATION_ALIASES.filter((entry) => entry.aliases.some((alias) => key.includes(alias) || alias.includes(key))).flatMap((entry) => [
+    entry.label,
+    `${entry.label} Konstanz`,
+  ]);
+}
+
+function compactLocationKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/é/g, "e")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function MapPickerModal({
