@@ -15,6 +15,7 @@ import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import {
   isCurrentUserAdmin,
+  linkSportIdeaToSports,
   listSportIdeas,
   listSportProfileSportLinks,
   listSportProfiles,
@@ -22,6 +23,7 @@ import {
   reviewSportIdea,
   saveSportIdeaDraft,
   submitSportIdea,
+  upsertMccSport,
   upsertSportProfile,
   type Json,
   type Row,
@@ -313,20 +315,68 @@ export default function IdeasScreen() {
   async function reviewIdea(idea: SportIdeaWithCreator, status: "approved" | "rejected") {
     if (!user) return;
     clearMessages();
+    let ideaForReview = idea;
     if (status === "approved") {
-      const profileResult = await createProfileFromIdea(idea);
+      const sportResult = await ensureIdeaHasAbstractSport(idea);
+      if (sportResult.error) {
+        setMessage(sportResult.error);
+        return;
+      }
+      ideaForReview = sportResult.idea;
+      const profileResult = await createProfileFromIdea(ideaForReview);
       if (profileResult) {
         setMessage(profileResult);
         return;
       }
     }
-    const result = await reviewSportIdea(supabase, { ideaId: idea.id, status, reviewedBy: user.id, reviewNote: idea.review_note });
+    const result = await reviewSportIdea(supabase, { ideaId: ideaForReview.id, status, reviewedBy: user.id, reviewNote: ideaForReview.review_note });
     if (result.error) {
       setMessage(result.error.message);
       return;
     }
     setSuccess(status === "approved" ? "Idee freigegeben." : "Idee abgelehnt.");
     await load();
+  }
+
+  async function ensureIdeaHasAbstractSport(idea: SportIdeaWithCreator): Promise<{ idea: SportIdeaWithCreator; error: string | null }> {
+    const existingSportIds = ideaSportIds(idea);
+    if (existingSportIds.length > 0) return { idea, error: null };
+
+    const requestedName = (idea.name ?? idea.profile_name ?? "").trim();
+    if (!requestedName) return { idea, error: "Bitte lege vor der Freigabe eine abstrakte Sportart für diese Idee an." };
+
+    const existingSport = sports.find((sport) => sport.name.trim().toLowerCase() === requestedName.toLowerCase());
+    const sportResult = existingSport
+      ? { data: existingSport, error: null }
+      : await upsertMccSport(supabase, {
+          sportId: null,
+          name: requestedName,
+          description: "Aus einer Standortidee angefragt.",
+          category: "unbekannt",
+          iconName: "",
+          intensityLevel: "medium",
+          combinableTags: [],
+          isActive: true,
+        });
+
+    if (sportResult.error || !sportResult.data) {
+      return { idea, error: sportResult.error?.message ?? "Abstrakte Sportart konnte nicht angelegt werden." };
+    }
+
+    const linkedIdeaResult = await linkSportIdeaToSports(supabase, { ideaId: idea.id, sportIds: [sportResult.data.id] });
+    if (linkedIdeaResult.error || !linkedIdeaResult.data) {
+      return { idea, error: linkedIdeaResult.error?.message ?? "Sportidee konnte nicht mit der Sportart verknüpft werden." };
+    }
+
+    return {
+      idea: {
+        ...idea,
+        ...linkedIdeaResult.data,
+        sportName: sportResult.data.name,
+        sportNames: [sportResult.data.name],
+      },
+      error: null,
+    };
   }
 
   async function createProfileFromIdea(idea: SportIdeaWithCreator): Promise<string | null> {

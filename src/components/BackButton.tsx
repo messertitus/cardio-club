@@ -9,10 +9,10 @@ export function BackButton({ onPress }: { onPress?: () => void }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Zurück"
-      style={({ pressed }) => [styles.button, { borderColor: theme.border, backgroundColor: theme.softSurface }, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.button, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }, pressed && styles.pressed]}
       onPress={onPress ?? (() => router.back())}
     >
-      <Text style={[styles.arrow, { color: theme.text }]}>‹</Text>
+      <Text style={[styles.arrow, { color: theme.mcc.textPrimary }]}>‹</Text>
     </Pressable>
   );
 }

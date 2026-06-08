@@ -1,7 +1,8 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text } from "react-native";
-import { Card, EmptyState, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
+import { EmptyState, MccBadge, MccBody, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
+import { ErrorText, LoadingState } from "../../../src/components/ui";
+import { formatCardioSunday } from "../../../src/services/date";
 import { supabase } from "../../../src/lib/supabase";
 import { listEventHistory, type Row } from "../../../src/services";
 
@@ -24,19 +25,19 @@ export default function EventHistoryScreen() {
   }, [clubId]);
 
   return (
-    <Screen title="Event-Verlauf" subtitle="Ein kurzer Blick darauf, was zuletzt gewählt wurde.">
+    <MccScreen title="Event-Verlauf" kicker="History" subtitle="Ein kurzer Blick darauf, was zuletzt gewaehlt wurde.">
       <ErrorText>{error}</ErrorText>
       {loading ? <LoadingState /> : null}
       {!loading && events.length === 0 ? <EmptyState title="Noch kein Verlauf" /> : null}
       {events.map((event) => (
-        <Card key={event.id}>
-          <Pill>{event.status}</Pill>
-          <Text style={ui.cardTitle}>Woche ab {event.week_start_date}</Text>
-          <Text style={ui.body}>Typ: {eventTypeLabel(event.decision_type)}</Text>
-          {event.decision_reason ? <Text style={ui.body}>{event.decision_reason}</Text> : null}
-        </Card>
+        <MccCard key={event.id}>
+          <MccBadge icon="calendar-check-outline">{event.status}</MccBadge>
+          <MccCardTitle>Cardiotag am {formatCardioSunday(event.starts_at ?? event.week_start_date)}</MccCardTitle>
+          <MccBody>Typ: {eventTypeLabel(event.decision_type)}</MccBody>
+          {event.decision_reason ? <MccBody muted>{event.decision_reason}</MccBody> : null}
+        </MccCard>
       ))}
-    </Screen>
+    </MccScreen>
   );
 }
 

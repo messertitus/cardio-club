@@ -1,9 +1,20 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { SearchField } from "../../../src/components/FormControls";
+import {
+  EmptyState,
+  MccBadge,
+  MccBody,
+  MccButton,
+  MccCard,
+  MccCardTitle,
+  MccScreen,
+  NoGoNotice,
+  SportVoteCard,
+} from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
-import { Button, Card, EmptyState, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
+import { ErrorText, LoadingState } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
 import { supabase } from "../../../src/lib/supabase";
@@ -208,92 +219,101 @@ export default function VoteOnSportsScreen() {
   }
 
   return (
-    <Screen title="Abstimmen" subtitle="Du kannst bis zu drei Sportarten wählen: erste Wahl zählt am stärksten, dritte Wahl etwas weniger.">
+    <MccScreen title="Abstimmen" kicker="Voting" subtitle="Bis zu drei Sportarten, klare Ranks und vorsichtige No-Go-Hinweise.">
       <ErrorText>{error}</ErrorText>
       {loading ? <LoadingState /> : null}
 
-      <Card>
-        <Pill>Schritt 1</Pill>
-        <Text style={ui.cardTitle}>Teilnahme zuerst</Text>
-        <Text style={ui.body}>Nur Dabei und Vielleicht fließen in die Entscheidung ein. Nicht dabei wird ignoriert.</Text>
-        <Text style={ui.body}>Dein Status: {attendanceLabel(myAttendance?.status)}</Text>
-        <Button label="Ich bin dabei" variant={myAttendance?.status === "going" ? "primary" : "secondary"} onPress={() => chooseAttendance("going")} />
-        <Button label="Vielleicht" variant={myAttendance?.status === "maybe" ? "primary" : "secondary"} onPress={() => chooseAttendance("maybe")} />
-        <Button label="Nicht dabei" variant={myAttendance?.status === "not_going" ? "primary" : "ghost"} onPress={() => chooseAttendance("not_going")} />
-      </Card>
+      <MccCard accent>
+        <MccBadge icon="account-check-outline">Schritt 1</MccBadge>
+        <MccCardTitle>Teilnahme zuerst</MccCardTitle>
+        <MccBody muted>Nur Dabei und Vielleicht fliessen in die Entscheidung ein. Nicht dabei wird ignoriert.</MccBody>
+        <MccBadge tone="neutral">Dein Status: {attendanceLabel(myAttendance?.status)}</MccBadge>
+        <MccButton label="Ich bin dabei" variant={myAttendance?.status === "going" ? "primary" : "secondary"} onPress={() => chooseAttendance("going")} />
+        <MccButton label="Vielleicht" variant={myAttendance?.status === "maybe" ? "primary" : "secondary"} onPress={() => chooseAttendance("maybe")} />
+        <MccButton label="Nicht dabei" variant={myAttendance?.status === "not_going" ? "primary" : "ghost"} onPress={() => chooseAttendance("not_going")} />
+      </MccCard>
 
       {previewPresentation ? (
-        <Card>
-          <Pill>Vorschau</Pill>
-          <Text style={ui.cardTitle}>Aktuelle Entscheidung: {previewPresentation.selectedSportName}</Text>
-          {previewPresentation.secondarySportName ? <Text style={ui.body}>+ {previewPresentation.secondarySportName}</Text> : null}
-          <Text style={ui.body}>{previewPresentation.simpleExplanation}</Text>
-          <Button label="Entscheidung anzeigen" variant="secondary" onPress={() => router.push(`/events/${eventId}/decision`)} />
-        </Card>
+        <MccCard>
+          <MccBadge icon="chart-timeline-variant">Live-Vorschau</MccBadge>
+          <MccCardTitle>Aktuelle Entscheidung: {previewPresentation.selectedSportName}</MccCardTitle>
+          {previewPresentation.secondarySportName ? <MccBody>+ {previewPresentation.secondarySportName}</MccBody> : null}
+          <MccBody muted>{previewPresentation.simpleExplanation}</MccBody>
+          <MccButton label="Entscheidung anzeigen" icon="arrow-right" variant="secondary" onPress={() => router.push(`/events/${eventId}/decision`)} />
+        </MccCard>
       ) : null}
 
-      <Card>
-        <Text style={ui.cardTitle}>Deine Stimmen</Text>
-        <Text style={ui.body}>Maximal drei Stimmen pro Woche. Dieselbe Sportart kann nicht doppelt gewählt werden.</Text>
-        <Text style={ui.body}>Ein No-Go betrifft vor allem deine Zuordnung. Deine Präferenz kann trotzdem sichtbar bleiben.</Text>
-        {!canVote ? <Text style={ui.body}>Abstimmen ist gesperrt, bis du Dabei oder Vielleicht gewählt hast.</Text> : null}
-        {myVotes.length === 0 ? <Text style={ui.body}>Du hast noch nicht abgestimmt.</Text> : null}
+      <MccCard>
+        <MccCardTitle>Deine Stimmen</MccCardTitle>
+        <MccBody muted>Maximal drei Stimmen pro Woche. Dieselbe Sportart kann nicht doppelt gewaehlt werden.</MccBody>
+        <MccBody muted>Ein No-Go betrifft vor allem deine Zuordnung. Deine Praeferenz kann trotzdem sichtbar bleiben.</MccBody>
+        {!canVote ? <NoGoNotice>Abstimmen ist gesperrt, bis du Dabei oder Vielleicht gewaehlt hast.</NoGoNotice> : null}
+        {myVotes.length === 0 ? <MccBody muted>Du hast noch nicht abgestimmt.</MccBody> : null}
         {myVotes.map((vote) => (
-          <Text key={vote.id} style={ui.body}>
+          <MccBody key={vote.id}>
             {rankLabel(vote.vote_rank as VoteRank)}: {sportsById.get(vote.sport_id)?.name ?? vote.sport_id}
-          </Text>
+          </MccBody>
         ))}
-      </Card>
+      </MccCard>
 
-      {!loading && proposals.length === 0 ? <EmptyState title="Noch keine Vorschläge" body="Schlage zuerst eine Sportart vor." /> : null}
+      {!loading && proposals.length === 0 ? <EmptyState title="Noch keine Vorschlaege" body="Schlage zuerst eine Sportart vor." icon="lightbulb-on-outline" /> : null}
       {proposals.length > 0 ? <SearchField value={proposalSearch} onChangeText={setProposalSearch} placeholder="Sportart oder Standort suchen" /> : null}
-      {!loading && proposals.length > 0 && filteredProposals.length === 0 ? <Text style={ui.body}>Keine Vorschläge für diese Suche.</Text> : null}
-      {filteredProposals.map((proposal) => {
+      {!loading && proposals.length > 0 && filteredProposals.length === 0 ? <MccBody muted>Keine Vorschlaege fuer diese Suche.</MccBody> : null}
+      {filteredProposals.map((proposal, index) => {
         const sport = sportsById.get(proposal.sport_id);
         const myVote = myVoteBySport.get(proposal.sport_id);
         const myNoGo = noGos.some((entry) => entry.user_id === user?.id && entry.sport_id === proposal.sport_id);
 
         return (
-          <Card key={proposal.id}>
-            <Pill>{countVotes(proposal.sport_id)} gewichtete Stimmen</Pill>
-            <View style={styles.sportTitleRow}>
-              <SportIconBadge sport={sport} size={36} />
-              <Text style={[ui.cardTitle, styles.sportTitleText]}>{sport?.name ?? proposal.sport_id}</Text>
-            </View>
-            <Text style={ui.body}>{sport ? `${sport.category} · ${sport.intensity_level}` : "Vorgeschlagene Sportart"}</Text>
-            <Text style={ui.body}>{profileSummary(sportProfiles, proposal.sport_id)}</Text>
-            {myNoGo ? <Text style={ui.body}>Dein No-Go ist gespeichert. Deine Stimme bleibt als Wunsch sichtbar, falls du hier gewählt hast.</Text> : null}
-            {myVote ? <Text style={ui.body}>Deine Auswahl: {rankLabel(myVote.vote_rank as VoteRank)}</Text> : null}
-            {[1, 2, 3].map((rank) => {
-              const typedRank = rank as VoteRank;
+          <SportVoteCard
+            key={proposal.id}
+            title={sport?.name ?? proposal.sport_id}
+            meta={sport ? `${sport.category} - ${sport.intensity_level}` : "Vorgeschlagene Sportart"}
+            icon={<SportIconBadge sport={sport} size={42} />}
+            selected={Boolean(myVote)}
+            blocked={myNoGo}
+            index={index}
+            right={<MccBadge tone={myVote ? "success" : "neutral"}>{countVotes(proposal.sport_id)} Stimmen</MccBadge>}
+          >
+            <MccBody muted>{profileSummary(sportProfiles, proposal.sport_id)}</MccBody>
+            {myNoGo ? <NoGoNotice>Dein No-Go ist gespeichert. Deine Stimme bleibt als Wunsch sichtbar, falls du hier gewaehlt hast.</NoGoNotice> : null}
+            {myVote ? <MccBadge tone="success">Deine Auswahl: {rankLabel(myVote.vote_rank as VoteRank)}</MccBadge> : null}
+            <View style={styles.rankGrid}>
+              {[1, 2, 3].map((rank) => {
+                const typedRank = rank as VoteRank;
 
-              return (
-                <Button
-                  key={rank}
-                  label={rankLabel(typedRank)}
-                  variant={myVote?.vote_rank === typedRank ? "primary" : "secondary"}
-                  disabled={Boolean(!canVote)}
-                  onPress={() => setRankedVote(proposal.sport_id, typedRank)}
-                />
-              );
-            })}
-            {myVote ? <Button label="Stimme entfernen" variant="ghost" onPress={() => removeMyVote(proposal.sport_id)} /> : null}
-            <Button
+                return (
+                  <MccButton
+                    key={rank}
+                    label={rankLabel(typedRank)}
+                    variant={myVote?.vote_rank === typedRank ? "primary" : "secondary"}
+                    disabled={Boolean(!canVote)}
+                    onPress={() => setRankedVote(proposal.sport_id, typedRank)}
+                    style={styles.rankButton}
+                  />
+                );
+              })}
+            </View>
+            {myVote ? <MccButton label="Stimme entfernen" variant="ghost" icon="close" onPress={() => removeMyVote(proposal.sport_id)} /> : null}
+            <MccButton
               label={myNoGo ? "No-Go entfernen" : "Als No-Go markieren"}
-              variant="ghost"
+              variant={myNoGo ? "danger" : "ghost"}
+              icon="shield-alert-outline"
               disabled={!canVote}
               onPress={() => toggleNoGo(proposal.sport_id)}
             />
-          </Card>
+          </SportVoteCard>
         );
       })}
-    </Screen>
+    </MccScreen>
   );
 }
 
 const styles = StyleSheet.create({
   sportTitleRow: { alignItems: "center", flexDirection: "row", gap: 10 },
   sportTitleText: { flex: 1, minWidth: 0 },
+  rankGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  rankButton: { flexGrow: 1, minWidth: 104 },
 });
 
 function attendanceLabel(status?: AttendanceStatus): string {

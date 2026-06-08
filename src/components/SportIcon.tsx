@@ -69,7 +69,7 @@ export const SPORT_ICON_OPTIONS: Array<{ name: MaterialCommunityIconName; label:
 
 export function SportIcon({ sport, size = 18, color }: { sport?: SportIconInput | null; size?: number; color?: string }) {
   const { theme } = useTheme();
-  return <MaterialCommunityIcons name={sportIconName(sport)} size={size} color={color ?? theme.accent} />;
+  return <MaterialCommunityIcons name={sportIconName(sport)} size={size} color={color ?? theme.mcc.accent} />;
 }
 
 export function SportIconBadge({ sport, size = 34 }: { sport?: SportIconInput | null; size?: number }) {
@@ -78,8 +78,8 @@ export function SportIconBadge({ sport, size = 34 }: { sport?: SportIconInput | 
     <View
       style={{
         alignItems: "center",
-        backgroundColor: theme.surface,
-        borderColor: theme.border,
+        backgroundColor: theme.mcc.surfaceSoft,
+        borderColor: theme.mcc.line,
         borderRadius: 999,
         borderWidth: 1,
         height: size,

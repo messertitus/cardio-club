@@ -4,6 +4,11 @@ import type { AppSupabaseClient } from "./supabaseClient";
 
 export type ChatMessageWithAuthor = Row<"chat_messages"> & {
   author_name: string;
+  reply_to?: {
+    id: string;
+    author_name: string;
+    body: string;
+  } | null;
 };
 
 export async function listChatMessages(
@@ -29,13 +34,23 @@ export async function listChatMessages(
     : { data: [] as Array<Pick<Row<"profiles">, "id" | "display_name">>, error: null };
   const profiles = profilesResult.data ?? [];
   const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
+  const messagesById = new Map(data.map((message) => [message.id, message]));
 
-  return ok(data.map((message) => ({ ...message, author_name: names.get(message.user_id) ?? "Mitglied" })));
+  return ok(
+    data.map((message) => {
+      const replied = message.reply_to_message_id ? messagesById.get(message.reply_to_message_id) : null;
+      return {
+        ...message,
+        author_name: names.get(message.user_id) ?? "Mitglied",
+        reply_to: replied ? { id: replied.id, author_name: names.get(replied.user_id) ?? "Mitglied", body: replied.body } : null,
+      };
+    }),
+  );
 }
 
 export async function sendChatMessage(
   supabase: AppSupabaseClient,
-  input: { clubId: string; eventId: string; sportId?: string | null; userId: string; body: string },
+  input: { clubId: string; eventId: string; sportId?: string | null; userId: string; body: string; replyToMessageId?: string | null },
 ): Promise<ServiceResult<Row<"chat_messages">>> {
   const { data, error } = await supabase
     .from("chat_messages")
@@ -45,6 +60,7 @@ export async function sendChatMessage(
       sport_id: input.sportId ?? null,
       user_id: input.userId,
       body: input.body.trim(),
+      reply_to_message_id: input.replyToMessageId ?? null,
     })
     .select()
     .single();

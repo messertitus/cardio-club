@@ -1,10 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Animated, KeyboardAvoidingView, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { MotionBackground } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -30,6 +30,12 @@ type ChatMessage = {
   body: string;
   created_at: string;
   author_name: string;
+  reply_to_message_id?: string | null;
+  reply_to?: {
+    id: string;
+    author_name: string;
+    body: string;
+  } | null;
 };
 
 type EventChatChannel = {
@@ -60,6 +66,7 @@ export default function ChatScreen() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(directChatId ? `direct:${directChatId}` : null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const [messagesBusy, setMessagesBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -174,20 +181,25 @@ export default function ChatScreen() {
   async function switchChannel(channel: ChatChannel) {
     setActiveChannelId(channel.id);
     setMembersOpen(false);
+    setReplyTo(null);
     await loadMessagesForChannel(channel);
   }
 
   async function send() {
     if (!draft.trim() || !user || !activeChannel || inputLocked) return;
     const body = draft.trim();
+    const pendingReply = replyTo;
     const optimisticMessage: ChatMessage = {
       id: `optimistic-${Date.now()}`,
       user_id: user.id,
       body,
       created_at: new Date().toISOString(),
       author_name: "Du",
+      reply_to_message_id: pendingReply?.id ?? null,
+      reply_to: pendingReply ? { id: pendingReply.id, author_name: pendingReply.user_id === user.id ? "Du" : pendingReply.author_name, body: pendingReply.body } : null,
     };
     setDraft("");
+    setReplyTo(null);
     setMessages((current) => [...current, optimisticMessage]);
     Animated.sequence([
       Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }),
@@ -203,17 +215,20 @@ export default function ChatScreen() {
               sportId: activeChannel.sportId,
               userId: user.id,
               body,
+              replyToMessageId: optimisticMessage.reply_to_message_id,
             })
           : { data: null, error: { message: "Event konnte nicht geladen werden." } }
         : await sendDirectChatMessage(supabase, {
             chatId: activeChannel.directChat.id,
             userId: user.id,
             body,
+            replyToMessageId: optimisticMessage.reply_to_message_id,
           });
 
     if (result.error) {
       setNotice(result.error.message);
       setDraft(body);
+      setReplyTo(pendingReply);
       setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id));
       return;
     }
@@ -236,8 +251,8 @@ export default function ChatScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <BrandBackground />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+      <MotionBackground />
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.content}>
           <PageHeader
@@ -254,23 +269,23 @@ export default function ChatScreen() {
           {busy ? <LoadingState /> : null}
 
           {adminChatsOpen && directChannels.length > 0 ? (
-            <View style={[styles.contactPanel, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.channelSectionTitle, { color: theme.muted }]}>Kontakt aufnehmen</Text>
+            <View style={[styles.contactPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.channelSectionTitle, { color: theme.mcc.textSecondary }]}>Kontakt aufnehmen</Text>
               {directChannels.map((channel) => (
                 <Pressable
                   key={channel.id}
-                  style={[styles.contactPanelRow, { borderTopColor: theme.border }]}
+                  style={[styles.contactPanelRow, { borderTopColor: theme.mcc.line }]}
                   onPress={() => {
                     setAdminChatsOpen(false);
                     void switchChannel(channel);
                   }}
                 >
-                  <View style={[styles.contactAvatar, { backgroundColor: activeChannel?.id === channel.id ? theme.button : theme.surface }]}>
-                    <MaterialCommunityIcons name="account-question" size={18} color={activeChannel?.id === channel.id ? theme.inverse : theme.text} />
+                  <View style={[styles.contactAvatar, { backgroundColor: activeChannel?.id === channel.id ? theme.mcc.accentDeep : theme.mcc.surface }]}>
+                    <MaterialCommunityIcons name="account-question" size={18} color={activeChannel?.id === channel.id ? "#FFFFFF" : theme.mcc.textPrimary} />
                   </View>
                   <View style={styles.directInfoText}>
-                    <Text style={[styles.memberName, { color: theme.text }]}>{channel.personName}</Text>
-                    <Text style={[styles.membersMeta, { color: theme.muted }]}>{channel.roleLabel}</Text>
+                    <Text style={[styles.memberName, { color: theme.mcc.textPrimary }]}>{channel.personName}</Text>
+                    <Text style={[styles.membersMeta, { color: theme.mcc.textSecondary }]}>{channel.roleLabel}</Text>
                   </View>
                 </Pressable>
               ))}
@@ -279,7 +294,7 @@ export default function ChatScreen() {
 
           {eventChatOpen && eventChannels.length > 0 ? (
             <View style={styles.channelBlock}>
-              <Text style={[styles.channelSectionTitle, { color: theme.muted }]}>Event & Gruppen</Text>
+              <Text style={[styles.channelSectionTitle, { color: theme.mcc.textSecondary }]}>Event & Gruppen</Text>
               <View style={styles.channelRow}>
                 {eventChannels.map((channel) => (
                   <ChannelChip key={channel.id} channel={channel} active={activeChannel?.id === channel.id} onPress={() => void switchChannel(channel)} />
@@ -289,21 +304,21 @@ export default function ChatScreen() {
           ) : null}
 
           {activeChannel?.kind === "event" && eventChatOpen ? (
-            <View style={[styles.membersPanel, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+            <View style={[styles.membersPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
               <Pressable style={styles.membersHeader} onPress={() => setMembersOpen((open) => !open)}>
                 <View>
-                  <Text style={[styles.membersTitle, { color: theme.text }]}>Mitspieler</Text>
-                  <Text style={[styles.membersMeta, { color: theme.muted }]}>{eventMembers.length} im aktuellen Chat</Text>
+                  <Text style={[styles.membersTitle, { color: theme.mcc.textPrimary }]}>Mitspieler</Text>
+                  <Text style={[styles.membersMeta, { color: theme.mcc.textSecondary }]}>{eventMembers.length} im aktuellen Chat</Text>
                 </View>
-                <Text style={[styles.itemArrow, { color: theme.muted }]}>{membersOpen ? "×" : "+"}</Text>
+                <Text style={[styles.itemArrow, { color: theme.mcc.textSecondary }]}>{membersOpen ? "×" : "+"}</Text>
               </Pressable>
               {membersOpen ? (
                 <View style={styles.membersList}>
-                  {eventMembers.length === 0 ? <Text style={[styles.emptySmall, { color: theme.muted }]}>Noch keine Zusagen.</Text> : null}
+                  {eventMembers.length === 0 ? <Text style={[styles.emptySmall, { color: theme.mcc.textSecondary }]}>Noch keine Zusagen.</Text> : null}
                   {eventMembers.map((member) => (
-                    <View key={member.userId} style={[styles.memberRow, { borderTopColor: theme.border }]}>
-                      <Text style={[styles.memberName, { color: theme.text }]}>{member.displayName}</Text>
-                      {member.meta ? <Text style={[styles.memberMeta, { color: theme.accent }]}>{member.meta}</Text> : null}
+                    <View key={member.userId} style={[styles.memberRow, { borderTopColor: theme.mcc.line }]}>
+                      <Text style={[styles.memberName, { color: theme.mcc.textPrimary }]}>{member.displayName}</Text>
+                      {member.meta ? <Text style={[styles.memberMeta, { color: theme.mcc.accent }]}>{member.meta}</Text> : null}
                     </View>
                   ))}
                 </View>
@@ -312,23 +327,23 @@ export default function ChatScreen() {
           ) : null}
 
           {state && !eventChatOpen ? (
-            <View style={[styles.lockedPanel, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.lockedTitle, { color: theme.text }]}>Noch geschlossen</Text>
-              <Text style={[styles.lockedText, { color: theme.muted }]}>Event- und Gruppen-Chats öffnen erst, wenn das Event startet.</Text>
+            <View style={[styles.lockedPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.lockedTitle, { color: theme.mcc.textPrimary }]}>Noch geschlossen</Text>
+              <Text style={[styles.lockedText, { color: theme.mcc.textSecondary }]}>Event- und Gruppen-Chats öffnen erst, wenn das Event startet.</Text>
             </View>
           ) : null}
 
           {activeDirectChat ? (
-            <View style={[styles.directInfo, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+            <View style={[styles.directInfo, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
               <View style={styles.directInfoText}>
-                <Text style={[styles.directTitle, { color: theme.text }]}>{activeChannel?.label}</Text>
-                <Text style={[styles.directMeta, { color: theme.muted }]}>
+                <Text style={[styles.directTitle, { color: theme.mcc.textPrimary }]}>{activeChannel?.label}</Text>
+                <Text style={[styles.directMeta, { color: theme.mcc.textSecondary }]}>
                   {activeDirectChat.status === "closed" ? "geschlossen" : "offen"} · Kontakt: {activeDirectChat.adminName}
                 </Text>
               </View>
               {activeDirectChat.admin_id === user.id && activeDirectChat.status === "open" ? (
-                <Pressable style={[styles.closeButton, { backgroundColor: theme.surface }]} onPress={() => void closeActiveDirectChat()}>
-                  <Text style={[styles.closeButtonText, { color: theme.text }]}>Schließen</Text>
+                <Pressable style={[styles.closeButton, { backgroundColor: theme.mcc.surface }]} onPress={() => void closeActiveDirectChat()}>
+                  <Text style={[styles.closeButtonText, { color: theme.mcc.textPrimary }]}>Schließen</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -336,47 +351,110 @@ export default function ChatScreen() {
 
           <ScrollView ref={scrollRef} contentContainerStyle={styles.messages} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {messagesBusy && messages.length === 0 ? <LoadingState /> : null}
-            {messages.length === 0 && !messagesBusy ? <Text style={[styles.empty, { color: theme.muted }]}>Noch keine Nachrichten.</Text> : null}
+            {messages.length === 0 && !messagesBusy ? <Text style={[styles.empty, { color: theme.mcc.textSecondary }]}>Noch keine Nachrichten.</Text> : null}
             {messages.map((message) => {
               const mine = message.user_id === user.id;
               return (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.bubble,
-                    { borderColor: theme.border, backgroundColor: theme.softSurface },
-                    mine && { borderColor: theme.accent, backgroundColor: theme.surface, alignSelf: "flex-end" },
-                  ]}
-                >
-                  <Text style={[styles.meta, { color: theme.muted }]}>
-                    {mine ? "Du" : message.author_name} · {formatTime(message.created_at)}
-                  </Text>
-                  <Text style={[styles.body, { color: theme.text }]}>{message.body}</Text>
-                </View>
+                <SwipeReplyBubble key={message.id} mine={mine} onReply={() => setReplyTo(message)}>
+                  <View
+                    style={[
+                      styles.bubble,
+                      { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft },
+                      mine && { borderColor: theme.mcc.accent, backgroundColor: theme.mcc.surface, alignSelf: "flex-end" },
+                    ]}
+                  >
+                    {message.reply_to ? <ReplyPreview reply={message.reply_to} /> : null}
+                    <Text style={[styles.meta, { color: theme.mcc.textSecondary }]}>
+                      {mine ? "Du" : message.author_name} · {formatTime(message.created_at)}
+                    </Text>
+                    <Text style={[styles.body, { color: theme.mcc.textPrimary }]}>{message.body}</Text>
+                  </View>
+                </SwipeReplyBubble>
               );
             })}
           </ScrollView>
+
+          {replyTo ? (
+            <View style={[styles.replyComposer, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <View style={styles.replyComposerText}>
+                <Text style={[styles.replyTitle, { color: theme.mcc.accent }]}>{replyTo.user_id === user.id ? "Du" : replyTo.author_name}</Text>
+                <Text style={[styles.replyBody, { color: theme.mcc.textSecondary }]} numberOfLines={1}>
+                  {replyTo.body}
+                </Text>
+              </View>
+              <Pressable style={styles.replyClose} onPress={() => setReplyTo(null)}>
+                <MaterialCommunityIcons name="close" size={18} color={theme.mcc.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
 
           <Animated.View style={[styles.inputRow, { transform: [{ scale }] }]}>
             <TextInput
               value={draft}
               onChangeText={setDraft}
               placeholder={inputLocked ? "Chat ist geschlossen" : "Nachricht..."}
-              placeholderTextColor={theme.muted}
-              style={[styles.input, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+              placeholderTextColor={theme.mcc.textSecondary}
+              style={[styles.input, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
               returnKeyType="send"
               blurOnSubmit={false}
               onSubmitEditing={send}
               editable={!inputLocked}
             />
-            <Pressable style={[styles.sendButton, { backgroundColor: theme.button }, (!draft.trim() || inputLocked) && styles.sendButtonDisabled]} onPress={send} disabled={!draft.trim() || inputLocked}>
-              <Text style={[styles.sendText, { color: theme.inverse }]}>Senden</Text>
+            <Pressable style={[styles.sendButton, { backgroundColor: theme.mcc.accentDeep }, (!draft.trim() || inputLocked) && styles.sendButtonDisabled]} onPress={send} disabled={!draft.trim() || inputLocked}>
+              <Text style={[styles.sendText, { color: "#FFFFFF" }]}>Senden</Text>
             </Pressable>
           </Animated.View>
         </KeyboardAvoidingView>
         <BottomNav active="chat" />
       </View>
     </SafeAreaView>
+  );
+}
+
+function SwipeReplyBubble({ children, mine, onReply }: { children: ReactNode; mine: boolean; onReply: () => void }) {
+  const { theme } = useTheme();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) => gesture.dx > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4,
+        onPanResponderMove: (_, gesture) => {
+          translateX.setValue(Math.min(72, Math.max(0, gesture.dx)));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dx > 48) onReply();
+          Animated.spring(translateX, { toValue: 0, damping: 16, stiffness: 220, useNativeDriver: true }).start();
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(translateX, { toValue: 0, damping: 16, stiffness: 220, useNativeDriver: true }).start();
+        },
+      }),
+    [onReply, translateX],
+  );
+
+  return (
+    <View style={[styles.swipeWrap, mine && styles.swipeWrapMine]}>
+      <View style={[styles.replySwipeIcon, { backgroundColor: theme.mcc.accentFaint }]}>
+        <MaterialCommunityIcons name="reply" size={18} color={theme.mcc.accent} />
+      </View>
+      <Animated.View {...panResponder.panHandlers} style={{ transform: [{ translateX }] }}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+function ReplyPreview({ reply }: { reply: NonNullable<ChatMessage["reply_to"]> }) {
+  const { theme } = useTheme();
+  return (
+    <View style={[styles.replyPreview, { borderLeftColor: theme.mcc.accent, backgroundColor: theme.mcc.accentFaint }]}>
+      <Text style={[styles.replyTitle, { color: theme.mcc.accent }]} numberOfLines={1}>
+        {reply.author_name}
+      </Text>
+      <Text style={[styles.replyBody, { color: theme.mcc.textSecondary }]} numberOfLines={2}>
+        {reply.body}
+      </Text>
+    </View>
   );
 }
 
@@ -387,11 +465,11 @@ function ChannelChip({ channel, active, onPress }: { channel: ChatChannel; activ
       onPress={onPress}
       style={[
         styles.channelChip,
-        { borderColor: theme.border, backgroundColor: theme.softSurface },
-        active && { backgroundColor: theme.button },
+        { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft },
+        active && { backgroundColor: theme.mcc.accentDeep },
       ]}
     >
-      <Text style={[styles.channelText, { color: active ? theme.inverse : theme.text }]} numberOfLines={1}>{channel.label}</Text>
+      <Text style={[styles.channelText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]} numberOfLines={1}>{channel.label}</Text>
     </Pressable>
   );
 }
@@ -414,11 +492,11 @@ function buildDirectChannels(directChats: DirectChatWithNames[], userId: string 
 function ContactMenuButton({ count, open, onPress }: { count: number; open: boolean; onPress: () => void }) {
   const { theme } = useTheme();
   return (
-    <Pressable style={[styles.contactButton, { borderColor: theme.border, backgroundColor: open ? theme.button : theme.softSurface }]} onPress={onPress}>
-      <MaterialCommunityIcons name={open ? "close" : "account-question"} size={19} color={open ? theme.inverse : theme.text} />
+    <Pressable style={[styles.contactButton, { borderColor: theme.mcc.line, backgroundColor: open ? theme.mcc.accentDeep : theme.mcc.surfaceSoft }]} onPress={onPress}>
+      <MaterialCommunityIcons name={open ? "close" : "account-question"} size={19} color={open ? "#FFFFFF" : theme.mcc.textPrimary} />
       {count > 0 ? (
-        <View style={[styles.contactBadge, { backgroundColor: theme.accent }]}>
-          <Text style={[styles.contactBadgeText, { color: theme.inverse }]}>{count > 9 ? "9+" : count}</Text>
+        <View style={[styles.contactBadge, { backgroundColor: theme.mcc.accent }]}>
+          <Text style={[styles.contactBadgeText, { color: "#FFFFFF" }]}>{count > 9 ? "9+" : count}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -544,6 +622,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
   },
+  swipeWrap: { alignSelf: "flex-start", justifyContent: "center", maxWidth: "100%", position: "relative" },
+  swipeWrapMine: { alignSelf: "flex-end" },
+  replySwipeIcon: { alignItems: "center", borderRadius: 999, height: 34, justifyContent: "center", left: 4, position: "absolute", width: 34 },
+  replyPreview: { borderLeftWidth: 3, borderRadius: 12, gap: 2, marginBottom: 3, paddingHorizontal: 9, paddingVertical: 7 },
+  replyComposer: { alignItems: "center", borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  replyComposerText: { flex: 1, minWidth: 0 },
+  replyTitle: { fontSize: 12, fontWeight: "900" },
+  replyBody: { fontSize: 12, fontWeight: "700", lineHeight: 16 },
+  replyClose: { alignItems: "center", height: 32, justifyContent: "center", width: 32 },
   meta: { color: "#728197", fontSize: 12, fontWeight: "900" },
   body: { color: "#ffffff", fontSize: 15, lineHeight: 21 },
   inputRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },

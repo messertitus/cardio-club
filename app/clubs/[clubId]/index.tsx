@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text } from "react-native";
-import { Button, Card, ErrorText, LoadingState, Screen, ui } from "../../../src/components/ui";
+import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, WeeklyEventHeroCard } from "../../../src/components/MccDesign";
+import { ErrorText, LoadingState } from "../../../src/components/ui";
+import { formatCardioSunday } from "../../../src/services/date";
 import { supabase } from "../../../src/lib/supabase";
 import { getClub, getCurrentWeeklyEvent, type Row } from "../../../src/services";
 
@@ -41,34 +42,44 @@ export default function ClubDashboardScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <MccScreen>
         <LoadingState />
-      </Screen>
+      </MccScreen>
     );
   }
 
   return (
-    <Screen title={club?.name ?? "Club"} subtitle={club?.description ?? "Gemeinsamer Cardiotag ohne Wiederholung von letzter Woche."}>
+    <MccScreen title={club?.name ?? "Club"} kicker="Dashboard" subtitle={club?.description ?? "Gemeinsamer Cardiotag ohne Wiederholung von letzter Woche."}>
       <ErrorText>{error}</ErrorText>
-      <Card>
-        <Text style={ui.cardTitle}>Diese Woche</Text>
-        <Text style={ui.body}>
-          {event ? `Status: ${event.status}` : "Für diese Woche gibt es noch kein Event."}
-        </Text>
-        <Button label="Diese Woche öffnen" onPress={() => router.push(`/clubs/${clubId}/event`)} />
-      </Card>
-      <Card>
-        <Text style={ui.cardTitle}>Planung</Text>
-        <Text style={ui.body}>Vorschläge sammeln, abstimmen und die faire Entscheidung anzeigen.</Text>
+      <WeeklyEventHeroCard
+        title="Diese Woche"
+        subtitle={event ? `Cardiotag am ${formatCardioSunday(event.starts_at ?? event.week_start_date)}` : "Fuer diese Woche gibt es noch kein Event."}
+        dateLabel={event ? formatCardioSunday(event.starts_at ?? event.week_start_date) : undefined}
+        status={event ? event.status : "offen"}
+        chips={[{ label: eventTypeLabel(event?.decision_type ?? null), icon: "chart-donut" }]}
+        ctaLabel="Diese Woche oeffnen"
+        onCtaPress={() => router.push(`/clubs/${clubId}/event`)}
+      />
+      <MccCard>
+        <MccBadge icon="clipboard-pulse-outline">Planung</MccBadge>
+        <MccCardTitle>Club-Woche steuern</MccCardTitle>
+        <MccBody muted>Vorschlaege sammeln, abstimmen und die faire Entscheidung anzeigen.</MccBody>
         {event ? (
           <>
-            <Button label="Sportart vorschlagen" variant="secondary" onPress={() => router.push(`/events/${event.id}/propose`)} />
-            <Button label="Abstimmen" variant="secondary" onPress={() => router.push(`/events/${event.id}/vote`)} />
-            <Button label="Entscheidung anzeigen" variant="secondary" onPress={() => router.push(`/events/${event.id}/decision`)} />
+            <MccButton label="Sportart vorschlagen" icon="lightbulb-on-outline" variant="secondary" onPress={() => router.push(`/events/${event.id}/propose`)} />
+            <MccButton label="Abstimmen" icon="vote-outline" variant="secondary" onPress={() => router.push(`/events/${event.id}/vote`)} />
+            <MccButton label="Entscheidung anzeigen" icon="trophy-outline" variant="secondary" onPress={() => router.push(`/events/${event.id}/decision`)} />
           </>
         ) : null}
-      </Card>
-      <Button label="Event-Verlauf" variant="secondary" onPress={() => router.push(`/clubs/${clubId}/history`)} />
-    </Screen>
+      </MccCard>
+      <MccButton label="Event-Verlauf" icon="history" variant="secondary" onPress={() => router.push(`/clubs/${clubId}/history`)} />
+    </MccScreen>
   );
+}
+
+function eventTypeLabel(type: Row<"weekly_events">["decision_type"] | null): string {
+  if (type === "multi_sport") return "Multi-Sport";
+  if (type === "twin") return "Twin";
+  if (type === "single") return "Single";
+  return "Entscheidung offen";
 }

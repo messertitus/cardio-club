@@ -1,9 +1,11 @@
 import { Redirect, router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { BackButton } from "../../src/components/BackButton";
 import { DetailLine } from "../../src/components/FormControls";
-import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../src/components/ui";
+import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../src/components/MccDesign";
+import { ErrorText, LoadingState } from "../../src/components/ui";
+import { formatCardioSunday } from "../../src/services/date";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
 import { getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, type Row } from "../../src/services";
@@ -62,30 +64,30 @@ export default function EventHistoryScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <Screen>
+    <MccScreen>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={ui.title}>Vergangene Events</Text>
-          <Text style={ui.subtitle}>Entscheidungen, konkrete Aktivitäten und Details rückwirkend ansehen.</Text>
+          <MccCardTitle>Vergangene Events</MccCardTitle>
+          <MccBody muted>Entscheidungen, konkrete Aktivitäten und Details rückwirkend ansehen.</MccBody>
         </View>
         <BackButton onPress={() => router.back()} />
       </View>
       <ErrorText>{error}</ErrorText>
       {busy ? <LoadingState /> : null}
-      {!busy && events.length === 0 ? <Text style={ui.body}>Noch keine Events.</Text> : null}
+      {!busy && events.length === 0 ? <MccBody muted>Noch keine Events.</MccBody> : null}
       {events.map(({ event, activities, results }) => {
         const opened = expandedEventId === event.id;
         return (
-          <Card key={event.id}>
-            <Pill>{eventTypeLabel(event.decision_type)}</Pill>
-            <Text style={ui.cardTitle}>Woche ab {event.week_start_date}</Text>
-            <Text style={ui.body}>{event.decision_reason ?? "Noch keine Entscheidung gespeichert."}</Text>
+          <MccCard key={event.id}>
+            <MccBadge icon="history">{eventTypeLabel(event.decision_type)}</MccBadge>
+            <MccCardTitle>Cardiotag am {formatCardioSunday(event.starts_at ?? event.week_start_date)}</MccCardTitle>
+            <MccBody muted>{event.decision_reason ?? "Noch keine Entscheidung gespeichert."}</MccBody>
             {activities.slice(0, opened ? activities.length : 2).map((activity) => (
               <View key={activity.id}>
-                <Text style={ui.body}>
+                <MccBody>
                   {activity.title || sportNames.get(activity.sport_id) || "Aktivität"}
                   {activity.location ? ` - ${activity.location}` : ""}
-                </Text>
+                </MccBody>
               </View>
             ))}
             {opened ? (
@@ -98,11 +100,11 @@ export default function EventHistoryScreen() {
                 <DetailLine label="Ergebnisse" value={results.length ? results.map((result) => result.summary).join(" | ") : "Noch keine"} />
               </>
             ) : null}
-            <Button label={opened ? "Weniger" : "Details"} variant="secondary" onPress={() => setExpandedEventId(opened ? null : event.id)} />
-          </Card>
+            <MccButton label={opened ? "Weniger" : "Details"} variant="secondary" onPress={() => setExpandedEventId(opened ? null : event.id)} />
+          </MccCard>
         );
       })}
-    </Screen>
+    </MccScreen>
   );
 }
 

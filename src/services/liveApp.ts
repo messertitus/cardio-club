@@ -12,6 +12,7 @@ import { listSportProfilesForSports } from "./sportProfiles";
 import type { AppSupabaseClient } from "./supabaseClient";
 import { listEventVotes, removeVote, voteForSport } from "./votes";
 import type { FairConstellationDecision } from "../lib/fairConstellationSelection";
+import { isDecisionReleaseOpen } from "./date";
 
 export type MccEventState = {
   clubId: string;
@@ -144,10 +145,14 @@ export async function clearMccNoGo(
 export async function finalizeMccDecisionIfReady(
   supabase: AppSupabaseClient,
   eventId: string,
+  weekStartDate?: string,
 ): Promise<ServiceResult<{ attempted: boolean }>> {
-  const weekday = new Date().getDay();
+  if (weekStartDate && !isDecisionReleaseOpen(weekStartDate)) {
+    return ok({ attempted: false });
+  }
 
-  if (weekday !== 3) {
+  const weekday = new Date().getDay();
+  if (!weekStartDate && weekday < 4) {
     return ok({ attempted: false });
   }
 

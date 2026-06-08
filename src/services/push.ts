@@ -1,4 +1,4 @@
-import type { Json } from "./database.types";
+import type { Json, Row } from "./database.types";
 import { fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -19,6 +19,43 @@ export async function saveWebPushSubscription(
 
   if (error) {
     return { data: null, error: fromPostgrestError(error, "Push-Abo konnte nicht gespeichert werden.") };
+  }
+
+  return ok({ saved: true });
+}
+
+export async function listUndeliveredAppNotifications(
+  supabase: AppSupabaseClient,
+  userId: string,
+): Promise<ServiceResult<Row<"app_notifications">[]>> {
+  const { data, error } = await supabase
+    .from("app_notifications")
+    .select()
+    .eq("user_id", userId)
+    .is("delivered_at", null)
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Benachrichtigungen konnten nicht geladen werden.") };
+  }
+
+  return ok(data);
+}
+
+export async function markAppNotificationsDelivered(
+  supabase: AppSupabaseClient,
+  notificationIds: string[],
+): Promise<ServiceResult<{ saved: true }>> {
+  if (notificationIds.length === 0) return ok({ saved: true });
+
+  const { error } = await supabase
+    .from("app_notifications")
+    .update({ delivered_at: new Date().toISOString() })
+    .in("id", notificationIds);
+
+  if (error) {
+    return { data: null, error: fromPostgrestError(error, "Benachrichtigungen konnten nicht bestaetigt werden.") };
   }
 
   return ok({ saved: true });
@@ -56,6 +93,32 @@ export async function requestWebPushSubscription(): Promise<{ endpoint: string; 
     endpoint: subscription.endpoint,
     subscription: subscription.toJSON() as Json,
   };
+}
+
+export async function showBrowserNotification(notification: Pick<Row<"app_notifications">, "title" | "body" | "href" | "kind">): Promise<boolean> {
+  if (typeof window === "undefined" || !("Notification" in window)) return false;
+  if (Notification.permission !== "granted") return false;
+
+  const options: NotificationOptions = {
+    body: notification.body,
+    tag: `mcc-${notification.kind}`,
+    icon: "/mcc-logo.png",
+    badge: "/mcc-logo.png",
+    data: { href: notification.href },
+  };
+
+  const registration = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : null;
+  if (registration?.showNotification) {
+    await registration.showNotification(notification.title, options);
+    return true;
+  }
+
+  const browserNotification = new Notification(notification.title, options);
+  browserNotification.onclick = () => {
+    window.focus();
+    window.location.assign(notification.href);
+  };
+  return true;
 }
 
 function urlBase64ToUint8Array(value: string): Uint8Array {

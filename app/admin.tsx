@@ -3,10 +3,10 @@ import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { MapLocationPicker, SearchField } from "../src/components/FormControls";
 import { MapRouteButton } from "../src/components/MapRouteButton";
+import { MccBadge, MccBody, MccCardTitle, MotionBackground } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { SPORT_ICON_OPTIONS, SportIconBadge } from "../src/components/SportIcon";
 import { LoadingState } from "../src/components/ui";
@@ -551,15 +551,15 @@ export default function AdminScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <BrandBackground />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+      <MotionBackground />
       <View style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <PageHeader kicker="Admin" title={sectionTitle(activeSection)} onBack={activeSection === "overview" ? undefined : () => setActiveSection("overview")} />
 
           {message ? <Text style={styles.notice}>{message}</Text> : null}
           {busy ? <LoadingState /> : null}
-          {!busy && !isAdmin ? <Text style={[styles.body, { color: theme.muted }]}>Dieser Bereich ist nur für Admins sichtbar.</Text> : null}
+          {!busy && !isAdmin ? <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Dieser Bereich ist nur für Admins sichtbar.</Text> : null}
 
           {isAdmin && activeSection === "overview" ? (
             <View style={styles.adminGrid}>
@@ -572,8 +572,8 @@ export default function AdminScreen() {
           ) : null}
 
           {isAdmin && activeSection === "sports" ? (
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Sportarten verwalten</Text>
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Sportarten verwalten</Text>
               <View style={styles.formGrid}>
                 <AdminInput value={sportDraft.name} onChangeText={(name) => setSportDraft((draft) => ({ ...draft, name }))} placeholder="Name" />
                 <AdminInput value={sportDraft.description} onChangeText={(description) => setSportDraft((draft) => ({ ...draft, description }))} placeholder="Beschreibung" multiline />
@@ -585,13 +585,13 @@ export default function AdminScreen() {
                 onSelect={(category) => setSportDraft((draft) => ({ ...draft, category }))}
               />
               <View style={styles.roleRow}>
-                <Pressable style={[styles.roleButton, { backgroundColor: customCategoryOpen ? theme.button : theme.surface }]} onPress={() => setCustomCategoryOpen((open) => !open)}>
-                  <Text style={[styles.roleText, { color: customCategoryOpen ? theme.inverse : theme.text }]}>+ Kategorie</Text>
+                <Pressable style={[styles.roleButton, { backgroundColor: customCategoryOpen ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setCustomCategoryOpen((open) => !open)}>
+                  <Text style={[styles.roleText, { color: customCategoryOpen ? "#FFFFFF" : theme.mcc.textPrimary }]}>+ Kategorie</Text>
                 </Pressable>
-                <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => setIconPickerOpen(true)}>
+                <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={() => setIconPickerOpen(true)}>
                   <View style={styles.inlineIconLabel}>
                     <SportIconBadge sport={{ name: sportDraft.name, category: sportDraft.category, intensity_level: sportDraft.intensityLevel, icon_name: sportDraft.iconName }} size={28} />
-                    <Text style={[styles.roleText, { color: theme.text }]}>Icon waehlen</Text>
+                    <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Icon waehlen</Text>
                   </View>
                 </Pressable>
               </View>
@@ -599,12 +599,12 @@ export default function AdminScreen() {
                 <AdminInput value={sportDraft.category} onChangeText={(category) => setSportDraft((draft) => ({ ...draft, category }))} placeholder="Neue Kategorie, z. B. Praezisionssport" />
               ) : null}
               <ChipGroup label="Schwierigkeit" options={intensityOptions} selected={sportDraft.intensityLevel} onSelect={(intensityLevel) => setSportDraft((draft) => ({ ...draft, intensityLevel }))} />
-              <Pressable style={[styles.roleButton, { backgroundColor: sportDraft.isActive ? theme.button : theme.surface, alignSelf: "flex-start" }]} onPress={() => setSportDraft((draft) => ({ ...draft, isActive: !draft.isActive }))}>
-                <Text style={[styles.roleText, { color: sportDraft.isActive ? theme.inverse : theme.text }]}>{sportDraft.isActive ? "Sportart aktiv" : "Sportart inaktiv"}</Text>
+              <Pressable style={[styles.roleButton, { backgroundColor: sportDraft.isActive ? theme.mcc.accentDeep : theme.mcc.surface, alignSelf: "flex-start" }]} onPress={() => setSportDraft((draft) => ({ ...draft, isActive: !draft.isActive }))}>
+                <Text style={[styles.roleText, { color: sportDraft.isActive ? "#FFFFFF" : theme.mcc.textPrimary }]}>{sportDraft.isActive ? "Sportart aktiv" : "Sportart inaktiv"}</Text>
               </Pressable>
               <View style={styles.roleRow}>
                 <Pressable
-                  style={[styles.primaryButton, { backgroundColor: theme.button }]}
+                  style={[styles.primaryButton, { backgroundColor: theme.mcc.accentDeep }]}
                   onPress={() =>
                     confirmAdminAction(
                       editingSportId ? "Sportart speichern?" : "Sportart anlegen?",
@@ -613,33 +613,33 @@ export default function AdminScreen() {
                     )
                   }
                 >
-                  <Text style={[styles.primaryText, { color: theme.inverse }]}>{editingSportId ? "Speichern" : "Anlegen"}</Text>
+                  <Text style={[styles.primaryText, { color: "#FFFFFF" }]}>{editingSportId ? "Speichern" : "Anlegen"}</Text>
                 </Pressable>
                 {editingSportId ? (
-                  <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={resetSportDraft}>
-                    <Text style={[styles.roleText, { color: theme.text }]}>Abbrechen</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={resetSportDraft}>
+                    <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Abbrechen</Text>
                   </Pressable>
                 ) : null}
               </View>
 
               {sports.map((sport) => (
-                <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
+                <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.mcc.line }]}>
                   <View style={styles.sportTitleRow}>
                     <SportIconBadge sport={sport} size={34} />
                     <View style={styles.memberText}>
-                    <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
-                    {sport.description ? <Text style={[styles.muted, { color: theme.muted }]}>{sport.description}</Text> : null}
-                    <Text style={[styles.muted, { color: theme.muted }]}>
+                    <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{sport.name}</Text>
+                    {sport.description ? <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{sport.description}</Text> : null}
+                    <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
                       {categoryLabel(sport.category)} · {intensityLabel(sport.intensity_level)} · {sport.is_active ? "aktiv" : "inaktiv"}
                     </Text>
                   </View>
                   </View>
                   <View style={styles.roleRow}>
-                    <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => editSport(sport)}>
-                      <Text style={[styles.roleText, { color: theme.text }]}>Bearbeiten</Text>
+                    <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={() => editSport(sport)}>
+                      <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Bearbeiten</Text>
                     </Pressable>
-                    <Pressable style={[styles.roleButton, sport.is_active ? styles.dangerButton : { backgroundColor: theme.surface }]} onPress={() => void toggleSportActive(sport)}>
-                      <Text style={sport.is_active ? styles.dangerText : [styles.roleText, { color: theme.text }]}>{sport.is_active ? "Deaktivieren" : "Aktivieren"}</Text>
+                    <Pressable style={[styles.roleButton, sport.is_active ? styles.dangerButton : { backgroundColor: theme.mcc.surface }]} onPress={() => void toggleSportActive(sport)}>
+                      <Text style={sport.is_active ? styles.dangerText : [styles.roleText, { color: theme.mcc.textPrimary }]}>{sport.is_active ? "Deaktivieren" : "Aktivieren"}</Text>
                     </Pressable>
                     <Pressable
                       style={[styles.roleButton, styles.dangerButton]}
@@ -660,9 +660,11 @@ export default function AdminScreen() {
           ) : null}
 
           {isAdmin && activeSection === "profiles" ? (
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Sportprofile verwalten</Text>
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wo ist der Standort?</Text>
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Sportprofile verwalten</Text>
+              <ProfileDraftPreview draft={profileDraft} members={members} editing={Boolean(editingProfileId)} />
+
+              <AdminSectionHeading label="Standort" body="Ort, PLZ und Karte entscheiden spaeter ueber Wege, Wetter und Kapazitaet." />
               <View style={styles.formGrid}>
                 <MapLocationPicker
                   label="Standort"
@@ -680,7 +682,7 @@ export default function AdminScreen() {
                 <AdminInput value={profileDraft.name} onChangeText={(name) => setProfileDraft((draft) => ({ ...draft, name }))} placeholder="Anzeigename, z. B. Beachvolleyball: Hörnle" />
               </View>
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welche Sportarten passen dazu?</Text>
+              <AdminSectionHeading label="Basis" body="Sportarten, Profilart und sichtbarer Name." />
               <MultiPickerGroup
                 label="Sportarten"
                 items={sports.map((sport) => ({ id: sport.id, label: sport.name, inactive: !sport.is_active }))}
@@ -693,36 +695,35 @@ export default function AdminScreen() {
                 }
               />
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welche Art von Profil ist das?</Text>
               <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welche Standortkapazität passt?</Text>
+              <AdminSectionHeading label="Kapazitaet" body="Gruppengroesse, Obergrenzen und passende Event-Zuordnung." />
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Standort-Minimum, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
                 <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Standort-Maximum, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
               </View>
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Welches Wetter ist relevant?</Text>
+              <AdminSectionHeading label="Wetter" body="Nur Outdoor-Profile brauchen Wettergrenzen oder Ortsdaten." />
               {profileDraft.locationType === "indoor" ? (
-                <Text style={[styles.muted, { color: theme.muted }]}>Indoor: Regen, Wind und Temperatur werden für die Entscheidung kaum gewichtet.</Text>
+                <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Indoor: Regen, Wind und Temperatur werden für die Entscheidung kaum gewichtet.</Text>
               ) : (
                 <View style={styles.formGrid}>
-                  {!draftHasWeatherLocation(profileDraft) ? <Text style={[styles.muted, { color: theme.accent }]}>Für Outdoor-Profile bitte Koordinaten oder PLZ hinterlegen.</Text> : null}
+                  {!draftHasWeatherLocation(profileDraft) ? <Text style={[styles.muted, { color: theme.mcc.accent }]}>Für Outdoor-Profile bitte Koordinaten oder PLZ hinterlegen.</Text> : null}
                   <View style={styles.roleRow}>
-                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.requiresDry ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, requiresDry: !draft.requiresDry }))}>
-                    <Text style={[styles.roleText, { color: profileDraft.requiresDry ? theme.inverse : theme.text }]}>Trocken nötig</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.requiresDry ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, requiresDry: !draft.requiresDry }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.requiresDry ? "#FFFFFF" : theme.mcc.textPrimary }]}>Trocken nötig</Text>
                   </Pressable>
-                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.rainSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, rainSensitive: !draft.rainSensitive }))}>
-                    <Text style={[styles.roleText, { color: profileDraft.rainSensitive ? theme.inverse : theme.text }]}>Regen sensibel</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.rainSensitive ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, rainSensitive: !draft.rainSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.rainSensitive ? "#FFFFFF" : theme.mcc.textPrimary }]}>Regen sensibel</Text>
                   </Pressable>
-                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.heatSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, heatSensitive: !draft.heatSensitive }))}>
-                    <Text style={[styles.roleText, { color: profileDraft.heatSensitive ? theme.inverse : theme.text }]}>Soll eher kalt sein</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.heatSensitive ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, heatSensitive: !draft.heatSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.heatSensitive ? "#FFFFFF" : theme.mcc.textPrimary }]}>Soll eher kalt sein</Text>
                   </Pressable>
-                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.coldSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, coldSensitive: !draft.coldSensitive }))}>
-                    <Text style={[styles.roleText, { color: profileDraft.coldSensitive ? theme.inverse : theme.text }]}>Soll eher warm sein</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.coldSensitive ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, coldSensitive: !draft.coldSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.coldSensitive ? "#FFFFFF" : theme.mcc.textPrimary }]}>Soll eher warm sein</Text>
                   </Pressable>
-                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.windSensitive ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, windSensitive: !draft.windSensitive }))}>
-                    <Text style={[styles.roleText, { color: profileDraft.windSensitive ? theme.inverse : theme.text }]}>Wind sensibel</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.windSensitive ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, windSensitive: !draft.windSensitive }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.windSensitive ? "#FFFFFF" : theme.mcc.textPrimary }]}>Wind sensibel</Text>
                   </Pressable>
                   </View>
                   {profileDraft.windSensitive ? (
@@ -731,30 +732,29 @@ export default function AdminScreen() {
                 </View>
               )}
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Was sollte man mitbringen?</Text>
+              <AdminSectionHeading label="Ausstattung" body="Mitbringen, Material vor Ort und Lichtbedingungen." />
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.requiredEquipment} onChangeText={(requiredEquipment) => setProfileDraft((draft) => ({ ...draft, requiredEquipment }))} placeholder="z. B. Schläger, Matte, Trinkflasche" />
               </View>
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Was ist vor Ort vorhanden?</Text>
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.availableEquipment} onChangeText={(availableEquipment) => setProfileDraft((draft) => ({ ...draft, availableEquipment }))} placeholder="z. B. Netz, Tore, Matten, Bälle" />
                 <View style={styles.roleRow}>
-                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.lightingAvailable ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, lightingAvailable: !draft.lightingAvailable }))}>
-                    <Text style={[styles.roleText, { color: profileDraft.lightingAvailable ? theme.inverse : theme.text }]}>Licht vorhanden</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.lightingAvailable ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, lightingAvailable: !draft.lightingAvailable }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.lightingAvailable ? "#FFFFFF" : theme.mcc.textPrimary }]}>Licht vorhanden</Text>
                   </Pressable>
                 </View>
               </View>
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wann kann man den Standort nutzen?</Text>
+              <AdminSectionHeading label="Kosten und Verfuegbarkeit" body="Zeitfenster, Reservierung und Kosten fuer die Entscheidung." />
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.openingNotes} onChangeText={(openingNotes) => setProfileDraft((draft) => ({ ...draft, openingNotes }))} placeholder="Öffnungszeiten oder Zeitfenster, z. B. ab 18 Uhr frei" multiline />
                 <View style={styles.roleRow}>
-                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.reservationRequired ? theme.button : theme.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, reservationRequired: !draft.reservationRequired }))}>
-                    <Text style={[styles.roleText, { color: profileDraft.reservationRequired ? theme.inverse : theme.text }]}>Reservierung nötig</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: profileDraft.reservationRequired ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => setProfileDraft((draft) => ({ ...draft, reservationRequired: !draft.reservationRequired }))}>
+                    <Text style={[styles.roleText, { color: profileDraft.reservationRequired ? "#FFFFFF" : theme.mcc.textPrimary }]}>Reservierung nötig</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.roleButton, { backgroundColor: profileCostOpen ? theme.button : theme.surface }]}
+                    style={[styles.roleButton, { backgroundColor: profileCostOpen ? theme.mcc.accentDeep : theme.mcc.surface }]}
                     onPress={() => {
                       const nextOpen = !profileCostOpen;
                       setProfileCostOpen(nextOpen);
@@ -767,7 +767,7 @@ export default function AdminScreen() {
                       }));
                     }}
                   >
-                    <Text style={[styles.roleText, { color: profileCostOpen ? theme.inverse : theme.text }]}>Kostenpflichtig</Text>
+                    <Text style={[styles.roleText, { color: profileCostOpen ? "#FFFFFF" : theme.mcc.textPrimary }]}>Kostenpflichtig</Text>
                   </Pressable>
                 </View>
                 {profileCostOpen ? (
@@ -779,13 +779,13 @@ export default function AdminScreen() {
                 ) : null}
               </View>
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wie kommt man hin und was muss man wissen?</Text>
+              <AdminSectionHeading label="Standortdetails" body="Anreise, Infrastruktur, Regeln und Sicherheit." />
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.transitNotes} onChangeText={(transitNotes) => setProfileDraft((draft) => ({ ...draft, transitNotes }))} placeholder="Anreise, z. B. Buslinie, Radweg, Parkplätze" multiline />
                 <AdminInput value={profileDraft.amenityNotes} onChangeText={(amenityNotes) => setProfileDraft((draft) => ({ ...draft, amenityNotes }))} placeholder="Infrastruktur, z. B. Wasser, Toiletten, Umkleiden" multiline />
               </View>
 
-              <Text style={[styles.sectionQuestion, { color: theme.text }]}>Wer ist Ansprechpartner?</Text>
+              <AdminSectionHeading label="AP und Organisation" body="Ansprechperson, AP-Level und organisatorische Hinweise." />
               <PickerGroup
                 label="Profil-AP"
                 items={members.map((member) => ({ id: member.userId, label: member.displayName }))}
@@ -793,8 +793,8 @@ export default function AdminScreen() {
                 onSelect={(apContactId) => setProfileDraft((draft) => ({ ...draft, apContactId }))}
               />
               {profileDraft.apContactId ? (
-                <Pressable style={[styles.roleButton, { backgroundColor: theme.surface, alignSelf: "flex-start" }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apContactId: "" }))}>
-                  <Text style={[styles.roleText, { color: theme.text }]}>Kein Profil-AP</Text>
+                <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface, alignSelf: "flex-start" }]} onPress={() => setProfileDraft((draft) => ({ ...draft, apContactId: "" }))}>
+                  <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Kein Profil-AP</Text>
                 </Pressable>
               ) : null}
               <PickerGroup
@@ -809,7 +809,7 @@ export default function AdminScreen() {
               </View>
               <View style={styles.roleRow}>
                 <Pressable
-                  style={[styles.primaryButton, { backgroundColor: theme.button }]}
+                  style={[styles.primaryButton, { backgroundColor: theme.mcc.accentDeep }]}
                   onPress={() =>
                     confirmAdminAction(
                       editingProfileId ? "Sportprofil speichern?" : "Sportprofil anlegen?",
@@ -818,11 +818,11 @@ export default function AdminScreen() {
                     )
                   }
                 >
-                  <Text style={[styles.primaryText, { color: theme.inverse }]}>{editingProfileId ? "Speichern" : "Anlegen"}</Text>
+                  <Text style={[styles.primaryText, { color: "#FFFFFF" }]}>{editingProfileId ? "Speichern" : "Anlegen"}</Text>
                 </Pressable>
                 {editingProfileId ? (
-                  <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={resetProfileDraft}>
-                    <Text style={[styles.roleText, { color: theme.text }]}>Abbrechen</Text>
+                  <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={resetProfileDraft}>
+                    <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Abbrechen</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -832,15 +832,15 @@ export default function AdminScreen() {
                 const profiles = profilesBySport.get(sport.id) ?? [];
                 if (profileSearch.trim() && profiles.length === 0) return null;
                 return (
-                  <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
+                  <View key={sport.id} style={[styles.memberCard, { borderTopColor: theme.mcc.line }]}>
                     <View style={styles.sportTitleRow}>
                       <SportIconBadge sport={sport} size={34} />
                       <View style={styles.memberText}>
-                        <Text style={[styles.name, { color: theme.text }]}>{sport.name}</Text>
+                        <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{sport.name}</Text>
                       </View>
                     </View>
-                    <Text style={[styles.muted, { color: theme.muted }]}>Abstrakte Sportart - darunter liegen konkrete Profile.</Text>
-                    {profiles.length === 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Noch kein Sportprofil.</Text> : null}
+                    <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Abstrakte Sportart - darunter liegen konkrete Profile.</Text>
+                    {profiles.length === 0 ? <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Noch kein Sportprofil.</Text> : null}
                     {profiles.map((profile) => {
                       const apMember = members.find((member) => member.userId === profile.ap_contact_id);
                       const creatorMember = members.find((member) => member.userId === profile.created_by);
@@ -850,32 +850,32 @@ export default function AdminScreen() {
                       const minimumParticipants = profile.minimum_participants ?? profile.minimum_group_size;
                       const maximumParticipants = profile.maximum_participants ?? profile.maximum_group_size;
                       return (
-                        <View key={profile.id} style={[styles.profileChildCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                        <View key={profile.id} style={[styles.profileChildCard, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
                           <View style={styles.profileHeaderRow}>
                           <View style={styles.profileText}>
-                            <Text style={[styles.name, { color: theme.text }]}>{profile.name}</Text>
-                            <Text style={[styles.muted, { color: theme.accent }]}>{linkedSports || "Keine Sportart verknüpft"}</Text>
-                            <Text style={[styles.muted, { color: theme.muted }]}>
+                            <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{profile.name}</Text>
+                            <Text style={[styles.muted, { color: theme.mcc.accent }]}>{linkedSports || "Keine Sportart verknüpft"}</Text>
+                            <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
                               {[profile.location_name ?? "Ort offen", profile.location_city, profile.postal_code].filter(Boolean).join(" - ")} - Standort min. {minimumParticipants}
                               {maximumParticipants ? ` - max. ${maximumParticipants}` : ""}
                             </Text>
-                            {missingWeatherLocation ? <Text style={[styles.muted, { color: theme.accent }]}>Wetterdaten fehlen: bitte PLZ oder Koordinaten ergänzen.</Text> : null}
-                            <Text style={[styles.muted, { color: theme.muted }]}>
+                            {missingWeatherLocation ? <Text style={[styles.muted, { color: theme.mcc.accent }]}>Wetterdaten fehlen: bitte PLZ oder Koordinaten ergänzen.</Text> : null}
+                            <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
                               AP: {apRequirementLabel(profile.ap_requirement_level)} - Kosten: {costProfileSummary(profile)}
                             </Text>
-                            <Text style={[styles.muted, { color: profile.is_active ? theme.accent : theme.muted }]}>
+                            <Text style={[styles.muted, { color: profile.is_active ? theme.mcc.accent : theme.mcc.textSecondary }]}>
                               {profile.is_active ? "aktiv" : "inaktiv"} - {locationLabel(profile.location_type)}
                               {creatorMember ? ` - Ersteller: ${creatorMember.displayName}` : " - Ersteller offen"}
                               {apMember && apMember.userId !== creatorMember?.userId ? ` - AP: ${apMember.displayName}` : ""}
                             </Text>
-                            {requiredEquipment.length > 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Mitbringen: {requiredEquipment.join(", ")}</Text> : null}
+                            {requiredEquipment.length > 0 ? <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Mitbringen: {requiredEquipment.join(", ")}</Text> : null}
                             {profile.opening_notes || profile.transit_notes || profile.amenity_notes ? (
-                              <Text style={[styles.muted, { color: theme.muted }]}>
+                              <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
                                 {[profile.opening_notes, profile.transit_notes, profile.amenity_notes].filter(Boolean).join(" - ")}
                               </Text>
                             ) : null}
                             {profile.location_rules || profile.safety_notes ? (
-                              <Text style={[styles.muted, { color: theme.muted }]}>
+                              <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
                                 {[profile.location_rules, profile.safety_notes].filter(Boolean).join(" - ")}
                               </Text>
                             ) : null}
@@ -883,11 +883,11 @@ export default function AdminScreen() {
                           <MapRouteButton target={profileMapTarget(profile)} compact />
                           </View>
                           <View style={styles.roleRow}>
-                            <Pressable style={[styles.roleButton, { backgroundColor: theme.softSurface }]} onPress={() => editProfile(profile)}>
-                              <Text style={[styles.roleText, { color: theme.text }]}>Bearbeiten</Text>
+                            <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => editProfile(profile)}>
+                              <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Bearbeiten</Text>
                             </Pressable>
-                            <Pressable style={[styles.roleButton, profile.is_active ? styles.dangerButton : { backgroundColor: theme.softSurface }]} onPress={() => void toggleProfileActive(profile)}>
-                              <Text style={profile.is_active ? styles.dangerText : [styles.roleText, { color: theme.text }]}>
+                            <Pressable style={[styles.roleButton, profile.is_active ? styles.dangerButton : { backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => void toggleProfileActive(profile)}>
+                              <Text style={profile.is_active ? styles.dangerText : [styles.roleText, { color: theme.mcc.textPrimary }]}>
                                 {profile.is_active ? "Deaktivieren" : "Aktivieren"}
                               </Text>
                             </Pressable>
@@ -914,14 +914,14 @@ export default function AdminScreen() {
           ) : null}
 
           {isAdmin && activeSection === "members" ? (
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Mitglieder & Rechte</Text>
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Mitglieder & Rechte</Text>
               <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied, Stadt oder Rolle suchen" />
               {filteredMembers.map((member) => (
-                <View key={member.userId} style={[styles.memberCard, { borderTopColor: theme.border }]}>
+                <View key={member.userId} style={[styles.memberCard, { borderTopColor: theme.mcc.line }]}>
                   <View>
-                    <Text style={[styles.name, { color: theme.text }]}>{member.displayName}</Text>
-                    <Text style={[styles.muted, { color: theme.muted }]}>
+                    <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{member.displayName}</Text>
+                    <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
                       {member.city ?? "Stadt offen"} · {member.phone ?? "Keine Nummer"} · {roleLabel(member.role)}
                     </Text>
                   </View>
@@ -929,26 +929,26 @@ export default function AdminScreen() {
                     <View style={styles.formGrid}>
                       <AdminInput value={memberNameDraft} onChangeText={setMemberNameDraft} placeholder="Neuer Anzeigename" />
                       <View style={styles.roleRow}>
-                        <Pressable style={[styles.roleButton, { backgroundColor: theme.button }]} onPress={() => void saveMemberName(member)}>
-                          <Text style={[styles.roleText, { color: theme.inverse }]}>Name speichern</Text>
+                        <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.accentDeep }]} onPress={() => void saveMemberName(member)}>
+                          <Text style={[styles.roleText, { color: "#FFFFFF" }]}>Name speichern</Text>
                         </Pressable>
-                        <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => setEditingMemberNameId(null)}>
-                          <Text style={[styles.roleText, { color: theme.text }]}>Abbrechen</Text>
+                        <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={() => setEditingMemberNameId(null)}>
+                          <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Abbrechen</Text>
                         </Pressable>
                       </View>
                     </View>
                   ) : null}
                   <View style={styles.roleRow}>
-                    <Pressable style={[styles.roleButton, { backgroundColor: theme.surface }]} onPress={() => startRenameMember(member)}>
-                      <Text style={[styles.roleText, { color: theme.text }]}>Name</Text>
+                    <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={() => startRenameMember(member)}>
+                      <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Name</Text>
                     </Pressable>
                     {roles.map((role) => (
                       <Pressable
                         key={role}
-                        style={[styles.roleButton, { backgroundColor: member.role === role ? theme.button : theme.surface }]}
+                        style={[styles.roleButton, { backgroundColor: member.role === role ? theme.mcc.accentDeep : theme.mcc.surface }]}
                         onPress={() => confirmAdminAction("Rechte ändern?", `${member.displayName} wird auf ${roleLabel(role)} gesetzt.`, () => void changeRole(member, role))}
                       >
-                        <Text style={[styles.roleText, { color: member.role === role ? theme.inverse : theme.text }]}>{roleLabel(role)}</Text>
+                        <Text style={[styles.roleText, { color: member.role === role ? "#FFFFFF" : theme.mcc.textPrimary }]}>{roleLabel(role)}</Text>
                       </Pressable>
                     ))}
                     <Pressable
@@ -970,36 +970,36 @@ export default function AdminScreen() {
           ) : null}
 
           {isAdmin && activeSection === "inviteTree" ? (
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Einladungsbaum</Text>
-              <Text style={[styles.body, { color: theme.muted }]}>Jeder Ast zeigt, welcher Code von wem erstellt wurde und welche weiteren Codes daraus entstanden sind.</Text>
-              {invitationTree.length === 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Noch keine Einladungscodes.</Text> : null}
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Einladungsbaum</Text>
+              <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Jeder Ast zeigt, welcher Code von wem erstellt wurde und welche weiteren Codes daraus entstanden sind.</Text>
+              {invitationTree.length === 0 ? <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Noch keine Einladungscodes.</Text> : null}
               <InvitationTreeView nodes={invitationRoots} />
             </View>
           ) : null}
 
           {isAdmin && activeSection === "nameRequests" ? (
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Namensanfragen</Text>
-              {nameRequests.length === 0 ? <Text style={[styles.muted, { color: theme.muted }]}>Keine offenen Anfragen.</Text> : null}
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Namensanfragen</Text>
+              {nameRequests.length === 0 ? <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Keine offenen Anfragen.</Text> : null}
               {nameRequests.map((request) => {
                 const member = members.find((entry) => entry.userId === request.user_id);
                 return (
-                  <View key={request.id} style={[styles.memberCard, { borderTopColor: theme.border }]}>
+                  <View key={request.id} style={[styles.memberCard, { borderTopColor: theme.mcc.line }]}>
                     <View>
-                      <Text style={[styles.name, { color: theme.text }]}>{member?.displayName ?? "Mitglied"}</Text>
-                      <Text style={[styles.muted, { color: theme.muted }]}>möchte heißen: {request.requested_display_name}</Text>
+                      <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{member?.displayName ?? "Mitglied"}</Text>
+                      <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>möchte heißen: {request.requested_display_name}</Text>
                     </View>
                     <View style={styles.roleRow}>
                       <Pressable
-                        style={[styles.roleButton, { backgroundColor: theme.button }]}
+                        style={[styles.roleButton, { backgroundColor: theme.mcc.accentDeep }]}
                         onPress={() =>
                           confirmAdminAction("Namen freigeben?", `${member?.displayName ?? "Mitglied"} wird zu ${request.requested_display_name}.`, () =>
                             void reviewNameRequest(request, "approved"),
                           )
                         }
                       >
-                        <Text style={[styles.roleText, { color: theme.inverse }]}>Freigeben</Text>
+                        <Text style={[styles.roleText, { color: "#FFFFFF" }]}>Freigeben</Text>
                       </Pressable>
                       <Pressable
                         style={[styles.roleButton, styles.dangerButton]}
@@ -1035,7 +1035,7 @@ export default function AdminScreen() {
 
 function AdminInput(props: React.ComponentProps<typeof TextInput>) {
   const { theme } = useTheme();
-  return <TextInput placeholderTextColor={theme.muted} style={[styles.input, props.multiline && styles.textArea, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]} {...props} />;
+  return <TextInput placeholderTextColor={theme.mcc.textSecondary} style={[styles.input, props.multiline && styles.textArea, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface, color: theme.mcc.textPrimary }]} {...props} />;
 }
 
 function SportIconPicker({ draft, onSelect, onClose }: { draft: SportDraft; onSelect: (iconName: string) => void; onClose: () => void }) {
@@ -1043,23 +1043,23 @@ function SportIconPicker({ draft, onSelect, onClose }: { draft: SportDraft; onSe
   return (
     <View style={styles.iconPickerOverlay} pointerEvents="box-none">
       <Pressable style={styles.confirmScrim} onPress={onClose} />
-      <View style={[styles.iconPickerCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+      <View style={[styles.iconPickerCard, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
         <View style={styles.contactRow}>
           <View style={styles.memberText}>
-            <Text style={[styles.confirmTitle, { color: theme.text }]}>Welches Icon passt?</Text>
-            <Text style={[styles.muted, { color: theme.muted }]}>{draft.name || "Neue Sportart"}</Text>
+            <Text style={[styles.confirmTitle, { color: theme.mcc.textPrimary }]}>Welches Icon passt?</Text>
+            <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{draft.name || "Neue Sportart"}</Text>
           </View>
-          <Pressable style={[styles.inlineCloseButton, { backgroundColor: theme.softSurface }]} onPress={onClose}>
-            <MaterialCommunityIcons name="close" size={18} color={theme.text} />
+          <Pressable style={[styles.inlineCloseButton, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={onClose}>
+            <MaterialCommunityIcons name="close" size={18} color={theme.mcc.textPrimary} />
           </Pressable>
         </View>
         <ScrollView style={styles.iconScroll} contentContainerStyle={styles.iconGrid} showsVerticalScrollIndicator={false}>
           {SPORT_ICON_OPTIONS.map((option) => {
             const active = draft.iconName === option.name;
             return (
-              <Pressable key={option.name} style={[styles.iconOption, { borderColor: active ? theme.accent : theme.border, backgroundColor: active ? theme.button : theme.softSurface }]} onPress={() => onSelect(option.name)}>
-                <MaterialCommunityIcons name={option.name} size={23} color={active ? theme.inverse : theme.text} />
-                <Text style={[styles.iconOptionText, { color: active ? theme.inverse : theme.text }]}>{option.label}</Text>
+              <Pressable key={option.name} style={[styles.iconOption, { borderColor: active ? theme.mcc.accent : theme.mcc.line, backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surfaceSoft }]} onPress={() => onSelect(option.name)}>
+                <MaterialCommunityIcons name={option.name} size={23} color={active ? "#FFFFFF" : theme.mcc.textPrimary} />
+                <Text style={[styles.iconOptionText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{option.label}</Text>
               </Pressable>
             );
           })}
@@ -1083,10 +1083,10 @@ function InvitationTreeItem({ node, depth }: { node: InvitationTreeNode; depth: 
   const { theme } = useTheme();
   return (
     <View style={[styles.treeItem, depth > 0 && styles.treeItemNested]}>
-      <View style={[styles.treeStem, { backgroundColor: theme.border }]} />
-      <View style={[styles.treeCard, { borderColor: node.accent ? theme.accent : theme.border, backgroundColor: theme.surface }]}>
-        <Text style={[styles.name, { color: theme.text }]}>{node.label}</Text>
-        <Text style={[styles.muted, { color: node.accent ? theme.accent : theme.muted }]}>{node.meta}</Text>
+      <View style={[styles.treeStem, { backgroundColor: theme.mcc.line }]} />
+      <View style={[styles.treeCard, { borderColor: node.accent ? theme.mcc.accent : theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+        <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{node.label}</Text>
+        <Text style={[styles.muted, { color: node.accent ? theme.mcc.accent : theme.mcc.textSecondary }]}>{node.meta}</Text>
       </View>
       {node.children.length > 0 ? (
         <View style={styles.treeChildren}>
@@ -1105,12 +1105,12 @@ function ConfirmSheet({ confirm, onCancel, onConfirm }: { confirm: Exclude<Pendi
   return (
     <View style={styles.confirmOverlay} pointerEvents="box-none">
       <Pressable style={styles.confirmScrim} onPress={onCancel} />
-      <View style={[styles.confirmCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-        <Text style={[styles.confirmTitle, { color: theme.text }]}>{confirm.title}</Text>
-        <Text style={[styles.confirmBody, { color: theme.muted }]}>{confirm.detail}</Text>
+      <View style={[styles.confirmCard, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+        <Text style={[styles.confirmTitle, { color: theme.mcc.textPrimary }]}>{confirm.title}</Text>
+        <Text style={[styles.confirmBody, { color: theme.mcc.textSecondary }]}>{confirm.detail}</Text>
         <View style={styles.confirmActions}>
-          <Pressable style={[styles.confirmButton, { backgroundColor: theme.softSurface }]} onPress={onCancel}>
-            <Text style={[styles.confirmButtonText, { color: theme.text }]}>Abbrechen</Text>
+          <Pressable style={[styles.confirmButton, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={onCancel}>
+            <Text style={[styles.confirmButtonText, { color: theme.mcc.textPrimary }]}>Abbrechen</Text>
           </Pressable>
           <Pressable style={[styles.confirmButton, styles.confirmDangerButton]} onPress={onConfirm}>
             <Text style={styles.confirmDangerText}>Bestätigen</Text>
@@ -1121,15 +1121,46 @@ function ConfirmSheet({ confirm, onCancel, onConfirm }: { confirm: Exclude<Pendi
   );
 }
 
+function AdminSectionHeading({ label, body }: { label: string; body: string }) {
+  return (
+    <View style={styles.adminSectionHeading}>
+      <MccBadge>{label}</MccBadge>
+      <MccBody muted>{body}</MccBody>
+    </View>
+  );
+}
+
+function ProfileDraftPreview({ draft, members, editing }: { draft: ProfileDraft; members: MccMember[]; editing: boolean }) {
+  const { theme } = useTheme();
+  const apMember = members.find((member) => member.userId === draft.apContactId);
+  const capacity = [draft.minimumGroupSize ? `min. ${draft.minimumGroupSize}` : null, draft.maximumGroupSize ? `max. ${draft.maximumGroupSize}` : null].filter(Boolean).join(" - ");
+  const cost = draft.costRequired || draft.costPerPerson || draft.costNote ? [draft.costPerPerson ? `${draft.costPerPerson} ${draft.costCurrency || "EUR"}` : null, draft.costNote || "kostenpflichtig"].filter(Boolean).join(" - ") : "keine Pflichtkosten";
+
+  return (
+    <View style={[styles.previewPanel, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
+      <MccBadge icon={editing ? "pencil-outline" : "plus-circle-outline"}>{editing ? "Preview: Bearbeitung" : "Preview: Neues Profil"}</MccBadge>
+      <MccCardTitle>{draft.name || "Unbenanntes Sportprofil"}</MccCardTitle>
+      <MccBody muted>{[draft.locationName || "Ort offen", draft.locationCity, draft.postalCode].filter(Boolean).join(" - ") || "Standort noch offen"}</MccBody>
+      <View style={styles.previewChipRow}>
+        <MccBadge tone="neutral">{locationLabel(draft.locationType)}</MccBadge>
+        <MccBadge tone={capacity ? "accent" : "neutral"}>{capacity || "Kapazitaet offen"}</MccBadge>
+        <MccBadge tone={draft.apRequirementLevel === "critical" ? "warning" : "neutral"}>AP {apRequirementLabel(draft.apRequirementLevel)}</MccBadge>
+        <MccBadge tone={draft.costRequired ? "warning" : "neutral"}>{cost}</MccBadge>
+      </View>
+      <MccBody muted>{apMember ? `Profil-AP: ${apMember.displayName}` : "Noch kein Profil-AP ausgewaehlt."}</MccBody>
+    </View>
+  );
+}
+
 function AdminMenuCard({ title, body, onPress }: { title: string; body: string; onPress: () => void }) {
   const { theme } = useTheme();
   return (
-    <Pressable style={({ pressed }) => [styles.menuCard, { borderColor: theme.border, backgroundColor: theme.softSurface }, pressed && styles.pressed]} onPress={onPress}>
+    <Pressable style={({ pressed }) => [styles.menuCard, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }, pressed && styles.pressed]} onPress={onPress}>
       <View style={styles.memberText}>
-        <Text style={[styles.name, { color: theme.text }]}>{title}</Text>
-        <Text style={[styles.muted, { color: theme.muted }]}>{body}</Text>
+        <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{title}</Text>
+        <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{body}</Text>
       </View>
-      <Text style={[styles.itemArrow, { color: theme.muted }]}>›</Text>
+      <Text style={[styles.itemArrow, { color: theme.mcc.textSecondary }]}>›</Text>
     </Pressable>
   );
 }
@@ -1148,13 +1179,13 @@ function PickerGroup({
   const { theme } = useTheme();
   return (
     <View style={styles.chipGroup}>
-      <Text style={[styles.muted, { color: theme.muted }]}>{label}</Text>
+      <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{label}</Text>
       <View style={styles.roleRow}>
         {items.map((item) => {
           const active = item.id === selectedId;
           return (
-            <Pressable key={item.id} style={[styles.roleButton, { backgroundColor: active ? theme.button : theme.surface }]} onPress={() => onSelect(item.id)}>
-              <Text style={[styles.roleText, { color: active ? theme.inverse : theme.text }]}>{item.label}</Text>
+            <Pressable key={item.id} style={[styles.roleButton, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => onSelect(item.id)}>
+              <Text style={[styles.roleText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{item.label}</Text>
             </Pressable>
           );
         })}
@@ -1177,13 +1208,13 @@ function MultiPickerGroup({
   const { theme } = useTheme();
   return (
     <View style={styles.chipGroup}>
-      <Text style={[styles.muted, { color: theme.muted }]}>{label}</Text>
+      <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{label}</Text>
       <View style={styles.roleRow}>
         {items.map((item) => {
           const active = selectedIds.includes(item.id);
           return (
-            <Pressable key={item.id} style={[styles.roleButton, { backgroundColor: active ? theme.button : theme.surface, opacity: item.inactive && !active ? 0.55 : 1 }]} onPress={() => onToggle(item.id)}>
-              <Text style={[styles.roleText, { color: active ? theme.inverse : theme.text }]}>{item.label}{item.inactive ? " (inaktiv)" : ""}</Text>
+            <Pressable key={item.id} style={[styles.roleButton, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surface, opacity: item.inactive && !active ? 0.55 : 1 }]} onPress={() => onToggle(item.id)}>
+              <Text style={[styles.roleText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{item.label}{item.inactive ? " (inaktiv)" : ""}</Text>
             </Pressable>
           );
         })}
@@ -1447,13 +1478,13 @@ function ChipGroup<T extends SportIntensityLevel | SportLocationType>({
   const { theme } = useTheme();
   return (
     <View style={styles.chipGroup}>
-      <Text style={[styles.muted, { color: theme.muted }]}>{label}</Text>
+      <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{label}</Text>
       <View style={styles.roleRow}>
         {options.map((option) => {
           const active = option === selected;
           return (
-            <Pressable key={option} style={[styles.roleButton, { backgroundColor: active ? theme.button : theme.surface }]} onPress={() => onSelect(option)}>
-              <Text style={[styles.roleText, { color: active ? theme.inverse : theme.text }]}>{isIntensity(option) ? intensityLabel(option) : locationLabel(option)}</Text>
+            <Pressable key={option} style={[styles.roleButton, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surface }]} onPress={() => onSelect(option)}>
+              <Text style={[styles.roleText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{isIntensity(option) ? intensityLabel(option) : locationLabel(option)}</Text>
             </Pressable>
           );
         })}
@@ -1478,6 +1509,9 @@ const styles = StyleSheet.create({
   body: { fontSize: 15, lineHeight: 22 },
   muted: { fontSize: 13, lineHeight: 19 },
   adminGrid: { gap: 10 },
+  adminSectionHeading: { gap: 6, paddingTop: 8 },
+  previewPanel: { gap: 12, borderRadius: 22, borderWidth: 1, padding: 14 },
+  previewChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   menuCard: {
     alignItems: "center",
     borderRadius: 22,

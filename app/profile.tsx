@@ -2,8 +2,8 @@ import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { MotionBackground } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -175,8 +175,8 @@ export default function ProfileScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <BrandBackground />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+      <MotionBackground />
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.shell}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -185,23 +185,23 @@ export default function ProfileScreen() {
             {message ? <Text style={styles.notice}>{message}</Text> : null}
             {success ? <Text style={styles.success}>{success}</Text> : null}
 
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Name</Text>
-              <Text style={[styles.label, { color: theme.muted }]}>Aktuell: {profile?.display_name ?? "Mitglied"}</Text>
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface, shadowColor: theme.mcc.shadow }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Name</Text>
+              <Text style={[styles.label, { color: theme.mcc.textSecondary }]}>Aktuell: {profile?.display_name ?? "Mitglied"}</Text>
               <ProfileInput value={requestedName} onChangeText={setRequestedName} placeholder="Neuer Name" />
               <ActionButton label="Zur Freigabe senden" onPress={submitNameRequest} disabled={busy || requestedName.trim().length < 2 || requestedName.trim() === profile?.display_name} />
             </View>
 
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Profil</Text>
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface, shadowColor: theme.mcc.shadow }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Profil</Text>
               <ProfileInput value={favoriteSports} onChangeText={setFavoriteSports} placeholder="Lieblingssportarten" />
               <BirthDatePicker value={birthDate} onChangeText={setBirthDate} />
               <ActionButton label="Profil speichern" onPress={saveDetails} disabled={busy} />
             </View>
 
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Telefonnummer</Text>
-              <Text style={[styles.label, { color: theme.muted }]}>Aktuell: {normalizePhone(profile?.phone ?? user.phone ?? "") || "Keine Nummer"}</Text>
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface, shadowColor: theme.mcc.shadow }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Telefonnummer</Text>
+              <Text style={[styles.label, { color: theme.mcc.textSecondary }]}>Aktuell: {normalizePhone(profile?.phone ?? user.phone ?? "") || "Keine Nummer"}</Text>
               <PhoneField countryIso={countryIso} dialCode={dialCode} onCountryChange={setCountryIso} onDialCodeChange={setDialCode} phone={phoneLocal} onPhoneChange={setPhoneLocal} />
               <ProfileInput value={phonePin} onChangeText={(value) => setPhonePin(value.replace(/\D/g, ""))} placeholder="Aktuelle PIN" keyboardType="number-pad" inputMode="numeric" secureTextEntry />
               {!pendingPhone ? <ActionButton label="SMS-Code senden" onPress={startPhoneChange} disabled={busy || !isValidPin(phonePin)} /> : null}
@@ -248,10 +248,10 @@ function PhoneField({
   return (
     <View style={styles.phoneGroup}>
       <View style={styles.phoneRow}>
-        <Pressable style={[styles.dialField, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => setExpanded((value) => !value)}>
+        <Pressable style={[styles.dialField, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => setExpanded((value) => !value)}>
           <FlagBadge country={selected} />
-          <Text style={[styles.dialText, { color: theme.text }]}>{dialCode}</Text>
-          <Text style={[styles.chevron, { color: theme.muted }]}>{expanded ? "▲" : "▼"}</Text>
+          <Text style={[styles.dialText, { color: theme.mcc.textPrimary }]}>{dialCode}</Text>
+          <Text style={[styles.chevron, { color: theme.mcc.textMuted }]}>{expanded ? "▲" : "▼"}</Text>
         </Pressable>
         <TextInput
           value={phone}
@@ -260,17 +260,17 @@ function PhoneField({
           inputMode="tel"
           autoComplete="tel"
           placeholder="170 1234567"
-          placeholderTextColor={theme.muted}
-          style={[styles.input, styles.phoneInput, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]}
+          placeholderTextColor={theme.mcc.textMuted}
+          style={[styles.input, styles.phoneInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
         />
       </View>
       {expanded ? (
-        <View style={[styles.countryMenu, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+        <View style={[styles.countryMenu, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceRaised }]}>
           {COUNTRIES.map((country) => (
-            <Pressable key={country.iso} style={[styles.countryOption, { borderBottomColor: theme.border }]} onPress={() => selectCountry(country)}>
+            <Pressable key={country.iso} style={[styles.countryOption, { borderBottomColor: theme.mcc.line }]} onPress={() => selectCountry(country)}>
               <FlagBadge country={country} />
-              <Text style={[styles.countryIso, { color: theme.text }]}>{country.iso}</Text>
-              <Text style={[styles.countryDialCode, { color: theme.muted }]}>{country.dialCode}</Text>
+              <Text style={[styles.countryIso, { color: theme.mcc.textPrimary }]}>{country.iso}</Text>
+              <Text style={[styles.countryDialCode, { color: theme.mcc.textSecondary }]}>{country.dialCode}</Text>
             </Pressable>
           ))}
         </View>
@@ -291,7 +291,7 @@ function FlagBadge({ country }: { country: CountryDialCode }) {
 
 function ProfileInput(props: React.ComponentProps<typeof TextInput>) {
   const { theme } = useTheme();
-  return <TextInput placeholderTextColor={theme.muted} style={[styles.input, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]} {...props} />;
+  return <TextInput placeholderTextColor={theme.mcc.textMuted} style={[styles.input, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]} {...props} />;
 }
 
 function CalendarInput({ value, onChangeText }: { value: string; onChangeText: (value: string) => void }) {
@@ -316,25 +316,25 @@ function CalendarInput({ value, onChangeText }: { value: string; onChangeText: (
 
   return (
     <View style={styles.calendarRoot}>
-      <Pressable style={[styles.input, styles.calendarTrigger, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => setOpen((next) => !next)}>
-        <Text style={[styles.calendarTriggerText, { color: normalizedValue ? theme.text : theme.muted }]}>{normalizedValue ? formatGermanDate(normalizedValue) : "Geburtstag auswählen"}</Text>
-        <Text style={[styles.chevron, { color: theme.muted }]}>{open ? "▲" : "▼"}</Text>
+      <Pressable style={[styles.input, styles.calendarTrigger, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => setOpen((next) => !next)}>
+        <Text style={[styles.calendarTriggerText, { color: normalizedValue ? theme.mcc.textPrimary : theme.mcc.textMuted }]}>{normalizedValue ? formatGermanDate(normalizedValue) : "Geburtstag auswählen"}</Text>
+        <Text style={[styles.chevron, { color: theme.mcc.textMuted }]}>{open ? "▲" : "▼"}</Text>
       </Pressable>
 
       {open ? (
-        <View style={[styles.calendarPanel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+        <View style={[styles.calendarPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceRaised }]}>
           <View style={styles.calendarHeader}>
-            <Pressable style={[styles.calendarNav, { backgroundColor: theme.softSurface }]} onPress={() => moveMonth(-1)}>
-              <Text style={[styles.calendarNavText, { color: theme.text }]}>‹</Text>
+            <Pressable style={[styles.calendarNav, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => moveMonth(-1)}>
+              <Text style={[styles.calendarNavText, { color: theme.mcc.textPrimary }]}>‹</Text>
             </Pressable>
-            <Text style={[styles.calendarTitle, { color: theme.text }]}>{monthTitle(visibleYear, visibleMonth)}</Text>
-            <Pressable style={[styles.calendarNav, { backgroundColor: theme.softSurface }]} onPress={() => moveMonth(1)}>
-              <Text style={[styles.calendarNavText, { color: theme.text }]}>›</Text>
+            <Text style={[styles.calendarTitle, { color: theme.mcc.textPrimary }]}>{monthTitle(visibleYear, visibleMonth)}</Text>
+            <Pressable style={[styles.calendarNav, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => moveMonth(1)}>
+              <Text style={[styles.calendarNavText, { color: theme.mcc.textPrimary }]}>›</Text>
             </Pressable>
           </View>
           <View style={styles.weekdayRow}>
             {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((day) => (
-              <Text key={day} style={[styles.weekday, { color: theme.muted }]}>
+              <Text key={day} style={[styles.weekday, { color: theme.mcc.textMuted }]}>
                 {day}
               </Text>
             ))}
@@ -343,8 +343,8 @@ function CalendarInput({ value, onChangeText }: { value: string; onChangeText: (
             {days.map((day, index) => {
               const active = day > 0 && normalizedValue === `${visibleYear}-${String(visibleMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
               return day > 0 ? (
-                <Pressable key={`${visibleYear}-${visibleMonth}-${day}`} style={[styles.dayCell, active && { backgroundColor: theme.button }]} onPress={() => selectDay(day)}>
-                  <Text style={[styles.dayText, { color: active ? theme.inverse : theme.text }]}>{day}</Text>
+                <Pressable key={`${visibleYear}-${visibleMonth}-${day}`} style={[styles.dayCell, active && { backgroundColor: theme.mcc.accentDeep }]} onPress={() => selectDay(day)}>
+                  <Text style={[styles.dayText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{day}</Text>
                 </Pressable>
               ) : (
                 <View key={`empty-${index}`} style={styles.dayCell} />
@@ -360,8 +360,8 @@ function CalendarInput({ value, onChangeText }: { value: string; onChangeText: (
 function ActionButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
   const { theme } = useTheme();
   return (
-    <Pressable style={({ pressed }) => [styles.button, { backgroundColor: theme.button }, disabled && styles.disabled, pressed && !disabled && styles.pressed]} onPress={onPress} disabled={disabled}>
-      <Text style={[styles.buttonText, { color: theme.inverse }]}>{label}</Text>
+    <Pressable style={({ pressed }) => [styles.button, { backgroundColor: theme.mcc.accentDeep }, disabled && styles.disabled, pressed && !disabled && styles.pressed]} onPress={onPress} disabled={disabled}>
+      <Text style={styles.buttonText}>{label}</Text>
     </Pressable>
   );
 }
@@ -385,19 +385,19 @@ function BirthDatePicker({ value, onChangeText }: { value: string; onChangeText:
 
   return (
     <View style={styles.calendarRoot}>
-      <Pressable style={[styles.input, styles.calendarTrigger, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => setOpen((next) => !next)}>
-        <Text style={[styles.calendarTriggerText, { color: normalizedValue ? theme.text : theme.muted }]}>{normalizedValue ? formatGermanDate(normalizedValue) : "Geburtstag auswählen"}</Text>
-        <Text style={[styles.chevron, { color: theme.muted }]}>{open ? "▲" : "▼"}</Text>
+      <Pressable style={[styles.input, styles.calendarTrigger, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => setOpen((next) => !next)}>
+        <Text style={[styles.calendarTriggerText, { color: normalizedValue ? theme.mcc.textPrimary : theme.mcc.textMuted }]}>{normalizedValue ? formatGermanDate(normalizedValue) : "Geburtstag auswählen"}</Text>
+        <Text style={[styles.chevron, { color: theme.mcc.textMuted }]}>{open ? "▲" : "▼"}</Text>
       </Pressable>
 
       {open ? (
-        <View style={[styles.calendarPanelCompact, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+        <View style={[styles.calendarPanelCompact, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceRaised }]}>
           <View style={styles.pickerStepper}>
             {(["year", "month", "day"] as const).map((entry) => {
               const active = step === entry;
               return (
-                <Pressable key={entry} style={[styles.stepPill, { backgroundColor: active ? theme.button : theme.softSurface }]} onPress={() => setStep(entry)}>
-                  <Text style={[styles.stepText, { color: active ? theme.inverse : theme.text }]}>{entry === "year" ? "Jahr" : entry === "month" ? "Monat" : "Tag"}</Text>
+                <Pressable key={entry} style={[styles.stepPill, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surfaceSoft }]} onPress={() => setStep(entry)}>
+                  <Text style={[styles.stepText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{entry === "year" ? "Jahr" : entry === "month" ? "Monat" : "Tag"}</Text>
                 </Pressable>
               );
             })}
@@ -410,13 +410,13 @@ function BirthDatePicker({ value, onChangeText }: { value: string; onChangeText:
                 return (
                   <Pressable
                     key={year}
-                    style={[styles.pickerCell, active && { backgroundColor: theme.button }]}
+                    style={[styles.pickerCell, active && { backgroundColor: theme.mcc.accentDeep }]}
                     onPress={() => {
                       setDraftYear(year);
                       setStep("month");
                     }}
                   >
-                    <Text style={[styles.pickerText, { color: active ? theme.inverse : theme.text }]}>{year}</Text>
+                    <Text style={[styles.pickerText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{year}</Text>
                   </Pressable>
                 );
               })}
@@ -430,13 +430,13 @@ function BirthDatePicker({ value, onChangeText }: { value: string; onChangeText:
                 return (
                   <Pressable
                     key={index}
-                    style={[styles.pickerCell, active && { backgroundColor: theme.button }]}
+                    style={[styles.pickerCell, active && { backgroundColor: theme.mcc.accentDeep }]}
                     onPress={() => {
                       setDraftMonth(index);
                       setStep("day");
                     }}
                   >
-                    <Text style={[styles.pickerText, { color: active ? theme.inverse : theme.text }]}>{shortMonthName(index)}</Text>
+                    <Text style={[styles.pickerText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{shortMonthName(index)}</Text>
                   </Pressable>
                 );
               })}
@@ -448,8 +448,8 @@ function BirthDatePicker({ value, onChangeText }: { value: string; onChangeText:
               {Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
                 const active = normalizedValue === `${draftYear}-${String(draftMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 return (
-                  <Pressable key={day} style={[styles.dayPickerCell, active && { backgroundColor: theme.button }]} onPress={() => selectDay(day)}>
-                    <Text style={[styles.pickerText, { color: active ? theme.inverse : theme.text }]}>{day}</Text>
+                  <Pressable key={day} style={[styles.dayPickerCell, active && { backgroundColor: theme.mcc.accentDeep }]} onPress={() => selectDay(day)}>
+                    <Text style={[styles.pickerText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{day}</Text>
                   </Pressable>
                 );
               })}
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 34, fontWeight: "900" },
   notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "900" },
   success: { color: "#5eead4", fontSize: 14, fontWeight: "900" },
-  card: { gap: 10, borderRadius: 22, borderWidth: 1, padding: 16 },
+  card: { gap: 10, borderRadius: 22, borderWidth: 1, padding: 16, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 22 },
   cardTitle: { fontSize: 20, fontWeight: "900" },
   label: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   input: {
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   countryIso: { flex: 1, fontSize: 15, fontWeight: "900" },
   countryDialCode: { fontSize: 15, fontWeight: "800" },
   button: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
-  buttonText: { fontSize: 15, fontWeight: "900" },
+  buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
   disabled: { opacity: 0.42 },
   pressed: { transform: [{ scale: 0.99 }], opacity: 0.86 },
 });

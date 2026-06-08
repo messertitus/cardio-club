@@ -31,12 +31,12 @@ export function PageHeader({
       <View style={styles.brand}>
         <Image source={mode === "dark" ? darkLogo : lightLogo} style={styles.logo} resizeMode="contain" />
         <View style={styles.textBlock}>
-          {kicker ? <Text style={[styles.kicker, { color: theme.muted }]}>{kicker}</Text> : null}
+          {kicker ? <Text style={[styles.kicker, { color: theme.mcc.accent }]}>{kicker}</Text> : null}
           <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>
+            <Text style={[styles.title, { color: theme.mcc.textPrimary }]} numberOfLines={2}>
               {title}
             </Text>
-            {titleMeta ? <Text style={[styles.titleMeta, { color: theme.muted }]}>{titleMeta}</Text> : null}
+            {titleMeta ? <Text style={[styles.titleMeta, { color: theme.mcc.textMuted }]}>{titleMeta}</Text> : null}
           </View>
         </View>
       </View>

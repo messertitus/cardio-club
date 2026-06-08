@@ -7,14 +7,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { SearchField } from "../src/components/FormControls";
 import { MapRouteButton } from "../src/components/MapRouteButton";
+import { FlowStepRail, MccScreen, MotionBackground, WeeklyEventHeroCard } from "../src/components/MccDesign";
 import { MotionPressable, Reveal } from "../src/components/Motion";
 import { SportIconBadge } from "../src/components/SportIcon";
 import { ThemeToggle } from "../src/components/ThemeToggle";
-import { LoadingState, Screen } from "../src/components/ui";
+import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import type { VoteRank } from "../src/lib/votingRules";
+import { formatCardioSunday, isDecisionReleaseOpen, isVotingInputOpen } from "../src/services/date";
 import {
   clearMccNoGo,
   clearMccVote,
@@ -176,7 +178,8 @@ export default function HomeScreen() {
     });
   }, [sportSearch, state]);
 
-  const isDecided = state?.event.status === "decided" || state?.event.status === "completed";
+  const isDecided = Boolean(state && (state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(state.event.week_start_date)));
+  const votingInputOpen = Boolean(state && isVotingInputOpen(state.event.week_start_date));
   const naturalStep: FlowStep = isDecided
     ? "overview"
     : !state?.myAttendance
@@ -187,10 +190,17 @@ export default function HomeScreen() {
           ? "sports"
           : "overview";
   const activeStep = manualStep ?? naturalStep;
-  const decisionSportName = isDecided ? (state?.decisionText.selectedSportName ?? "Entscheidung steht") : "???";
+  const decisionSportName = isDecided ? (state?.decisionText.selectedSportName ?? "Entscheidung steht") : "Auswahl gespeichert";
   const secondaryDecisionName = isDecided ? state?.decisionText.secondarySportName : undefined;
-  const eventDate = state?.event.starts_at ? new Date(state.event.starts_at) : null;
-  const brandLogo = mode === "dark" ? darkLogo : lightLogo;
+  const participantCount = state?.attendance.filter((entry) => entry.status === "going" || entry.status === "maybe").length ?? 0;
+  const weightedVoteCount = state?.votes.reduce((total, vote) => total + vote.weight, 0).toFixed(1) ?? "0.0";
+  const heroCtaLabel = activeStep === "attendance" ? "Teilnahme setzen" : activeStep === "sports" ? "Abstimmen" : isDecided ? "Zum Event-Chat" : "Auswahl bearbeiten";
+  const heroFlowTarget =
+    activeStep === "attendance"
+      ? { label: "Teilnahme", icon: "account-check-outline" as const, tone: "success" as const }
+      : activeStep === "sports"
+        ? { label: "Voting", icon: "vote-outline" as const, tone: "accent" as const }
+        : { label: "Club", icon: "trophy-outline" as const, tone: isDecided ? "success" as const : "warning" as const };
 
   function applyLocalState(nextState: MccEventState) {
     setState(nextState);
@@ -482,9 +492,9 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <MccScreen>
         <LoadingState />
-      </Screen>
+      </MccScreen>
     );
   }
 
@@ -492,22 +502,22 @@ export default function HomeScreen() {
 
   if (!state && busy) {
     return (
-      <Screen>
+      <MccScreen>
         <LoadingState />
-      </Screen>
+      </MccScreen>
     );
   }
 
   if (!state) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-        <Image source={brandLogo} style={[styles.backgroundLogo, { opacity: mode === "dark" ? 0.055 : 0.075 }]} resizeMode="contain" />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+        <MotionBackground />
         <View style={styles.appShell}>
           <View style={styles.screen}>
             <Header />
-            <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-              <Text style={[styles.panelTitle, { color: theme.text }]}>Event konnte nicht geladen werden</Text>
-              <Text style={[styles.body, { color: theme.muted }]}>{notice ?? "Bitte prüfe Supabase und lade danach neu."}</Text>
+            <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+              <Text style={[styles.panelTitle, { color: theme.mcc.textPrimary }]}>Event konnte nicht geladen werden</Text>
+              <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>{notice ?? "Bitte prüfe Supabase und lade danach neu."}</Text>
               <PrimaryButton label="Neu laden" onPress={load} />
             </View>
           </View>
@@ -518,26 +528,65 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <Image source={brandLogo} style={[styles.backgroundLogo, { opacity: mode === "dark" ? 0.055 : 0.075 }]} resizeMode="contain" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+      <MotionBackground />
       <View style={styles.appShell}>
         <Animated.ScrollView
-          refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={theme.text} />}
+          refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={theme.mcc.textPrimary} />}
           contentContainerStyle={styles.screen}
         >
           <Header />
-          <View style={styles.hero}>
-            <Text style={[styles.kicker, { color: theme.accent }]}>Diese Woche</Text>
-            <Text style={[styles.title, { color: theme.text }]}>Gemeinsamer Cardiotag</Text>
-          </View>
-          <Progress activeStep={activeStep} />
+          <WeeklyEventHeroCard
+            title={isDecided ? decisionSportName : "Gemeinsamer Cardiotag"}
+            subtitle={
+              isDecided
+                ? state.decisionText.simpleExplanation
+                : `Cardiotag am ${formatCardioSunday(state.event.starts_at ?? state.event.week_start_date)}`
+            }
+            status={eventStatusLabel(state.event.status)}
+            dateLabel={formatCardioSunday(state.event.starts_at ?? state.event.week_start_date)}
+            flowTarget={heroFlowTarget}
+            chips={[
+              { label: `${participantCount} Teilnehmende`, icon: "account-group-outline", tone: "neutral" },
+              { label: `${weightedVoteCount} Stimmen`, icon: "vote-outline", tone: "accent" },
+              { label: attendanceLabel(state.myAttendance?.status), icon: "check-circle-outline", tone: canInfluenceDecision(state.myAttendance?.status) ? "success" : "neutral" },
+            ]}
+            ctaLabel={heroCtaLabel}
+            onCtaPress={() => {
+              if (activeStep === "attendance") {
+                router.push(`/events/${state.event.id}/attendance`);
+                return;
+              }
+              if (activeStep === "sports") {
+                router.push(`/events/${state.event.id}/vote`);
+                return;
+              }
+              if (isDecided && activeStep === "overview") {
+                router.push("/chat");
+                return;
+              }
+              if (activeStep === "overview") {
+                setManualStep(canInfluenceDecision(state.myAttendance?.status) ? "sports" : "attendance");
+                return;
+              }
+              setManualStep(activeStep);
+            }}
+          />
+          <FlowStepRail
+            activeIndex={["attendance", "sports", "overview"].indexOf(activeStep)}
+            steps={[
+              { label: "Teilnahme", icon: "account-check-outline" },
+              { label: "Voting", icon: "vote-outline" },
+              { label: "Club", icon: "trophy-outline" },
+            ]}
+          />
           {notice ? <View style={styles.notice}><Text style={styles.noticeText}>{notice}</Text></View> : null}
 
           <Stage stepKey={activeStep}>
             {activeStep === "attendance" ? (
-              <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-                <Text style={[styles.panelKicker, { color: theme.accent }]}>Schritt 1</Text>
-                <Text style={[styles.panelTitle, { color: theme.text }]}>Bist du dabei?</Text>
+              <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+                <Text style={[styles.panelKicker, { color: theme.mcc.accent }]}>Schritt 1</Text>
+                <Text style={[styles.panelTitle, { color: theme.mcc.textPrimary }]}>Bist du dabei?</Text>
                 <View style={styles.optionStack}>
                   {attendanceOptions.map((option) => {
                     const active = state.myAttendance?.status === option.status;
@@ -547,14 +596,16 @@ export default function HomeScreen() {
                         key={option.status}
                         style={[
                           styles.option,
-                          { borderColor: theme.border, backgroundColor: theme.softSurface },
-                          active && { borderColor: theme.accent, backgroundColor: theme.button },
+                          { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft },
+                          active && { borderColor: theme.mcc.accent, backgroundColor: theme.mcc.accentDeep },
                         ]}
                         pressedStyle={styles.pressed}
-                        onPress={() => chooseAttendance(option.status)}
+                        onPress={() => {
+                          if (votingInputOpen) void chooseAttendance(option.status);
+                        }}
                       >
-                        <Text style={[styles.optionTitle, { color: active ? theme.inverse : theme.text }]}>{option.title}</Text>
-                        <Text style={[styles.optionBody, { color: active ? theme.inverse : theme.muted }]}>{option.body}</Text>
+                        <Text style={[styles.optionTitle, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{option.title}</Text>
+                        <Text style={[styles.optionBody, { color: active ? "#FFFFFF" : theme.mcc.textSecondary }]}>{option.body}</Text>
                       </MotionPressable>
                       </Reveal>
                     );
@@ -564,9 +615,9 @@ export default function HomeScreen() {
             ) : null}
 
             {activeStep === "sports" ? (
-              <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-                <Text style={[styles.panelKicker, { color: theme.accent }]}>Schritt 2</Text>
-                <Text style={[styles.panelTitle, { color: theme.text }]}>Wähle deinen Mix</Text>
+              <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+                <Text style={[styles.panelKicker, { color: theme.mcc.accent }]}>Schritt 2</Text>
+                <Text style={[styles.panelTitle, { color: theme.mcc.textPrimary }]}>Wähle deinen Mix</Text>
                 <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart oder Standort suchen" />
                 <View style={styles.voteStack}>
                   {selectableSports.map((sport, index) => {
@@ -579,19 +630,19 @@ export default function HomeScreen() {
                         key={sport.id}
                         style={[
                           styles.sportCard,
-                          { borderColor: theme.border, backgroundColor: theme.softSurface },
-                          vote && { borderColor: theme.accent, backgroundColor: theme.button },
+                          { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft },
+                          vote && { borderColor: theme.mcc.accent, backgroundColor: theme.mcc.accentDeep },
                           noGo && { borderColor: "#ff8d7a", backgroundColor: "rgba(255,126,106,0.14)" },
                         ]}
                         pressedStyle={styles.pressed}
                       >
                         <SportIconBadge sport={sport} size={36} />
                         <View style={styles.sportTextWrap}>
-                          <Text style={[styles.sportName, { color: vote ? theme.inverse : theme.text }]}>{sport.name}</Text>
-                          <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>
+                          <Text style={[styles.sportName, { color: vote ? "#FFFFFF" : theme.mcc.textPrimary }]}>{sport.name}</Text>
+                          <Text style={[styles.sportMeta, { color: vote ? "#FFFFFF" : theme.mcc.textSecondary }]}>
                             {sport.category} · {sport.intensity_level}
                           </Text>
-                          {profileHint ? <Text style={[styles.sportMeta, { color: vote ? theme.inverse : theme.muted }]}>{profileHint}</Text> : null}
+                          {profileHint ? <Text style={[styles.sportMeta, { color: vote ? "#FFFFFF" : theme.mcc.textSecondary }]}>{profileHint}</Text> : null}
                         </View>
                         <View style={styles.voteControls}>
                           {noGo ? null : (
@@ -600,7 +651,9 @@ export default function HomeScreen() {
                                 <Pressable
                                   key={rank}
                                   style={[styles.rankDot, vote?.vote_rank === rank && styles.rankDotActive]}
-                                  onPress={() => setRank(sport.id, rank)}
+                                  onPress={() => {
+                                    if (votingInputOpen) void setRank(sport.id, rank);
+                                  }}
                                 >
                                   <Text style={[styles.rankText, vote?.vote_rank === rank && styles.rankTextActive]}>{rank}</Text>
                                 </Pressable>
@@ -608,12 +661,22 @@ export default function HomeScreen() {
                             </View>
                           )}
                           {vote ? (
-                            <Pressable style={styles.removeVoteButton} onPress={() => chooseSport(sport.id)}>
-                              <MaterialCommunityIcons name="close" size={16} color={vote ? theme.inverse : theme.text} />
+                            <Pressable
+                              style={styles.removeVoteButton}
+                              onPress={() => {
+                                if (votingInputOpen) void chooseSport(sport.id);
+                              }}
+                            >
+                              <MaterialCommunityIcons name="close" size={16} color={vote ? "#FFFFFF" : theme.mcc.textPrimary} />
                             </Pressable>
                           ) : null}
-                          <Pressable style={noGo ? styles.noGoButton : styles.noGoGhost} onPress={() => toggleNoGo(sport.id)}>
-                            <Text style={noGo ? styles.noGoButtonText : [styles.noGoGhostText, { color: theme.muted }]}>No-Go</Text>
+                          <Pressable
+                            style={noGo ? styles.noGoButton : styles.noGoGhost}
+                            onPress={() => {
+                              if (votingInputOpen) void toggleNoGo(sport.id);
+                            }}
+                          >
+                            <Text style={noGo ? styles.noGoButtonText : [styles.noGoGhostText, { color: theme.mcc.textSecondary }]}>No-Go</Text>
                           </Pressable>
                         </View>
                       </MotionPressable>
@@ -621,36 +684,36 @@ export default function HomeScreen() {
                     );
                   })}
                 </View>
-                {selectableSports.length === 0 ? <Text style={[styles.body, { color: theme.muted }]}>Keine Sportarten für diese Suche.</Text> : null}
+                {selectableSports.length === 0 ? <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Keine Sportarten für diese Suche.</Text> : null}
                 <PrimaryButton label="Weiter zum Überblick" onPress={() => state.myVotes.length > 0 && setManualStep("overview")} disabled={state.myVotes.length === 0} />
               </View>
             ) : null}
 
             {activeStep === "overview" ? (
-              <View style={[styles.panel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-                <Text style={[styles.panelKicker, { color: theme.accent }]}>{isDecided ? "Entscheidung" : "Vor der Auswertung"}</Text>
-                <Text style={[styles.panelTitle, { color: theme.text }]}>{decisionSportName}</Text>
-                {!isDecided ? <Text style={[styles.body, { color: theme.muted }]}>Sportart folgt am Mittwoch nach der Auswertung.</Text> : null}
+              <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+                <Text style={[styles.panelKicker, { color: theme.mcc.accent }]}>{isDecided ? "Entscheidung" : "Auswahl gesichert"}</Text>
+                <Text style={[styles.panelTitle, { color: theme.mcc.textPrimary }]}>{isDecided ? decisionSportName : "Der Club ist im Flow"}</Text>
+                {!isDecided ? <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Teilnahme und Voting sind gespeichert. Bis zur Auswertung bleibt der konkrete Sport verborgen, aber deine Auswahl kann weiter angepasst werden.</Text> : null}
                 {isDecided ? (
                   <>
-                    {secondaryDecisionName ? <Text style={[styles.secondarySport, { color: theme.accent }]}>+ {secondaryDecisionName}</Text> : null}
+                    {secondaryDecisionName ? <Text style={[styles.secondarySport, { color: theme.mcc.accent }]}>+ {secondaryDecisionName}</Text> : null}
                     <View style={styles.pillRow}>
                       {state.decisionText.resultLabels.map((label) => (
-                        <View key={label} style={[styles.pill, { backgroundColor: theme.softSurface }]}>
-                          <Text style={[styles.pillText, { color: theme.accent }]}>{label}</Text>
+                        <View key={label} style={[styles.pill, { backgroundColor: theme.mcc.surfaceSoft }]}>
+                          <Text style={[styles.pillText, { color: theme.mcc.accent }]}>{label}</Text>
                         </View>
                       ))}
                     </View>
-                    <Text style={[styles.body, { color: theme.muted }]}>{state.event.decision_reason ?? state.decisionText.simpleExplanation}</Text>
+                    <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>{state.event.decision_reason ?? state.decisionText.simpleExplanation}</Text>
                     {homeActivityRows(state).map((activity) => (
                       <View key={activity.key} style={styles.activityRouteRow}>
-                        <Text style={[styles.body, styles.activityRouteText, { color: theme.text }]}>{activity.label}</Text>
+                        <Text style={[styles.body, styles.activityRouteText, { color: theme.mcc.textPrimary }]}>{activity.label}</Text>
                         <MapRouteButton target={activity.mapTarget} compact />
                       </View>
                     ))}
                   </>
                 ) : (
-                  <Text style={[styles.body, { color: theme.muted }]}>
+                  <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
                     Deine Auswahl ist gespeichert. Die Sportart bleibt bis zur Auswertung eine Überraschung.
                   </Text>
                 )}
@@ -667,7 +730,7 @@ export default function HomeScreen() {
                           ].filter(Boolean).join(" · ")
                     }
                   />
-                  <Detail label="Zeit" value={eventDate ? eventDate.toLocaleString("de-DE", { weekday: "long", hour: "2-digit", minute: "2-digit" }) : "Noch offen"} />
+                  <Detail label="Cardiotag" value={formatCardioSunday(state.event.starts_at ?? state.event.week_start_date)} />
                   <Detail label="Ort" value={state.event.location ?? "Noch offen"} />
                 </View>
                 <View style={styles.actionRow}>
@@ -677,8 +740,8 @@ export default function HomeScreen() {
                 {isDecided ? (
                   <PrimaryButton label="Zum Event-Chat" onPress={() => router.push("/chat")} />
                 ) : (
-                  <View style={[styles.lockedChat, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-                    <Text style={[styles.lockedChatText, { color: theme.muted }]}>Chat öffnet nach der Entscheidung.</Text>
+                  <View style={[styles.lockedChat, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+                    <Text style={[styles.lockedChatText, { color: theme.mcc.textSecondary }]}>Chat öffnet nach der Entscheidung.</Text>
                   </View>
                 )}
               </View>
@@ -747,38 +810,38 @@ function CityPrompt({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <KeyboardAvoidingView behavior={undefined} style={styles.cityOverlay}>
-        <Animated.View style={[styles.cityCard, { backgroundColor: theme.surface, borderColor: theme.border, opacity, transform: [{ translateY }, { scale }] }]}>
-          <Text style={[styles.cityKicker, { color: theme.accent }]}>Kurz dein Standort</Text>
-          <Text style={[styles.cityTitle, { color: theme.text }]}>Aus welcher Stadt kommst du?</Text>
+        <Animated.View style={[styles.cityCard, { backgroundColor: theme.mcc.surface, borderColor: theme.mcc.line, opacity, transform: [{ translateY }, { scale }] }]}>
+          <Text style={[styles.cityKicker, { color: theme.mcc.accent }]}>Kurz dein Standort</Text>
+          <Text style={[styles.cityTitle, { color: theme.mcc.textPrimary }]}>Aus welcher Stadt kommst du?</Text>
           <TextInput
             value={postalCode}
             onChangeText={onPostalCodeChange}
             placeholder="PLZ"
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mcc.textSecondary}
             keyboardType="number-pad"
             inputMode="numeric"
             maxLength={5}
-            style={[styles.cityInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+            style={[styles.cityInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
           />
           <TextInput
             value={city}
             onChangeText={onCityChange}
             placeholder="Stadt"
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mcc.textSecondary}
             autoCapitalize="words"
-            style={[styles.cityInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+            style={[styles.cityInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
           />
           <Pressable
-            style={[styles.cityButton, { backgroundColor: theme.button }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
+            style={[styles.cityButton, { backgroundColor: theme.mcc.accentDeep }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
             onPress={() => {
               void onSave();
             }}
             disabled={postalCode.length < 5 || !city.trim() || busy}
           >
-            <Text style={[styles.cityButtonText, { color: theme.inverse }]}>{busy ? "Speichern..." : "Speichern"}</Text>
+            <Text style={[styles.cityButtonText, { color: "#FFFFFF" }]}>{busy ? "Speichern..." : "Speichern"}</Text>
           </Pressable>
           <Pressable style={styles.citySkip} onPress={closeWithAnimation}>
-            <Text style={[styles.citySkipText, { color: theme.muted }]}>Später</Text>
+            <Text style={[styles.citySkipText, { color: theme.mcc.textSecondary }]}>Später</Text>
           </Pressable>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -787,15 +850,15 @@ function CityPrompt({
 }
 
 function Header() {
-  const { mode } = useTheme();
+  const { mode, theme } = useTheme();
   const headerLogo = mode === "dark" ? darkLogo : lightLogo;
 
   return (
     <View style={styles.header}>
       <Image source={headerLogo} style={styles.logo} resizeMode="contain" />
       <View style={styles.headerActions}>
-        <Pressable style={styles.historyButton} onPress={() => router.push("/events/history")}>
-          <MaterialCommunityIcons name="history" size={27} color="#ffffff" />
+        <Pressable style={[styles.historyButton, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => router.push("/events/history")}>
+          <MaterialCommunityIcons name="history" size={27} color={theme.mcc.textPrimary} />
         </Pressable>
         <ThemeToggle />
       </View>
@@ -811,7 +874,7 @@ function Progress({ activeStep }: { activeStep: FlowStep }) {
   return (
     <View style={styles.progress}>
       {steps.map((step, index) => (
-        <View key={step} style={[styles.progressDot, { backgroundColor: index <= activeIndex ? theme.accent : theme.border }]} />
+        <View key={step} style={[styles.progressDot, { backgroundColor: index <= activeIndex ? theme.mcc.accent : theme.mcc.line }]} />
       ))}
     </View>
   );
@@ -841,11 +904,11 @@ function PrimaryButton({ label, onPress, disabled = false }: { label: string; on
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.button }, disabled && styles.disabled, pressed && !disabled && styles.pressed]}
+      style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.mcc.accentDeep }, disabled && styles.disabled, pressed && !disabled && styles.pressed]}
       onPress={onPress}
       disabled={disabled}
     >
-      <Text style={[styles.primaryButtonText, { color: theme.inverse }]}>{label}</Text>
+      <Text style={[styles.primaryButtonText, { color: "#FFFFFF" }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -855,10 +918,10 @@ function SecondaryButton({ label, onPress }: { label: string; onPress: () => voi
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.softSurface }, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.secondaryButton, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }, pressed && styles.pressed]}
       onPress={onPress}
     >
-      <Text style={[styles.secondaryButtonText, { color: theme.text }]}>{label}</Text>
+      <Text style={[styles.secondaryButtonText, { color: theme.mcc.textPrimary }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -867,9 +930,9 @@ function Detail({ label, value }: { label: string; value: string }) {
   const { theme } = useTheme();
 
   return (
-    <View style={[styles.detail, { borderTopColor: theme.border }]}>
-      <Text style={[styles.detailLabel, { color: theme.muted }]}>{label}</Text>
-      <Text style={[styles.detailValue, { color: theme.text }]}>{value || "Noch offen"}</Text>
+    <View style={[styles.detail, { borderTopColor: theme.mcc.line }]}>
+      <Text style={[styles.detailLabel, { color: theme.mcc.textSecondary }]}>{label}</Text>
+      <Text style={[styles.detailValue, { color: theme.mcc.textPrimary }]}>{value || "Noch offen"}</Text>
     </View>
   );
 }
@@ -879,6 +942,14 @@ function attendanceLabel(status?: AttendanceStatus): string {
   if (status === "maybe") return "Vielleicht";
   if (status === "not_going") return "Du kannst nicht";
   return "Noch offen";
+}
+
+function eventStatusLabel(status?: string): string {
+  if (status === "decided") return "Entschieden";
+  if (status === "completed") return "Abgeschlossen";
+  if (status === "voting") return "Voting läuft";
+  if (status === "collecting") return "Vorschläge";
+  return "Diese Woche";
 }
 
 function canInfluenceDecision(status?: AttendanceStatus): boolean {
@@ -987,14 +1058,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#05070b" },
   appShell: { flex: 1 },
   screen: { gap: 18, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
-  backgroundLogo: {
-    position: "absolute",
-    top: 82,
-    right: -120,
-    width: 380,
-    height: 380,
-    opacity: 0.055,
-  },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   headerActions: { alignItems: "center", flexDirection: "row", gap: 8 },
   historyButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", borderColor: "rgba(255,255,255,0.18)", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },

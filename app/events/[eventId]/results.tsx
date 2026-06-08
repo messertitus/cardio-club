@@ -2,14 +2,17 @@ import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { LabeledInput, SegmentedControl } from "../../../src/components/FormControls";
-import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
+import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
+import { ErrorText, LoadingState } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
+import { useTheme } from "../../../src/context/ThemeContext";
 import { supabase } from "../../../src/lib/supabase";
 import { listEventActivities, listEventResults, upsertEventResult, type Row } from "../../../src/services";
 
 export default function EventResultsScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { loading, user } = useAuth();
+  const { theme } = useTheme();
   const [event, setEvent] = useState<Row<"weekly_events"> | null>(null);
   const [activities, setActivities] = useState<Row<"event_activities">[]>([]);
   const [results, setResults] = useState<Row<"event_results">[]>([]);
@@ -68,28 +71,39 @@ export default function EventResultsScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <Screen title="Spielergebnisse" subtitle="Wenn ein Event läuft oder vorbei ist, können Ergebnisse und kurze Zusammenfassungen gespeichert werden.">
+    <MccScreen title="Spielergebnisse" kicker="Recap" subtitle="Wenn ein Event laeuft oder vorbei ist, koennen Ergebnisse und kurze Zusammenfassungen gespeichert werden.">
       <ErrorText>{error}</ErrorText>
       {busy ? <LoadingState /> : null}
       {!busy && !canEnterResults ? (
-        <Card>
-          <Text style={ui.cardTitle}>Noch nicht freigeschaltet</Text>
-          <Text style={ui.body}>Ergebnisse sind ab Eventstart sinnvoll. Bis dahin bleibt diese Seite nur lesend.</Text>
-        </Card>
+        <MccCard>
+          <MccCardTitle>Noch nicht freigeschaltet</MccCardTitle>
+          <MccBody muted>Ergebnisse sind ab Eventstart sinnvoll. Bis dahin bleibt diese Seite nur lesend.</MccBody>
+        </MccCard>
       ) : null}
 
       {canEnterResults ? (
-        <Card>
-          <Pill>Eintragen</Pill>
+        <MccCard accent>
+          <MccBadge icon="trophy-outline">Eintragen</MccBadge>
           {activities.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <Text style={ui.body}>Aktivität</Text>
+              <MccBody>Aktivität</MccBody>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {activities.map((activity) => {
                   const active = activityId === activity.id;
                   return (
-                    <Pressable key={activity.id} style={[ui.pill, active && { backgroundColor: "#ffffff" }]} onPress={() => setActivityId(activity.id)}>
-                      <Text style={[ui.pillText, active && { color: "#05070b" }]}>{activity.title}</Text>
+                    <Pressable
+                      key={activity.id}
+                      style={{
+                        backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surfaceSoft,
+                        borderColor: active ? theme.mcc.accent : theme.mcc.line,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                      }}
+                      onPress={() => setActivityId(activity.id)}
+                    >
+                      <Text style={{ color: active ? "#FFFFFF" : theme.mcc.textPrimary, fontSize: 12, fontWeight: "900" }}>{activity.title}</Text>
                     </Pressable>
                   );
                 })}
@@ -107,26 +121,26 @@ export default function EventResultsScreen() {
             ]}
           />
           <LabeledInput label="Ergebnis" required value={summary} onChangeText={setSummary} placeholder="z. B. Team Blau gewinnt 21:18, 18:21, 15:12" multiline />
-          <Button label="Speichern" onPress={saveResult} disabled={!summary.trim()} />
-        </Card>
+          <MccButton label="Speichern" icon="content-save-outline" onPress={saveResult} disabled={!summary.trim()} />
+        </MccCard>
       ) : null}
 
-      <Card>
-        <Text style={ui.cardTitle}>Bisherige Ergebnisse</Text>
-        {results.length === 0 ? <Text style={ui.body}>Noch keine Ergebnisse eingetragen.</Text> : null}
+      <MccCard>
+        <MccCardTitle>Bisherige Ergebnisse</MccCardTitle>
+        {results.length === 0 ? <MccBody muted>Noch keine Ergebnisse eingetragen.</MccBody> : null}
         {results.map((result) => {
           const activity = activities.find((entry) => entry.id === result.activity_id);
           return (
             <View key={result.id}>
-              <Text style={ui.body}>
+              <MccBody>
                 {activity?.title ?? "Event"} - {resultTypeLabel(result.result_type)}
-              </Text>
-              <Text style={ui.body}>{result.summary}</Text>
+              </MccBody>
+              <MccBody muted>{result.summary}</MccBody>
             </View>
           );
         })}
-      </Card>
-    </Screen>
+      </MccCard>
+    </MccScreen>
   );
 }
 

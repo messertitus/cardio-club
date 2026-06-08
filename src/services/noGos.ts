@@ -1,4 +1,5 @@
 import type { Row } from "./database.types";
+import { isVotingInputOpen } from "./date";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -26,7 +27,7 @@ export async function setSportNoGo(
   }
 
   if (!eligibility.data.votingOpen) {
-    return fail("Die Abstimmung ist geschlossen, weil die Entscheidung bereits festgelegt wurde.");
+    return fail("Die Abstimmung ist geschlossen. Ihr habt Montag bis Mittwoch Zeit, danach erscheint am Donnerstag die Auswertung.");
   }
 
   if (!eligibility.data.attendance || eligibility.data.attendance.status === "not_going") {
@@ -78,7 +79,7 @@ async function getNoGoEligibility(
   userId: string,
 ): Promise<ServiceResult<{ votingOpen: boolean; attendance: Pick<Row<"attendance">, "status"> | null }>> {
   const [eventResult, attendanceResult] = await Promise.all([
-    supabase.from("weekly_events").select("status").eq("id", eventId).single(),
+    supabase.from("weekly_events").select("status, week_start_date").eq("id", eventId).single(),
     supabase.from("attendance").select("status").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
   ]);
 
@@ -91,7 +92,7 @@ async function getNoGoEligibility(
   }
 
   return ok({
-    votingOpen: eventResult.data.status === "proposing" || eventResult.data.status === "voting",
+    votingOpen: (eventResult.data.status === "proposing" || eventResult.data.status === "voting") && isVotingInputOpen(eventResult.data.week_start_date),
     attendance: attendanceResult.data,
   });
 }

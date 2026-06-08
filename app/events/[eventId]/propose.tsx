@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
 import { SearchField } from "../../../src/components/FormControls";
+import { MccBadge, MccBody, MccButton, MccScreen, SportVoteCard } from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
-import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
+import { ErrorText, LoadingState } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
 import { listEventProposals, listSports, proposeSport, type Row } from "../../../src/services";
@@ -70,39 +70,34 @@ export default function ProposeSportScreen() {
   }
 
   return (
-    <Screen title="Sportart vorschlagen" subtitle="Nur vorgeschlagene Sportarten können diese Woche gewinnen.">
+    <MccScreen title="Sportart vorschlagen" kicker="Ideen" subtitle="Nur vorgeschlagene Sportarten koennen diese Woche gewinnen.">
       <ErrorText>{error}</ErrorText>
       {loading ? <LoadingState /> : null}
       <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart suchen" />
-      {!loading && filteredSports.length === 0 ? <Text style={ui.body}>Keine Sportarten für diese Suche.</Text> : null}
-      {filteredSports.map((sport) => {
+      {!loading && filteredSports.length === 0 ? <MccBody muted>Keine Sportarten fuer diese Suche.</MccBody> : null}
+      {filteredSports.map((sport, index) => {
         const proposed = proposedSportIds.has(sport.id);
 
         return (
-          <Card key={sport.id}>
-            <Pill>{sport.category}</Pill>
-            <View style={styles.sportTitleRow}>
-              <SportIconBadge sport={sport} size={36} />
-              <Text style={[ui.cardTitle, styles.sportTitleText]}>{sport.name}</Text>
-            </View>
-            <Text style={ui.body}>
-              {sport.intensity_level} · {sport.location_type}
-            </Text>
-            <Button
+          <SportVoteCard
+            key={sport.id}
+            title={sport.name}
+            meta={`${sport.intensity_level} - ${sport.location_type}`}
+            icon={<SportIconBadge sport={sport} size={42} />}
+            selected={proposed}
+            index={index}
+            right={<MccBadge tone={proposed ? "success" : "neutral"}>{sport.category}</MccBadge>}
+          >
+            <MccButton
               label={proposed ? "Bereits vorgeschlagen" : "Vorschlagen"}
               variant={proposed ? "secondary" : "primary"}
               disabled={proposed || savingSportId === sport.id}
               onPress={() => submit(sport.id)}
             />
-          </Card>
+          </SportVoteCard>
         );
       })}
-      <Button label="Weiter zur Abstimmung" variant="secondary" onPress={() => router.push(`/events/${eventId}/vote`)} />
-    </Screen>
+      <MccButton label="Weiter zur Abstimmung" icon="vote-outline" variant="secondary" onPress={() => router.push(`/events/${eventId}/vote`)} />
+    </MccScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  sportTitleRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  sportTitleText: { flex: 1, minWidth: 0 },
-});

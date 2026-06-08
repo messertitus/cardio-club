@@ -761,6 +761,7 @@ export type Database = {
           sport_id: string | null;
           user_id: string;
           body: string;
+          reply_to_message_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -770,11 +771,13 @@ export type Database = {
           sport_id?: string | null;
           user_id: string;
           body: string;
+          reply_to_message_id?: string | null;
           created_at?: string;
         };
         Update: {
           body?: string;
           sport_id?: string | null;
+          reply_to_message_id?: string | null;
         };
         Relationships: [];
       };
@@ -816,6 +819,7 @@ export type Database = {
           chat_id: string;
           user_id: string;
           body: string;
+          reply_to_message_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -823,10 +827,12 @@ export type Database = {
           chat_id: string;
           user_id: string;
           body: string;
+          reply_to_message_id?: string | null;
           created_at?: string;
         };
         Update: {
           body?: string;
+          reply_to_message_id?: string | null;
         };
         Relationships: [];
       };
@@ -854,6 +860,37 @@ export type Database = {
           endpoint?: string;
           subscription?: Json;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      app_notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: "event_created" | "decision_released" | "chat_message";
+          title: string;
+          body: string;
+          href: string;
+          payload: Json;
+          delivered_at: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: "event_created" | "decision_released" | "chat_message";
+          title: string;
+          body: string;
+          href?: string;
+          payload?: Json;
+          delivered_at?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          delivered_at?: string | null;
+          read_at?: string | null;
         };
         Relationships: [];
       };

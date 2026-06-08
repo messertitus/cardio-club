@@ -9,6 +9,11 @@ export type DirectChatWithNames = Row<"direct_chats"> & {
 
 export type DirectChatMessageWithAuthor = Row<"direct_chat_messages"> & {
   author_name: string;
+  reply_to?: {
+    id: string;
+    author_name: string;
+    body: string;
+  } | null;
 };
 
 export async function getOrCreateDirectChat(
@@ -106,13 +111,23 @@ export async function listDirectChatMessages(
     ? await supabase.from("profiles").select("id, display_name").in("id", userIds)
     : { data: [] as Array<Pick<Row<"profiles">, "id" | "display_name">>, error: null };
   const names = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.display_name]));
+  const messagesById = new Map(data.map((message) => [message.id, message]));
 
-  return ok(data.map((message) => ({ ...message, author_name: names.get(message.user_id) ?? "Mitglied" })));
+  return ok(
+    data.map((message) => {
+      const replied = message.reply_to_message_id ? messagesById.get(message.reply_to_message_id) : null;
+      return {
+        ...message,
+        author_name: names.get(message.user_id) ?? "Mitglied",
+        reply_to: replied ? { id: replied.id, author_name: names.get(replied.user_id) ?? "Mitglied", body: replied.body } : null,
+      };
+    }),
+  );
 }
 
 export async function sendDirectChatMessage(
   supabase: AppSupabaseClient,
-  input: { chatId: string; userId: string; body: string },
+  input: { chatId: string; userId: string; body: string; replyToMessageId?: string | null },
 ): Promise<ServiceResult<Row<"direct_chat_messages">>> {
   const body = input.body.trim();
   if (!body) {
@@ -125,6 +140,7 @@ export async function sendDirectChatMessage(
       chat_id: input.chatId,
       user_id: input.userId,
       body,
+      reply_to_message_id: input.replyToMessageId ?? null,
     })
     .select()
     .single();
