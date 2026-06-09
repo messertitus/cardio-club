@@ -15,13 +15,13 @@
   "categories": ["sports", "social", "productivity"],
   "icons": [
     {
-      "src": "/mcc-logo.png",
+      "src": "/mcc-icon.png",
       "sizes": "1254x1254",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/mcc-logo.png",
+      "src": "/mcc-icon.png",
       "sizes": "1254x1254",
       "type": "image/png",
       "purpose": "maskable"

@@ -21,7 +21,8 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <link id="mcc-favicon" rel="icon" type="image/png" href="/assets/mcc-logo-white-symbol-transparent.png" />
         <link rel="icon" type="image/png" href="/assets/mcc-logo-black-symbol-transparent.png" media="(prefers-color-scheme: light)" />
         <link rel="icon" type="image/png" href="/assets/mcc-logo-white-symbol-transparent.png" media="(prefers-color-scheme: dark)" />
-        <link rel="apple-touch-icon" href="/mcc-logo.png" />        <script src="/pwa-register.js" defer />
+        <link rel="apple-touch-icon" href="/mcc-icon.png" />
+        <script src="/pwa-register.js" defer />
         <script dangerouslySetInnerHTML={{ __html: FAVICON_THEME_SCRIPT }} />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: WEB_RESET }} />
