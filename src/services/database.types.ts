@@ -366,6 +366,32 @@ export type Database = {
         };
         Relationships: [];
       };
+      club_event_settings: {
+        Row: {
+          club_id: string;
+          saturday_enabled: boolean;
+          saturday_time: string;
+          sunday_enabled: boolean;
+          sunday_time: string;
+          updated_at: string;
+        };
+        Insert: {
+          club_id: string;
+          saturday_enabled?: boolean;
+          saturday_time?: string;
+          sunday_enabled?: boolean;
+          sunday_time?: string;
+          updated_at?: string;
+        };
+        Update: {
+          saturday_enabled?: boolean;
+          saturday_time?: string;
+          sunday_enabled?: boolean;
+          sunday_time?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       sport_proposals: {
         Row: {
           id: string;
@@ -1062,6 +1088,17 @@ export type Database = {
       event_close_readiness: {
         Args: { target_event_id: string };
         Returns: { has_results: boolean; attendance_reviewed: boolean; can_close: boolean }[];
+      };
+      set_mcc_event_schedule: {
+        Args: { sat_enabled: boolean; sat_time: string; sun_enabled: boolean; sun_time: string };
+        Returns: {
+          club_id: string;
+          saturday_enabled: boolean;
+          saturday_time: string;
+          sunday_enabled: boolean;
+          sunday_time: string;
+          updated_at: string;
+        };
       };
       event_can_be_closed_by: {
         Args: { target_event_id: string; actor_id: string };

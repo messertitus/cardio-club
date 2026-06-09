@@ -9,6 +9,7 @@ export * from "./directChats";
 export * from "./eventActivities";
 export * from "./eventLifecycle";
 export * from "./eventResults";
+export * from "./eventSchedule";
 export * from "./events";
 export * from "./invitations";
 export * from "./liveApp";
