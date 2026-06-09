@@ -1,10 +1,10 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { LabeledInput } from "../../../src/components/FormControls";
 import { MapRouteButton } from "../../../src/components/MapRouteButton";
-import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, SundayRibbon } from "../../../src/components/MccDesign";
+import { InlineError, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader, SundayRibbon } from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
-import { ErrorText, Field, LoadingState } from "../../../src/components/ui";
 import { supabase } from "../../../src/lib/supabase";
 import { formatCardioSunday, getCardioSundayDate } from "../../../src/services/date";
 import {
@@ -73,14 +73,14 @@ export default function CurrentWeeklyEventScreen() {
   if (loading) {
     return (
       <MccScreen>
-        <LoadingState />
+        <ScreenLoader />
       </MccScreen>
     );
   }
 
   return (
     <MccScreen title="Diese Woche" kicker="Club Event" subtitle="Plane den Cardiotag am Sonntag und halte die Entscheidung sichtbar.">
-      <ErrorText>{error}</ErrorText>
+      <InlineError>{error}</InlineError>
       {event ? (
         <>
           <MccCard accent>
@@ -121,9 +121,9 @@ export default function CurrentWeeklyEventScreen() {
           <MccBadge icon="plus-circle-outline">Sonntag</MccBadge>
           <MccCardTitle>Event anlegen</MccCardTitle>
           <SundayRibbon date={formatCardioSunday(defaultSundayStartIso())} />
-          <Field label="Ort" value={location} onChangeText={setLocation} placeholder="See, Park, Halle..." />
-          <Field label="Startzeit" value={startsAt} onChangeText={setStartsAt} placeholder={defaultSundayStartIso()} />
-          <Field label="Notizen" value={notes} onChangeText={setNotes} placeholder="Locker, gemeinsam, danach optional Kaffee." multiline />
+          <LabeledInput label="Ort" value={location} onChangeText={setLocation} placeholder="See, Park, Halle..." />
+          <LabeledInput label="Startzeit" value={startsAt} onChangeText={setStartsAt} placeholder={defaultSundayStartIso()} />
+          <LabeledInput label="Notizen" value={notes} onChangeText={setNotes} placeholder="Locker, gemeinsam, danach optional Kaffee." multiline />
           <MccButton label="Sonntag erstellen" icon="calendar-plus" onPress={createEvent} disabled={saving} />
         </MccCard>
       )}

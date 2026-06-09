@@ -7,6 +7,7 @@ export * from "./database.types";
 export * from "./decisions";
 export * from "./directChats";
 export * from "./eventActivities";
+export * from "./eventLifecycle";
 export * from "./eventResults";
 export * from "./events";
 export * from "./invitations";

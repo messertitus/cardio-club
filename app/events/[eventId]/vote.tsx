@@ -4,6 +4,8 @@ import { StyleSheet, View } from "react-native";
 import { SearchField } from "../../../src/components/FormControls";
 import {
   EmptyState,
+  InlineError,
+  LoadingSkeleton,
   MccBadge,
   MccBody,
   MccButton,
@@ -12,9 +14,9 @@ import {
   MccScreen,
   NoGoNotice,
   SportVoteCard,
+  SuccessFlash,
 } from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
-import { ErrorText, LoadingState } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
 import { supabase } from "../../../src/lib/supabase";
@@ -51,6 +53,7 @@ export default function VoteOnSportsScreen() {
   const [loading, setLoading] = useState(true);
   const [proposalSearch, setProposalSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(0);
 
   const sportsById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport])), [sports]);
   const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
@@ -136,6 +139,7 @@ export default function VoteOnSportsScreen() {
       return;
     }
 
+    setSavedFlash((value) => value + 1);
     await load();
   }
 
@@ -220,11 +224,12 @@ export default function VoteOnSportsScreen() {
 
   return (
     <MccScreen title="Abstimmen" kicker="Voting" subtitle="Bis zu drei Sportarten, klare Ranks und vorsichtige No-Go-Hinweise.">
-      <ErrorText>{error}</ErrorText>
-      {loading ? <LoadingState /> : null}
+      <SuccessFlash trigger={savedFlash} label="Stimme gespeichert" />
+      <InlineError>{error}</InlineError>
+      {loading ? <LoadingSkeleton lines={4} /> : null}
 
       <MccCard accent>
-        <MccBadge icon="account-check-outline">Schritt 1</MccBadge>
+        <MccBadge icon="account-check-outline">Teilnahme</MccBadge>
         <MccCardTitle>Teilnahme zuerst</MccCardTitle>
         <MccBody muted>Nur Dabei und Vielleicht fliessen in die Entscheidung ein. Nicht dabei wird ignoriert.</MccBody>
         <MccBadge tone="neutral">Dein Status: {attendanceLabel(myAttendance?.status)}</MccBadge>
@@ -245,9 +250,9 @@ export default function VoteOnSportsScreen() {
 
       <MccCard>
         <MccCardTitle>Deine Stimmen</MccCardTitle>
-        <MccBody muted>Maximal drei Stimmen pro Woche. Dieselbe Sportart kann nicht doppelt gewaehlt werden.</MccBody>
-        <MccBody muted>Ein No-Go betrifft vor allem deine Zuordnung. Deine Praeferenz kann trotzdem sichtbar bleiben.</MccBody>
-        {!canVote ? <NoGoNotice>Abstimmen ist gesperrt, bis du Dabei oder Vielleicht gewaehlt hast.</NoGoNotice> : null}
+        <MccBody muted>Maximal drei Stimmen pro Woche. Dieselbe Sportart kann nicht doppelt gewählt werden.</MccBody>
+        <MccBody muted>Ein No-Go betrifft vor allem deine Zuordnung. Deine Präferenz kann trotzdem sichtbar bleiben.</MccBody>
+        {!canVote ? <NoGoNotice>Abstimmen ist gesperrt, bis du Dabei oder Vielleicht gewählt hast.</NoGoNotice> : null}
         {myVotes.length === 0 ? <MccBody muted>Du hast noch nicht abgestimmt.</MccBody> : null}
         {myVotes.map((vote) => (
           <MccBody key={vote.id}>
@@ -256,9 +261,9 @@ export default function VoteOnSportsScreen() {
         ))}
       </MccCard>
 
-      {!loading && proposals.length === 0 ? <EmptyState title="Noch keine Vorschlaege" body="Schlage zuerst eine Sportart vor." icon="lightbulb-on-outline" /> : null}
+      {!loading && proposals.length === 0 ? <EmptyState title="Noch keine Vorschläge" body="Schlage zuerst eine Sportart vor." icon="lightbulb-on-outline" /> : null}
       {proposals.length > 0 ? <SearchField value={proposalSearch} onChangeText={setProposalSearch} placeholder="Sportart oder Standort suchen" /> : null}
-      {!loading && proposals.length > 0 && filteredProposals.length === 0 ? <MccBody muted>Keine Vorschlaege fuer diese Suche.</MccBody> : null}
+      {!loading && proposals.length > 0 && filteredProposals.length === 0 ? <MccBody muted>Keine Vorschläge für diese Suche.</MccBody> : null}
       {filteredProposals.map((proposal, index) => {
         const sport = sportsById.get(proposal.sport_id);
         const myVote = myVoteBySport.get(proposal.sport_id);
@@ -276,7 +281,7 @@ export default function VoteOnSportsScreen() {
             right={<MccBadge tone={myVote ? "success" : "neutral"}>{countVotes(proposal.sport_id)} Stimmen</MccBadge>}
           >
             <MccBody muted>{profileSummary(sportProfiles, proposal.sport_id)}</MccBody>
-            {myNoGo ? <NoGoNotice>Dein No-Go ist gespeichert. Deine Stimme bleibt als Wunsch sichtbar, falls du hier gewaehlt hast.</NoGoNotice> : null}
+            {myNoGo ? <NoGoNotice>Dein No-Go ist gespeichert. Deine Stimme bleibt als Wunsch sichtbar, falls du hier gewählt hast.</NoGoNotice> : null}
             {myVote ? <MccBadge tone="success">Deine Auswahl: {rankLabel(myVote.vote_rank as VoteRank)}</MccBadge> : null}
             <View style={styles.rankGrid}>
               {[1, 2, 3].map((rank) => {

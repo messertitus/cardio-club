@@ -27,16 +27,23 @@ export function MotionPressable({ children, style, pressedStyle, onPressIn, onPr
   );
 }
 
-export function Reveal({ children, index = 0, style }: { children: ReactNode; index?: number; style?: StyleProp<ViewStyle> }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(18)).current;
+export function Reveal({ children, index = 0, delay, style }: { children: ReactNode; index?: number; delay?: number; style?: StyleProp<ViewStyle> }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const startDelay = delay ?? 60 * index;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 360, delay: 60 * index, useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 0, delay: 60 * index, damping: 18, stiffness: 130, useNativeDriver: true }),
-    ]).start();
-  }, [index, opacity, translateY]);
+    // useNativeDriver:false — rotateX uses a "deg" string which the native
+    // driver cannot interpolate on react-native-web (animation would not run).
+    Animated.spring(progress, { toValue: 1, delay: startDelay, damping: 17, stiffness: 130, useNativeDriver: false }).start();
+  }, [progress, startDelay]);
 
-  return <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>{children}</Animated.View>;
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.965, 1] });
+  const rotateX = progress.interpolate({ inputRange: [0, 1], outputRange: ["7deg", "0deg"] });
+
+  return (
+    <Animated.View style={[style, { opacity: progress, transform: [{ perspective: 700 }, { translateY }, { rotateX }, { scale }] }]}>
+      {children}
+    </Animated.View>
+  );
 }

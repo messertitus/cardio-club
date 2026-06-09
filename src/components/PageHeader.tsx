@@ -7,6 +7,39 @@ import { ThemeToggle } from "./ThemeToggle";
 const darkLogo = require("../../assets/mcc-logo-white-symbol-transparent.png");
 const lightLogo = require("../../assets/mcc-logo-black-symbol-transparent.png");
 
+export function MainHeader({ title, actions }: { title: string; actions?: ReactNode }) {
+  const { mode, theme } = useTheme();
+  return (
+    <View style={mainStyles.header}>
+      <View style={mainStyles.brand}>
+        <Image source={mode === "dark" ? darkLogo : lightLogo} style={mainStyles.logo} resizeMode="contain" />
+        <View style={mainStyles.textBlock}>
+          <Text style={[mainStyles.kicker, { color: theme.mcc.textSecondary }]} numberOfLines={1}>
+            Messers Cardio Club
+          </Text>
+          <Text style={[mainStyles.title, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
+      </View>
+      <View style={mainStyles.actions}>
+        {actions}
+        <ThemeToggle />
+      </View>
+    </View>
+  );
+}
+
+const mainStyles = StyleSheet.create({
+  header: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 10, minWidth: 0 },
+  logo: { height: 44, width: 44 },
+  textBlock: { flex: 1, minWidth: 0 },
+  kicker: { fontSize: 12, fontWeight: "800", lineHeight: 16 },
+  title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 34 },
+  actions: { alignItems: "center", flexDirection: "row", gap: 8 },
+});
+
 export function PageHeader({
   kicker,
   title,

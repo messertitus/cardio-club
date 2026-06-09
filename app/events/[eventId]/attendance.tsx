@@ -1,10 +1,10 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
-import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
-import { ErrorText, LoadingState } from "../../../src/components/ui";
+import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
+import { isVotingInputOpen } from "../../../src/services/date";
 import {
   isCurrentUserAdmin,
   listAttendance,
@@ -109,18 +109,21 @@ export default function AttendanceScreen() {
     if (!user || !reviewerIsParticipant) return false;
     return isAdmin || event?.activity_contact_id === user.id || eventActivities.some((activity) => activity.activity_contact_id === user.id);
   }, [event?.activity_contact_id, eventActivities, isAdmin, ownStatus, user]);
+  const rsvpOpen = Boolean(event && isVotingInputOpen(event.week_start_date, event.event_day));
 
   return (
-    <MccScreen title="Teilnahme" kicker="RSVP" subtitle="Schnell sagen, ob du dabei bist. Keine Ranglisten, kein Druck.">
-      <ErrorText>{error}</ErrorText>
-      {loading ? <LoadingState /> : null}
-      <MccCard accent>
-        <MccBadge icon="account-check-outline">Dein Status: {ownStatus ?? "offen"}</MccBadge>
-        <MccCardTitle>Bist du dabei?</MccCardTitle>
-        <MccButton label="Ich bin dabei" onPress={() => setStatus("going")} />
-        <MccButton label="Vielleicht" variant="secondary" onPress={() => setStatus("maybe")} />
-        <MccButton label="Nicht dabei" variant="secondary" onPress={() => setStatus("not_going")} />
-      </MccCard>
+    <MccScreen title="Teilnahme" kicker="RSVP" subtitle="Plane deine Teilnahme — und trage nach dem Event die tatsächliche Anwesenheit ein.">
+      <InlineError>{error}</InlineError>
+      {loading ? <LoadingSkeleton lines={3} /> : null}
+      {rsvpOpen ? (
+        <MccCard accent>
+          <MccBadge icon="account-check-outline">Dein Status: {attendanceStatusLabel(ownStatus)}</MccBadge>
+          <MccCardTitle>Bist du dabei?</MccCardTitle>
+          <MccButton label="Ich bin dabei" onPress={() => setStatus("going")} />
+          <MccButton label="Vielleicht" variant="secondary" onPress={() => setStatus("maybe")} />
+          <MccButton label="Nicht dabei" variant="secondary" onPress={() => setStatus("not_going")} />
+        </MccCard>
+      ) : null}
       <MccCard>
         <MccCardTitle>Teilnehmende</MccCardTitle>
         <MccBody>Dabei: {going}</MccBody>
@@ -154,6 +157,13 @@ export default function AttendanceScreen() {
 function displayName(entry: Row<"attendance">, names: Map<string, string>, ownUserId?: string): string {
   if (entry.user_id === ownUserId) return "Du";
   return names.get(entry.user_id) ?? "Mitglied";
+}
+
+function attendanceStatusLabel(status?: AttendanceStatus): string {
+  if (status === "going") return "Dabei";
+  if (status === "maybe") return "Vielleicht";
+  if (status === "not_going") return "Nicht dabei";
+  return "Offen";
 }
 
 function plannedLabel(status: AttendanceStatus): string {

@@ -26,17 +26,47 @@ export function formatCardioSunday(value?: string | null): string {
   });
 }
 
-export function getDecisionReleaseDate(weekStartDate: string): Date {
-  return addUtcDays(weekStartDate, 3);
+// Formats the actual date (with its real weekday) — used for events that can
+// fall on Saturday or Sunday, where forcing the Sunday would be wrong.
+export function formatEventDate(value?: string | null): string {
+  const base = value ? new Date(value) : new Date();
+  return base.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
 }
 
-export function isDecisionReleaseOpen(weekStartDate: string, now = new Date()): boolean {
-  return startOfUtcDay(now).getTime() >= getDecisionReleaseDate(weekStartDate).getTime();
+export type EventDay = "saturday" | "sunday";
+
+// weekStartDate is the Monday of the week.
+// Sunday event: voting Mon–Wed, decision Thursday (Monday + 3).
+// Saturday event: voting Sun(before)–Tue, decision Wednesday (Monday + 2).
+const DECISION_DAY_OFFSET: Record<EventDay, number> = { saturday: 2, sunday: 3 };
+const VOTING_START_OFFSET: Record<EventDay, number> = { saturday: -1, sunday: 0 };
+
+// The real calendar date of the event, derived from the week's Monday and the
+// event day (Saturday = Monday + 5, Sunday = Monday + 6). Independent of any
+// stored starts_at, so the weekday label is always correct.
+export function getEventDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
+  return addUtcDays(weekStartDate, eventDay === "saturday" ? 5 : 6);
 }
 
-export function isVotingInputOpen(weekStartDate: string, now = new Date()): boolean {
+export function formatEventDayDate(weekStartDate: string, eventDay: EventDay = "sunday"): string {
+  return getEventDate(weekStartDate, eventDay).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
+}
+
+export function isEventPast(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
+  return startOfUtcDay(now).getTime() > getEventDate(weekStartDate, eventDay).getTime();
+}
+
+export function getDecisionReleaseDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
+  return addUtcDays(weekStartDate, DECISION_DAY_OFFSET[eventDay]);
+}
+
+export function isDecisionReleaseOpen(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
+  return startOfUtcDay(now).getTime() >= getDecisionReleaseDate(weekStartDate, eventDay).getTime();
+}
+
+export function isVotingInputOpen(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
   const today = startOfUtcDay(now).getTime();
-  return today >= addUtcDays(weekStartDate, 0).getTime() && today < getDecisionReleaseDate(weekStartDate).getTime();
+  return today >= addUtcDays(weekStartDate, VOTING_START_OFFSET[eventDay]).getTime() && today < getDecisionReleaseDate(weekStartDate, eventDay).getTime();
 }
 
 function addUtcDays(dateString: string, days: number): Date {

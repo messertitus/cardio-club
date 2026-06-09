@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
 import { SearchField } from "../src/components/FormControls";
-import { MccBadge, MccScreen } from "../src/components/MccDesign";
-import { LoadingState } from "../src/components/ui";
+import { MccBadge, MccScreen, ScreenLoader } from "../src/components/MccDesign";
+import { MainHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -63,7 +63,12 @@ export default function MembersScreen() {
     void load();
   }, [user]);
 
-  if (loading) return <LoadingState />;
+  if (loading)
+    return (
+      <MccScreen>
+        <ScreenLoader />
+      </MccScreen>
+    );
   if (!user) return <Redirect href="/auth" />;
 
   async function contactAdmin(member: MccMember) {
@@ -80,10 +85,11 @@ export default function MembersScreen() {
 
   return (
     <View style={styles.shell}>
-      <MccScreen title="Mitglieder" kicker="Community" subtitle={`${filteredMembers.length} Profile im Club`} bottomInset={96}>
+      <MccScreen bottomInset={96}>
+        <MainHeader title="Mitglieder" actions={<HeaderIconButton open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />} />
         <View style={styles.toolRow}>
           <MccBadge icon="account-heart-outline">{selectedCity}</MccBadge>
-          <HeaderIconButton open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />
+          <MccBadge tone="neutral" icon="account-group-outline">{`${filteredMembers.length} Profile`}</MccBadge>
         </View>
         {message ? <Text style={[styles.notice, { color: theme.mcc.danger }]}>{message}</Text> : null}
         <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied, Stadt oder Rolle suchen" />

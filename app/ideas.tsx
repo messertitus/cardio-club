@@ -7,9 +7,10 @@ import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
 import { DetailLine, LabeledInput, MapLocationPicker, SearchField, SegmentedControl } from "../src/components/FormControls";
 import { MapRouteButton } from "../src/components/MapRouteButton";
+import { ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { SportIconBadge } from "../src/components/SportIcon";
-import { Button, LoadingState } from "../src/components/ui";
+import { Button } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -168,6 +169,8 @@ export default function IdeasScreen() {
   const [requestSportOpen, setRequestSportOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [costOpenBySport, setCostOpenBySport] = useState<Record<string, boolean>>({});
+  const [expandedSports, setExpandedSports] = useState<Record<string, boolean>>({});
+  const [activeOnlyWithLocation, setActiveOnlyWithLocation] = useState(false);
   const confirmationPulse = useRef(new Animated.Value(0)).current;
 
   async function load() {
@@ -231,6 +234,20 @@ export default function IdeasScreen() {
 
   const ownDraft = useMemo(() => ideas.find((idea) => user && idea.suggested_by === user.id && idea.is_draft) ?? null, [ideas, user]);
   const profilesBySport = useMemo(() => groupProfilesBySport(sportProfiles, sportProfileLinks), [sportProfileLinks, sportProfiles]);
+
+  // Active sports list: optionally only sports that already have a location,
+  // sorted so sports with profiles come first, then alphabetically. Easy to scan
+  // even when many locations exist.
+  const displaySports = useMemo(() => {
+    const withCounts = filteredSports.map((sport) => ({ sport, count: (profilesBySport.get(sport.id) ?? []).length }));
+    const visible = activeOnlyWithLocation ? withCounts.filter((entry) => entry.count > 0) : withCounts;
+    return visible.sort((a, b) => {
+      if ((b.count > 0 ? 1 : 0) !== (a.count > 0 ? 1 : 0)) return (b.count > 0 ? 1 : 0) - (a.count > 0 ? 1 : 0);
+      return a.sport.name.localeCompare(b.sport.name, "de");
+    });
+  }, [activeOnlyWithLocation, filteredSports, profilesBySport]);
+  const totalActiveProfiles = useMemo(() => displaySports.reduce((total, entry) => total + entry.count, 0), [displaySports]);
+  const searchActive = sportSearch.trim().length > 0;
   const creatorNameById = useMemo(() => {
     const result = new Map<string, string>();
     for (const idea of ideas) {
@@ -533,7 +550,7 @@ export default function IdeasScreen() {
     if (!open) updateActiveSportDetail({ costNote: "" });
   }
 
-  if (loading) return <LoadingState />;
+  if (loading) return <ScreenLoader />;
   if (!user) return <Redirect href="/auth" />;
 
   return (
@@ -550,43 +567,14 @@ export default function IdeasScreen() {
             {message ? <Text style={styles.notice}>{message}</Text> : null}
             {success ? <Text style={styles.success}>{success}</Text> : null}
 
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Aktive Sportarten</Text>
-              <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart oder Standort suchen" />
-              {filteredSports.length === 0 ? <Text style={[styles.body, { color: theme.muted }]}>Keine Sportarten für diese Suche.</Text> : null}
-              <View style={styles.activeSportList}>
-                {filteredSports.map((sport) => {
-                  const profiles = profilesBySport.get(sport.id) ?? [];
-                  return (
-                    <View key={sport.id} style={[styles.activeSportBlock, { borderTopColor: theme.border }]}>
-                      <View style={styles.sportTitleRow}>
-                        <SportIconBadge sport={sport} size={34} />
-                        <Text style={[styles.sportPillText, { color: theme.text }]}>{sport.name}</Text>
-                      </View>
-                      {profiles.length === 0 ? <Text style={[styles.ideaNote, { color: theme.muted }]}>Noch kein Standortprofil hinterlegt.</Text> : null}
-                      {profiles.map((profile) => (
-                        <View key={profile.id} style={[styles.profileLine, styles.profileLineRow, { backgroundColor: theme.surface }]}>
-                          <View style={styles.profileLineText}>
-                            <Text style={[styles.profileLineTitle, { color: theme.text }]}>{sportProfileEventName(sport.name, profile)}</Text>
-                            <Text style={[styles.profileLineMeta, { color: theme.muted }]}>
-                              {[profileLocationText(profile), profile.created_by ? `Ersteller: ${creatorNameById.get(profile.created_by) ?? "Mitglied"}` : null].filter(Boolean).join(" - ")}
-                            </Text>
-                          </View>
-                          <MapRouteButton target={profileMapTarget(profile)} compact />
-                        </View>
-                      ))}
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-
-            <Pressable style={[styles.createCard, { borderColor: theme.border, backgroundColor: theme.softSurface }]} onPress={() => setProposalOpen(true)}>
+            <Pressable style={[styles.createCard, { borderColor: theme.accent, backgroundColor: theme.softSurface }]} onPress={() => setProposalOpen(true)}>
               <View style={styles.ideaText}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>Neue Aktivität vorschlagen</Text>
                 <Text style={[styles.ideaNote, { color: theme.muted }]}>Standort, Sportart, Wetter und Gruppengröße Schritt für Schritt erfassen.</Text>
               </View>
-              <Text style={[styles.itemArrow, { color: theme.accent }]}>+</Text>
+              <View style={[styles.createPlus, { backgroundColor: theme.accent }]}>
+                <MaterialCommunityIcons name="plus" size={24} color={theme.inverse} />
+              </View>
             </Pressable>
 
             {proposalOpen ? (
@@ -1013,6 +1001,65 @@ export default function IdeasScreen() {
                   ) : null}
                 </View>
               ) : null}
+            </View>
+
+            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
+              <View style={styles.activeHeaderRow}>
+                <View style={styles.ideaText}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>Aktive Sportarten</Text>
+                  <Text style={[styles.ideaNote, { color: theme.muted }]}>
+                    {displaySports.length} Sportarten · {totalActiveProfiles} Standorte
+                  </Text>
+                </View>
+                <Pressable
+                  style={[styles.filterChip, { borderColor: activeOnlyWithLocation ? theme.accent : theme.border, backgroundColor: activeOnlyWithLocation ? theme.softSurface : "transparent" }]}
+                  onPress={() => setActiveOnlyWithLocation((value) => !value)}
+                >
+                  <MaterialCommunityIcons name="map-marker-outline" size={14} color={activeOnlyWithLocation ? theme.accent : theme.muted} />
+                  <Text style={[styles.filterChipText, { color: activeOnlyWithLocation ? theme.accent : theme.muted }]}>Mit Standort</Text>
+                </Pressable>
+              </View>
+              <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart oder Standort suchen" />
+              {displaySports.length === 0 ? <Text style={[styles.body, { color: theme.muted }]}>Keine Sportarten für diese Suche.</Text> : null}
+              <View style={styles.activeSportList}>
+                {displaySports.map(({ sport, count }) => {
+                  const profiles = profilesBySport.get(sport.id) ?? [];
+                  const open = searchActive || Boolean(expandedSports[sport.id]);
+                  return (
+                    <View key={sport.id} style={[styles.activeSportBlock, { borderTopColor: theme.border }]}>
+                      <Pressable style={styles.sportHeaderRow} onPress={() => setExpandedSports((prev) => ({ ...prev, [sport.id]: !open }))}>
+                        <View style={styles.sportTitleRow}>
+                          <SportIconBadge sport={sport} size={34} />
+                          <Text style={[styles.sportPillText, { color: theme.text }]}>{sport.name}</Text>
+                        </View>
+                        <View style={styles.sportHeaderRight}>
+                          <View style={[styles.countChip, { borderColor: theme.border, backgroundColor: count > 0 ? theme.surface : "transparent" }]}>
+                            <MaterialCommunityIcons name="map-marker-outline" size={12} color={count > 0 ? theme.accent : theme.muted} />
+                            <Text style={[styles.countChipText, { color: count > 0 ? theme.text : theme.muted }]}>{count}</Text>
+                          </View>
+                          {!searchActive ? <MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={20} color={theme.muted} /> : null}
+                        </View>
+                      </Pressable>
+                      {open ? (
+                        <>
+                          {profiles.length === 0 ? <Text style={[styles.ideaNote, { color: theme.muted }]}>Noch kein Standortprofil hinterlegt.</Text> : null}
+                          {profiles.map((profile) => (
+                            <View key={profile.id} style={[styles.profileLine, styles.profileLineRow, { backgroundColor: theme.surface }]}>
+                              <View style={styles.profileLineText}>
+                                <Text style={[styles.profileLineTitle, { color: theme.text }]}>{sportProfileEventName(sport.name, profile)}</Text>
+                                <Text style={[styles.profileLineMeta, { color: theme.muted }]}>
+                                  {[profileLocationText(profile), profile.created_by ? `Ersteller: ${creatorNameById.get(profile.created_by) ?? "Mitglied"}` : null].filter(Boolean).join(" - ")}
+                                </Text>
+                              </View>
+                              <MapRouteButton target={profileMapTarget(profile)} compact />
+                            </View>
+                          ))}
+                        </>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -1593,6 +1640,14 @@ const styles = StyleSheet.create({
   activeSportList: { gap: 8 },
   activeSportBlock: { borderTopWidth: 1, gap: 8, paddingTop: 10 },
   sportTitleRow: { alignItems: "center", flexDirection: "row", gap: 9 },
+  createPlus: { alignItems: "center", borderRadius: 999, height: 42, justifyContent: "center", width: 42 },
+  activeHeaderRow: { alignItems: "flex-start", flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  filterChip: { alignItems: "center", borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 6, paddingHorizontal: 11, paddingVertical: 7 },
+  filterChipText: { fontSize: 12, fontWeight: "900" },
+  sportHeaderRow: { alignItems: "center", flexDirection: "row", gap: 9, justifyContent: "space-between" },
+  sportHeaderRight: { alignItems: "center", flexDirection: "row", gap: 8 },
+  countChip: { alignItems: "center", borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
+  countChipText: { fontSize: 12, fontWeight: "900" },
   profileLine: { borderRadius: 14, gap: 3, paddingHorizontal: 11, paddingVertical: 9 },
   profileLineRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
   profileLineText: { flex: 1, minWidth: 0, gap: 3 },

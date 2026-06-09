@@ -51,6 +51,7 @@ function RootStack() {
           <Stack.Screen name="events/[eventId]/vote" options={{ title: "Abstimmen" }} />
           <Stack.Screen name="events/[eventId]/decision" options={{ title: "Entscheidung" }} />
           <Stack.Screen name="events/[eventId]/attendance" options={{ title: "Teilnahme" }} />
+          <Stack.Screen name="events/[eventId]/close" options={{ title: "Event abschließen" }} />
         </Stack>
       </SwipeNavigator>
     </AuthProvider>

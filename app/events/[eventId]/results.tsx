@@ -2,8 +2,7 @@ import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { LabeledInput, SegmentedControl } from "../../../src/components/FormControls";
-import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
-import { ErrorText, LoadingState } from "../../../src/components/ui";
+import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader } from "../../../src/components/MccDesign";
 import { useAuth } from "../../../src/context/AuthContext";
 import { useTheme } from "../../../src/context/ThemeContext";
 import { supabase } from "../../../src/lib/supabase";
@@ -67,13 +66,19 @@ export default function EventResultsScreen() {
     await load();
   }
 
-  if (loading) return <LoadingState />;
+  if (loading)
+    return (
+      <MccScreen>
+        <ScreenLoader />
+      </MccScreen>
+    );
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <MccScreen title="Spielergebnisse" kicker="Recap" subtitle="Wenn ein Event laeuft oder vorbei ist, koennen Ergebnisse und kurze Zusammenfassungen gespeichert werden.">
-      <ErrorText>{error}</ErrorText>
-      {busy ? <LoadingState /> : null}
+    <MccScreen title="Spielergebnisse" kicker="Recap" subtitle="Wenn ein Event läuft oder vorbei ist, können Ergebnisse und kurze Zusammenfassungen gespeichert werden.">
+
+      <InlineError>{error}</InlineError>
+      {busy ? <LoadingSkeleton lines={3} /> : null}
       {!busy && !canEnterResults ? (
         <MccCard>
           <MccCardTitle>Noch nicht freigeschaltet</MccCardTitle>

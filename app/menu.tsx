@@ -1,20 +1,22 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { MotionBackground } from "../src/components/MccDesign";
 import { MotionPressable, Reveal } from "../src/components/Motion";
-import { ThemeToggle } from "../src/components/ThemeToggle";
+import { MainHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
+import {
+  directChatNotificationId,
+  isNotificationVisible,
+  loadReadNotifications,
+  saveReadNotifications,
+  type ReadNotificationMap,
+} from "../src/lib/adminNotifications";
 import { supabase } from "../src/lib/supabase";
 import { getMyProfile, isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas, updateProfileCity } from "../src/services";
-
-const darkLogo = require("../assets/mcc-logo-white-symbol-transparent.png");
-const lightLogo = require("../assets/mcc-logo-color-symbol.png");
-const READ_NOTIFICATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type AdminNotification = {
   id: string;
@@ -25,7 +27,7 @@ type AdminNotification = {
 
 export default function MenuScreen() {
   const { user } = useAuth();
-  const { mode, theme } = useTheme();
+  const { theme } = useTheme();
   const [isAdmin, setIsAdmin] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [readNotifications, setReadNotifications] = useState<Record<string, number>>({});
@@ -77,7 +79,7 @@ export default function MenuScreen() {
         directChatsResult.data
           ?.filter((chat) => chat.status === "open" && chat.admin_id === user.id)
           .map((chat) => ({
-            id: `direct-chat:${chat.id}:${chat.last_message_at}`,
+            id: directChatNotificationId(chat),
             title: "Kontaktanfrage",
             body: chat.requesterName,
             href: `/chat?directChatId=${chat.id}`,
@@ -132,19 +134,10 @@ export default function MenuScreen() {
       <MotionBackground />
       <View style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <View style={styles.headerBrand}>
-              <Image source={mode === "dark" ? darkLogo : lightLogo} style={styles.logo} resizeMode="contain" />
-              <View style={styles.headerText}>
-                <Text style={[styles.kicker, { color: theme.mcc.textSecondary }]}>Messers Cardio Club</Text>
-                <Text style={[styles.title, { color: theme.mcc.textPrimary }]}>Menü</Text>
-              </View>
-            </View>
-            <View style={styles.headerActions}>
-              {isAdmin ? <AdminNoticeButton count={unreadNotifications.length} open={notificationsOpen} onPress={() => setNotificationsOpen((open) => !open)} /> : null}
-              <ThemeToggle />
-            </View>
-          </View>
+          <MainHeader
+            title="Menü"
+            actions={isAdmin ? <AdminNoticeButton count={unreadNotifications.length} open={notificationsOpen} onPress={() => setNotificationsOpen((open) => !open)} /> : null}
+          />
 
           <Reveal index={0}>
             <MotionPressable
@@ -335,24 +328,6 @@ function NotificationPreviewPanel({
   );
 }
 
-async function loadReadNotifications(userId: string): Promise<Record<string, number>> {
-  const value = await AsyncStorage.getItem(readNotificationsKey(userId));
-  if (!value) return {};
-  try {
-    return pruneReadNotifications(JSON.parse(value) as Record<string, number>);
-  } catch {
-    return {};
-  }
-}
-
-async function saveReadNotifications(userId: string, readNotifications: Record<string, number>): Promise<void> {
-  await AsyncStorage.setItem(readNotificationsKey(userId), JSON.stringify(pruneReadNotifications(readNotifications)));
-}
-
-function readNotificationsKey(userId: string): string {
-  return `mcc:admin-notifications-read:${userId}`;
-}
-
 async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
   try {
     const response = await fetch(`https://api.zippopotam.us/de/${postalCode}`);
@@ -384,16 +359,6 @@ function inferCityFromPostalCode(postalCode: string): string {
   if (prefix <= 79) return "Konstanz";
   if (prefix <= 89) return "München";
   return "";
-}
-
-function isNotificationVisible(id: string, readNotifications: Record<string, number>): boolean {
-  const readAt = readNotifications[id];
-  return !readAt || Date.now() - readAt < READ_NOTIFICATION_TTL_MS;
-}
-
-function pruneReadNotifications(readNotifications: Record<string, number>): Record<string, number> {
-  const now = Date.now();
-  return Object.fromEntries(Object.entries(readNotifications).filter(([, readAt]) => now - readAt < READ_NOTIFICATION_TTL_MS));
 }
 
 function MenuItem({ title, body, onPress, index }: { title: string; body: string; onPress: () => void; index: number }) {

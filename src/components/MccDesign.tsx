@@ -4,6 +4,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   Animated,
+  Easing,
   Image,
   Pressable,
   ScrollView,
@@ -16,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
+import { BackButton } from "./BackButton";
 
 const darkLogo = require("../../assets/mcc-logo-white-symbol-transparent.png");
 const lightLogo = require("../../assets/mcc-logo-color-symbol.png");
@@ -57,6 +59,7 @@ export function MccScreen({
   kicker,
   scroll = true,
   bottomInset = 36,
+  showBack,
 }: {
   children: ReactNode;
   title?: string;
@@ -64,10 +67,17 @@ export function MccScreen({
   kicker?: string;
   scroll?: boolean;
   bottomInset?: number;
+  showBack?: boolean;
 }) {
   const { theme } = useTheme();
+  const back = showBack ?? Boolean(title);
   const content = (
     <View style={[styles.screenContent, { paddingBottom: bottomInset }]}>
+      {back ? (
+        <View style={styles.screenBackRow}>
+          <BackButton />
+        </View>
+      ) : null}
       {title ? <MccHero kicker={kicker} title={title} subtitle={subtitle} compact /> : null}
       {children}
     </View>
@@ -91,36 +101,58 @@ export function MotionBackground() {
   const { mode, theme } = useTheme();
   const reduced = useReducedMotion();
   const drift = useRef(new Animated.Value(0)).current;
+  const drift2 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (reduced) return;
-    const animation = Animated.loop(
+    const a = Animated.loop(
       Animated.sequence([
-        Animated.timing(drift, { toValue: 1, duration: 5200, useNativeDriver: true }),
-        Animated.timing(drift, { toValue: 0, duration: 5200, useNativeDriver: true }),
+        Animated.timing(drift, { toValue: 1, duration: 7200, useNativeDriver: true }),
+        Animated.timing(drift, { toValue: 0, duration: 7200, useNativeDriver: true }),
       ]),
     );
-    animation.start();
-    return () => animation.stop();
-  }, [drift, reduced]);
+    const b = Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift2, { toValue: 1, duration: 9400, useNativeDriver: true }),
+        Animated.timing(drift2, { toValue: 0, duration: 9400, useNativeDriver: true }),
+      ]),
+    );
+    a.start();
+    b.start();
+    return () => {
+      a.stop();
+      b.stop();
+    };
+  }, [drift, drift2, reduced]);
 
-  const translateX = drift.interpolate({ inputRange: [0, 1], outputRange: [-18, 18] });
-  const translateY = drift.interpolate({ inputRange: [0, 1], outputRange: [10, -12] });
-  const scale = drift.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.04] });
+  const blobAx = drift.interpolate({ inputRange: [0, 1], outputRange: [-28, 30] });
+  const blobAy = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -42] });
+  const blobBx = drift2.interpolate({ inputRange: [0, 1], outputRange: [24, -26] });
+  const blobBy = drift2.interpolate({ inputRange: [0, 1], outputRange: [-12, 34] });
+  const logoTx = drift.interpolate({ inputRange: [0, 1], outputRange: [-14, 14] });
+  const logoScale = drift.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] });
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <View style={[styles.backgroundBase, { backgroundColor: theme.mcc.background }]} />
+      <Animated.View
+        style={[
+          styles.glowBlob,
+          styles.glowBlobTop,
+          { backgroundColor: theme.mcc.accent, shadowColor: theme.mcc.accent, opacity: mode === "dark" ? 0.18 : 0.1, transform: [{ translateX: blobAx }, { translateY: blobAy }] },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.glowBlob,
+          styles.glowBlobBottom,
+          { backgroundColor: theme.mcc.accentDeep, shadowColor: theme.mcc.accentDeep, opacity: mode === "dark" ? 0.16 : 0.08, transform: [{ translateX: blobBx }, { translateY: blobBy }] },
+        ]}
+      />
       <Animated.Image
         source={mode === "dark" ? darkLogo : lightLogo}
         resizeMode="contain"
-        style={[
-          styles.backgroundLogo,
-          {
-            opacity: mode === "dark" ? 0.09 : 0.12,
-            transform: [{ translateX }, { translateY }, { scale }],
-          },
-        ]}
+        style={[styles.backgroundLogo, { opacity: mode === "dark" ? 0.06 : 0.09, transform: [{ translateX: logoTx }, { scale: logoScale }] }]}
       />
     </View>
   );
@@ -267,92 +299,173 @@ export function PulseLine() {
   );
 }
 
-export function CardioRing({ label, value }: { label: string; value: string }) {
-  const { theme } = useTheme();
-  const reduced = useReducedMotion();
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reduced) return;
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1200, useNativeDriver: true }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [pulse, reduced]);
-
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0.9] });
-
-  return (
-    <View style={[styles.cardioRing, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
-      <Animated.View style={[styles.cardioRingPulse, { borderColor: theme.mcc.accent, opacity, transform: [{ scale }] }]} />
-      <MaterialCommunityIcons name="heart-pulse" size={31} color={theme.mcc.accent} />
-      <View style={styles.pulseBars}>
-        <View style={[styles.pulseBar, { backgroundColor: theme.mcc.accent }]} />
-        <View style={[styles.pulseBar, styles.pulseBarTall, { backgroundColor: theme.mcc.accent }]} />
-        <View style={[styles.pulseBar, { backgroundColor: theme.mcc.accent }]} />
-      </View>
-    </View>
-  );
-}
-
-function OrbitingArc({ size = 38 }: { size?: number }) {
+// A continuous loading spinner — the recurring brand motif used for the cardio
+// orb and the active flow step. A faint full track with a bright arc-stroke that
+// rotates without stopping.
+export function SpinnerRing({
+  size = 40,
+  duration = 1100,
+  stroke = 2.5,
+  color,
+  trackColor,
+}: {
+  size?: number;
+  duration?: number;
+  stroke?: number;
+  color?: string;
+  trackColor?: string;
+}) {
   const { theme } = useTheme();
   const reduced = useReducedMotion();
   const spin = useRef(new Animated.Value(0)).current;
+  const arcColor = color ?? theme.mcc.accent;
 
   useEffect(() => {
     if (reduced) return;
-    const animation = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 1050, useNativeDriver: true }));
+    // useNativeDriver:false — rotation interpolates to a "deg" string, which the
+    // native driver cannot loop reliably on react-native-web (it stops after a
+    // few cycles). The JS driver keeps the spinner running continuously.
+    const animation = Animated.loop(Animated.timing(spin, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: false }));
     animation.start();
     return () => animation.stop();
-  }, [reduced, spin]);
+  }, [duration, reduced, spin]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   return (
-    <Animated.View
-      style={[
-        styles.orbitArc,
-        {
-          height: size,
-          width: size,
-          borderTopColor: theme.mcc.accent,
-          borderRightColor: theme.mcc.accent,
-          transform: [{ rotate }],
-        },
-      ]}
-    />
+    <View pointerEvents="none" style={{ width: size, height: size }}>
+      <View style={[StyleSheet.absoluteFill, { borderRadius: 999, borderWidth: stroke, borderColor: trackColor ?? theme.mcc.accentSoft }]} />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            borderRadius: 999,
+            borderWidth: stroke,
+            borderColor: "transparent",
+            borderTopColor: arcColor,
+            borderRightColor: arcColor,
+            transform: [{ rotate }],
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+export function CardioRing({ label, value }: { label?: string; value?: string }) {
+  void label;
+  void value;
+  const { theme } = useTheme();
+  const reduced = useReducedMotion();
+  const beat = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduced) return;
+    // double-thump heartbeat: quick-quick-rest
+    const beatAnim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(beat, { toValue: 1, duration: 130, useNativeDriver: true }),
+        Animated.timing(beat, { toValue: 0.5, duration: 130, useNativeDriver: true }),
+        Animated.timing(beat, { toValue: 1, duration: 130, useNativeDriver: true }),
+        Animated.timing(beat, { toValue: 0, duration: 760, useNativeDriver: true }),
+      ]),
+    );
+    beatAnim.start();
+    return () => beatAnim.stop();
+  }, [beat, reduced]);
+
+  const scale = beat.interpolate({ inputRange: [0, 1], outputRange: [1, 1.16] });
+
+  return (
+    <View style={[styles.cardioRing, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.accentFaint }]}>
+      <View style={styles.cardioRingSpinner}>
+        <SpinnerRing size={70} duration={2400} stroke={2} />
+      </View>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <MaterialCommunityIcons name="heart" size={26} color={theme.mcc.accent} />
+      </Animated.View>
+    </View>
+  );
+}
+
+export function CardEntranceTrace({ radius = 24 }: { radius?: number }) {
+  const { theme } = useTheme();
+  const reduced = useReducedMotion();
+  const progress = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (reduced) return;
+    progress.setValue(0);
+    fade.setValue(1);
+    Animated.sequence([
+      Animated.timing(progress, { toValue: 4, duration: 1150, useNativeDriver: false }),
+      Animated.timing(fade, { toValue: 0, duration: 520, delay: 280, useNativeDriver: false }),
+    ]).start();
+  }, [fade, progress, reduced]);
+
+  if (reduced) return null;
+
+  const topScaleX = progress.interpolate({ inputRange: [0, 1, 4], outputRange: [0, 1, 1] });
+  const rightScaleY = progress.interpolate({ inputRange: [0, 1, 2, 4], outputRange: [0, 0, 1, 1] });
+  const bottomScaleX = progress.interpolate({ inputRange: [0, 2, 3, 4], outputRange: [0, 0, 1, 1] });
+  const leftScaleY = progress.interpolate({ inputRange: [0, 3, 4], outputRange: [0, 0, 1] });
+  const glow = { shadowColor: theme.mcc.accent, shadowOpacity: 0.9, shadowRadius: 8 };
+  const bar = { backgroundColor: theme.mcc.accent } as const;
+
+  return (
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, opacity: fade, overflow: "hidden" }]}>
+      <Animated.View style={[styles.traceTop, bar, glow, { transformOrigin: "left", transform: [{ scaleX: topScaleX }] } as object]} />
+      <Animated.View style={[styles.traceRight, bar, glow, { transformOrigin: "top", transform: [{ scaleY: rightScaleY }] } as object]} />
+      <Animated.View style={[styles.traceBottom, bar, glow, { transformOrigin: "right", transform: [{ scaleX: bottomScaleX }] } as object]} />
+      <Animated.View style={[styles.traceLeft, bar, glow, { transformOrigin: "bottom", transform: [{ scaleY: leftScaleY }] } as object]} />
+    </Animated.View>
   );
 }
 
 export function FlowStepRail({
   steps,
   activeIndex,
+  onStepPress,
 }: {
   steps: Array<{ label: string; icon?: IconName }>;
   activeIndex: number;
+  onStepPress?: (index: number) => void;
 }) {
   const { theme } = useTheme();
   return (
     <View style={[styles.flowRail, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
       {steps.map((step, index) => {
         const active = index <= activeIndex;
+        const isCurrent = index === activeIndex;
         return (
-          <View key={step.label} style={styles.flowStep}>
-            <View style={[styles.flowNode, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surfaceSoft, borderColor: active ? theme.mcc.accent : theme.mcc.line }]}>
-              {index === activeIndex ? <OrbitingArc size={40} /> : null}
-              <MaterialCommunityIcons name={step.icon ?? "circle-small"} size={15} color={active ? "#FFFFFF" : theme.mcc.textMuted} />
+          <Pressable
+            key={step.label}
+            style={({ pressed }) => [styles.flowStep, pressed && onStepPress ? styles.flowStepPressed : null]}
+            disabled={!onStepPress}
+            onPress={() => onStepPress?.(index)}
+            accessibilityRole={onStepPress ? "button" : undefined}
+          >
+            <View style={styles.flowNodeWrap}>
+              {isCurrent ? (
+                <View style={StyleSheet.absoluteFill}>
+                  <SpinnerRing size={42} duration={1300} />
+                </View>
+              ) : null}
+              <View
+                style={[
+                  styles.flowNode,
+                  { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surfaceSoft, borderColor: isCurrent ? theme.mcc.accent : active ? theme.mcc.accent : theme.mcc.line },
+                ]}
+              >
+                <MaterialCommunityIcons name={step.icon ?? "circle-small"} size={15} color={active ? "#FFFFFF" : theme.mcc.textMuted} />
+              </View>
             </View>
-            <Text style={[styles.flowLabel, { color: active ? theme.mcc.textPrimary : theme.mcc.textMuted }]} numberOfLines={1}>
+            <Text style={[styles.flowLabel, { color: isCurrent ? theme.mcc.accent : active ? theme.mcc.textPrimary : theme.mcc.textMuted }]} numberOfLines={1}>
               {step.label}
             </Text>
             {index < steps.length - 1 ? <View style={[styles.flowConnector, { backgroundColor: index < activeIndex ? theme.mcc.accent : theme.mcc.line }]} /> : null}
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -394,6 +507,7 @@ export function WeeklyEventHeroCard({
   const { theme } = useTheme();
   return (
     <MccCard accent animatedLine={false} style={styles.weeklyHero}>
+      <CardEntranceTrace radius={24} />
       <HeroFlowSignal target={flowTarget} />
       <View style={styles.weeklyTop}>
         <View style={styles.flexText}>
@@ -561,16 +675,49 @@ export function WhyNotAccordion({
   initiallyOpen?: boolean;
 }) {
   const { theme } = useTheme();
+  const reduced = useReducedMotion();
   const [open, setOpen] = useState(initiallyOpen);
+  const spin = useRef(new Animated.Value(initiallyOpen ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(spin, { toValue: open ? 1 : 0, duration: reduced ? 0 : 220, useNativeDriver: false }).start();
+  }, [open, reduced, spin]);
+
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
+
   return (
     <MccCard>
       <Pressable style={styles.accordionHeader} onPress={() => setOpen((visible) => !visible)}>
         <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>{title}</Text>
-        <MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={22} color={theme.mcc.textSecondary} />
+        <Animated.View style={{ transform: [{ rotate }] }}>
+          <MaterialCommunityIcons name="chevron-down" size={22} color={theme.mcc.textSecondary} />
+        </Animated.View>
       </Pressable>
-      {open ? <View style={styles.accordionBody}>{children}</View> : null}
+      {open ? (
+        <SmoothReveal>
+          <View style={styles.accordionBody}>{children}</View>
+        </SmoothReveal>
+      ) : null}
     </MccCard>
   );
+}
+
+export function SmoothReveal({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const reduced = useReducedMotion();
+  const progress = useRef(new Animated.Value(reduced ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (reduced) {
+      progress.setValue(1);
+      return;
+    }
+    Animated.timing(progress, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+  }, [progress, reduced]);
+
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] });
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] });
+
+  return <Animated.View style={[{ opacity: progress, transform: [{ perspective: 600 }, { translateY }, { scale }] }, style]}>{children}</Animated.View>;
 }
 
 export function NoGoNotice({ children }: { children: ReactNode }) {
@@ -602,26 +749,180 @@ export function AnimatedScoreRow({ label, value, detail }: { label: string; valu
 
 export function LoadingSkeleton({ lines = 3 }: { lines?: number }) {
   const { theme } = useTheme();
+  const reduced = useReducedMotion();
+  const shimmer = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    if (reduced) return;
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 720, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0.4, duration: 720, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [reduced, shimmer]);
+
   return (
     <MccCard>
       {Array.from({ length: lines }).map((_, index) => (
-        <View key={index} style={[styles.skeletonLine, { width: `${88 - index * 14}%`, backgroundColor: theme.mcc.surfaceSoft } as ViewStyle]} />
+        <Animated.View
+          key={index}
+          style={[styles.skeletonLine, { width: `${88 - index * 14}%`, backgroundColor: theme.mcc.surfaceSoft } as ViewStyle, { opacity: reduced ? 0.7 : shimmer }]}
+        />
       ))}
-      <ActivityIndicator color={theme.mcc.accent} />
+      <View style={styles.skeletonFoot}>
+        <SpinnerRing size={20} stroke={2} />
+        <Text style={[styles.screenLoaderText, { color: theme.mcc.textSecondary }]}>Lädt …</Text>
+      </View>
     </MccCard>
   );
 }
 
 export function EmptyState({ title, body, icon = "calendar-blank-outline" }: { title: string; body?: string; icon?: IconName }) {
   const { theme } = useTheme();
+  const reduced = useReducedMotion();
+  const float = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduced) return;
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: 1700, useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 1700, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [float, reduced]);
+
+  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
+  const scale = float.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] });
+
   return (
     <MccCard style={styles.emptyState}>
-      <View style={[styles.emptyIcon, { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.line }]}>
+      <Animated.View style={[styles.emptyIcon, { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.line, transform: [{ translateY }, { scale }] }]}>
         <MaterialCommunityIcons name={icon} size={26} color={theme.mcc.accent} />
-      </View>
+      </Animated.View>
       <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary, textAlign: "center" } as TextStyle]}>{title}</Text>
       {body ? <Text style={[styles.bodyText, { color: theme.mcc.textSecondary, textAlign: "center" } as TextStyle]}>{body}</Text> : null}
     </MccCard>
+  );
+}
+
+export function InlineError({ children }: { children?: ReactNode }) {
+  const { theme } = useTheme();
+  if (!children) return null;
+  return (
+    <View style={[styles.inlineError, { backgroundColor: theme.mcc.dangerSoft, borderColor: `${theme.mcc.danger}66` }]}>
+      <MaterialCommunityIcons name="alert-circle-outline" size={18} color={theme.mcc.danger} />
+      <Text style={[styles.inlineErrorText, { color: theme.mcc.danger }]}>{children}</Text>
+    </View>
+  );
+}
+
+// A brief success confirmation that pops in and fades out. Re-fires whenever
+// `trigger` increments — keep a counter in the screen and bump it on success.
+export function SuccessFlash({ trigger, label }: { trigger: number; label: string }) {
+  const { theme } = useTheme();
+  const value = useRef(new Animated.Value(0)).current;
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    if (trigger <= 0) return;
+    setShown(true);
+    value.setValue(0);
+    Animated.sequence([
+      Animated.spring(value, { toValue: 1, damping: 14, stiffness: 180, useNativeDriver: true }),
+      Animated.delay(950),
+      Animated.timing(value, { toValue: 0, duration: 260, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) setShown(false);
+    });
+  }, [trigger, value]);
+
+  if (!shown) return null;
+
+  const scale = value.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] });
+  const translateY = value.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.successFlash, { backgroundColor: theme.mcc.surfaceRaised, borderColor: theme.mcc.strongLine, shadowColor: theme.mcc.shadow, opacity: value, transform: [{ translateY }, { scale }] }]}
+    >
+      <View style={[styles.successTick, { backgroundColor: theme.mcc.success }]}>
+        <MaterialCommunityIcons name="check-bold" size={13} color={theme.mcc.background} />
+      </View>
+      <Text style={[styles.successText, { color: theme.mcc.textPrimary }]}>{label}</Text>
+    </Animated.View>
+  );
+}
+
+export function ScreenLoader({ label = "Lädt …" }: { label?: string }) {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.screenLoader}>
+      <ActivityIndicator color={theme.mcc.accent} />
+      <Text style={[styles.screenLoaderText, { color: theme.mcc.textSecondary }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function StatTile({ label, value, icon, tone = "neutral" }: { label: string; value: string; icon?: IconName; tone?: Tone }) {
+  const { theme } = useTheme();
+  const color = toneColor(tone, theme.mcc);
+  return (
+    <View style={[styles.statTile, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+      <View style={styles.statTileHead}>
+        {icon ? <MaterialCommunityIcons name={icon} size={15} color={color} /> : null}
+        <Text style={[styles.statTileLabel, { color: theme.mcc.textMuted }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      <Text style={[styles.statTileValue, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+export function ConnectedSports({
+  primary,
+  secondary,
+  mode = "multi_sport",
+}: {
+  primary: { name: string; icon?: ReactNode };
+  secondary?: { name: string; icon?: ReactNode };
+  mode?: "multi_sport" | "twin";
+}) {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.connected}>
+      <View style={styles.connectedNode}>
+        {primary.icon}
+        <Text style={[styles.connectedName, { color: theme.mcc.textPrimary }]} numberOfLines={2}>
+          {primary.name}
+        </Text>
+      </View>
+      {secondary ? (
+        <>
+          <View style={styles.connectedLinkWrap}>
+            <View style={[styles.connectedLink, { backgroundColor: theme.mcc.strongLine }]} />
+            <View style={[styles.connectedLinkBadge, { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.strongLine }]}>
+              <MaterialCommunityIcons name={mode === "twin" ? "call-split" : "vector-combine"} size={14} color={theme.mcc.accent} />
+            </View>
+          </View>
+          <View style={styles.connectedNode}>
+            {secondary.icon}
+            <Text style={[styles.connectedName, { color: theme.mcc.textPrimary }]} numberOfLines={2}>
+              {secondary.name}
+            </Text>
+          </View>
+        </>
+      ) : null}
+    </View>
   );
 }
 
@@ -635,7 +936,11 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   screenContent: { gap: 16, paddingHorizontal: 16, paddingTop: 16 },
+  screenBackRow: { alignItems: "flex-start", flexDirection: "row" },
   backgroundBase: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
+  glowBlob: { borderRadius: 999, height: 300, position: "absolute", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 90, width: 300 },
+  glowBlobTop: { left: -70, top: -110 },
+  glowBlobBottom: { bottom: -130, right: -80 },
   backgroundLogo: {
     height: 500,
     position: "absolute",
@@ -696,25 +1001,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: 74,
   },
-  cardioRingPulse: {
-    position: "absolute",
-    width: 62,
-    height: 62,
-    borderRadius: 999,
-    borderWidth: 2,
-  },
-  pulseBars: { alignItems: "flex-end", bottom: 13, flexDirection: "row", gap: 2, height: 10, position: "absolute" },
-  pulseBar: { borderRadius: 999, height: 5, opacity: 0.75, width: 3 },
-  pulseBarTall: { height: 10 },
-  cardioRingValue: { fontSize: 15, fontWeight: "900", lineHeight: 18 },
-  cardioRingLabel: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5, textTransform: "uppercase" },
-  orbitArc: {
-    borderBottomColor: "transparent",
-    borderLeftColor: "transparent",
-    borderRadius: 999,
-    borderWidth: 3,
-    position: "absolute",
-  },
+  cardioRingSpinner: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   flowRail: {
     borderRadius: 22,
     borderWidth: 1,
@@ -725,9 +1012,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   flowStep: { alignItems: "center", flex: 1, gap: 5, minWidth: 0, position: "relative" },
+  flowStepPressed: { opacity: 0.6, transform: [{ scale: 0.96 }] },
+  flowNodeWrap: { alignItems: "center", height: 42, justifyContent: "center", width: 42 },
   flowNode: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 28, justifyContent: "center", width: 28, zIndex: 2 },
   flowLabel: { fontSize: 10, fontWeight: "900", maxWidth: "100%", textTransform: "uppercase" },
-  flowConnector: { height: 2, left: "64%", position: "absolute", right: "-36%", top: 13, zIndex: 1 },
+  flowConnector: { height: 2, left: "64%", position: "absolute", right: "-36%", top: 20, zIndex: 1 },
   sundayRibbon: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
   sundayLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase" },
   sundayDate: { fontSize: 15, fontWeight: "900", lineHeight: 20 },
@@ -766,6 +1055,43 @@ const styles = StyleSheet.create({
   scoreFill: { borderRadius: 999, height: "100%" },
   scoreDetail: { fontSize: 12, fontWeight: "700", lineHeight: 17 },
   skeletonLine: { borderRadius: 999, height: 14 },
+  skeletonFoot: { alignItems: "center", flexDirection: "row", gap: 10 },
   emptyState: { alignItems: "center" },
   emptyIcon: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 54, justifyContent: "center", width: 54 },
+  inlineError: { alignItems: "center", borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 9, paddingHorizontal: 12, paddingVertical: 11 },
+  inlineErrorText: { flex: 1, fontSize: 13, fontWeight: "800", lineHeight: 18 },
+  screenLoader: { alignItems: "center", gap: 10, paddingVertical: 28 },
+  screenLoaderText: { fontSize: 13, fontWeight: "700" },
+  successFlash: {
+    alignItems: "center",
+    alignSelf: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    position: "absolute",
+    top: 6,
+    zIndex: 40,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+  },
+  successTick: { alignItems: "center", borderRadius: 999, height: 22, justifyContent: "center", width: 22 },
+  successText: { fontSize: 13, fontWeight: "900" },
+  statTile: { borderRadius: 16, borderWidth: 1, flexBasis: "47%", flexGrow: 1, gap: 6, minWidth: 130, paddingHorizontal: 12, paddingVertical: 11 },
+  statTileHead: { alignItems: "center", flexDirection: "row", gap: 6 },
+  statTileLabel: { flex: 1, fontSize: 10, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
+  statTileValue: { fontSize: 16, fontWeight: "900", lineHeight: 20 },
+  connected: { alignItems: "center", flexDirection: "row", gap: 10 },
+  connectedNode: { alignItems: "center", flex: 1, gap: 8 },
+  connectedName: { fontSize: 15, fontWeight: "900", lineHeight: 19, textAlign: "center" },
+  connectedLinkWrap: { alignItems: "center", justifyContent: "center", width: 30 },
+  connectedLink: { height: 2, position: "absolute", width: 30 },
+  connectedLinkBadge: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 26, justifyContent: "center", width: 26 },
+  traceTop: { height: 2.5, left: 0, position: "absolute", right: 0, top: 0 },
+  traceRight: { bottom: 0, position: "absolute", right: 0, top: 0, width: 2.5 },
+  traceBottom: { bottom: 0, height: 2.5, left: 0, position: "absolute", right: 0 },
+  traceLeft: { bottom: 0, left: 0, position: "absolute", top: 0, width: 2.5 },
 });

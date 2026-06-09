@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Share, StyleSheet, Text, View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
 import { EmptyState, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../src/components/MccDesign";
+import { Reveal } from "../src/components/Motion";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -98,16 +99,18 @@ export default function InvitesScreen() {
         </MccCard>
 
         {codes.length === 0 ? <EmptyState title="Noch kein Code erstellt" body="Erzeuge einen Code und teile ihn direkt mit einem neuen Mitglied." icon="ticket-outline" /> : null}
-        {codes.map((code) => (
-          <MccCard key={code.code} style={code.used_at ? styles.usedCard : undefined}>
-            <MccBadge tone={code.used_at ? "neutral" : "success"} icon={code.used_at ? "check-outline" : "share-variant-outline"}>
-              {code.used_at ? "Verwendet" : "Bereit zum Teilen"}
-            </MccBadge>
-            <Text style={[styles.code, { color: theme.mcc.textPrimary }]}>{code.code}</Text>
-            <MccBody muted>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Einmalig gueltig fuer den Clubzugang."}</MccBody>
-            {code.usedByPhone ? <MccBody style={{ color: theme.mcc.accent }}>{code.usedByPhone}</MccBody> : null}
-            {!code.used_at ? <MccButton label="Teilen" icon="share-outline" variant="secondary" onPress={() => shareCode(code.code)} /> : null}
-          </MccCard>
+        {codes.map((code, index) => (
+          <Reveal key={code.code} index={index}>
+            <MccCard style={code.used_at ? styles.usedCard : undefined}>
+              <MccBadge tone={code.used_at ? "neutral" : "success"} icon={code.used_at ? "check-outline" : "share-variant-outline"}>
+                {code.used_at ? "Verwendet" : "Bereit zum Teilen"}
+              </MccBadge>
+              <Text style={[styles.code, { color: theme.mcc.textPrimary }]}>{code.code}</Text>
+              <MccBody muted>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Einmalig gueltig fuer den Clubzugang."}</MccBody>
+              {code.usedByPhone ? <MccBody style={{ color: theme.mcc.accent }}>{code.usedByPhone}</MccBody> : null}
+              {!code.used_at ? <MccButton label="Teilen" icon="share-outline" variant="secondary" onPress={() => shareCode(code.code)} /> : null}
+            </MccCard>
+          </Reveal>
         ))}
       </MccScreen>
       <BottomNav active="menu" />

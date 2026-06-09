@@ -4,11 +4,18 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, KeyboardAvoidingView, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
-import { MotionBackground } from "../src/components/MccDesign";
-import { PageHeader } from "../src/components/PageHeader";
-import { LoadingState } from "../src/components/ui";
+import { MotionBackground, ScreenLoader } from "../src/components/MccDesign";
+import { MainHeader } from "../src/components/PageHeader";
+import {
+  directChatNotificationId,
+  isNotificationUnread,
+  loadReadNotifications,
+  markNotificationRead,
+  type ReadNotificationMap,
+} from "../src/lib/adminNotifications";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
+import { getEventDate, isDecisionReleaseOpen } from "../src/services/date";
 import { supabase } from "../src/lib/supabase";
 import {
   closeDirectChat,
@@ -72,13 +79,19 @@ export default function ChatScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
   const [adminChatsOpen, setAdminChatsOpen] = useState(Boolean(directChatId));
+  const [readMap, setReadMap] = useState<ReadNotificationMap>({});
   const [now, setNow] = useState(Date.now());
   const scale = useRef(new Animated.Value(1)).current;
   const scrollRef = useRef<ScrollView | null>(null);
 
-  const eventChatOpen = isEventChatOpen(state, now);
+  const chatPhase = eventChatPhase(state, now);
+  const eventChatOpen = chatPhase === "open";
   const eventChannels = useMemo(() => (eventChatOpen ? buildEventChannels(state) : []), [eventChatOpen, state]);
   const directChannels = useMemo(() => buildDirectChannels(directChats, user?.id ?? null), [directChats, user?.id]);
+  const unreadDirectCount = useMemo(
+    () => directChats.filter((chat) => chat.status === "open" && chat.admin_id === user?.id && isNotificationUnread(directChatNotificationId(chat), readMap)).length,
+    [directChats, readMap, user?.id],
+  );
   const channels = useMemo(() => [...eventChannels, ...directChannels], [directChannels, eventChannels]);
   const activeChannel = activeChannelId ? channels.find((channel) => channel.id === activeChannelId) ?? eventChannels[0] ?? null : eventChannels[0] ?? null;
   const activeDirectChat = activeChannel?.kind === "direct" ? activeChannel.directChat : null;
@@ -125,6 +138,12 @@ export default function ChatScreen() {
       setActiveChannelId(nextActive);
       setNotice(null);
       setBusy(false);
+
+      let map = await loadReadNotifications(user.id);
+      const openedDirect = nextActiveChannel?.kind === "direct" ? nextActiveChannel.directChat : null;
+      if (openedDirect) map = await markNotificationRead(user.id, directChatNotificationId(openedDirect));
+      setReadMap(map);
+
       await loadMessagesForChannel(nextActiveChannel, nextState.data);
     }
 
@@ -182,6 +201,9 @@ export default function ChatScreen() {
     setActiveChannelId(channel.id);
     setMembersOpen(false);
     setReplyTo(null);
+    if (channel.kind === "direct" && user) {
+      setReadMap(await markNotificationRead(user.id, directChatNotificationId(channel.directChat)));
+    }
     await loadMessagesForChannel(channel);
   }
 
@@ -247,7 +269,7 @@ export default function ChatScreen() {
     await loadMessagesForChannel(activeChannel);
   }
 
-  if (loading) return <LoadingState />;
+  if (loading) return <ScreenLoader />;
   if (!user) return <Redirect href="/auth" />;
 
   return (
@@ -255,18 +277,16 @@ export default function ChatScreen() {
       <MotionBackground />
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.content}>
-          <PageHeader
+          <MainHeader
             title="Chat"
-            showBack={false}
-            showTheme
             actions={
               directChannels.length > 0 ? (
-                <ContactMenuButton count={directChannels.length} open={adminChatsOpen} onPress={() => setAdminChatsOpen((open) => !open)} />
+                <ContactMenuButton count={unreadDirectCount} open={adminChatsOpen} onPress={() => setAdminChatsOpen((open) => !open)} />
               ) : null
             }
           />
           {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-          {busy ? <LoadingState /> : null}
+          {busy ? <ScreenLoader /> : null}
 
           {adminChatsOpen && directChannels.length > 0 ? (
             <View style={[styles.contactPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
@@ -328,8 +348,12 @@ export default function ChatScreen() {
 
           {state && !eventChatOpen ? (
             <View style={[styles.lockedPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
-              <Text style={[styles.lockedTitle, { color: theme.mcc.textPrimary }]}>Noch geschlossen</Text>
-              <Text style={[styles.lockedText, { color: theme.mcc.textSecondary }]}>Event- und Gruppen-Chats öffnen erst, wenn das Event startet.</Text>
+              <Text style={[styles.lockedTitle, { color: theme.mcc.textPrimary }]}>{chatPhase === "closed" ? "Event-Chat geschlossen" : "Noch geschlossen"}</Text>
+              <Text style={[styles.lockedText, { color: theme.mcc.textSecondary }]}>
+                {chatPhase === "closed"
+                  ? "Dieser Event-Chat wurde einen Tag nach dem Cardiotag geschlossen. Frühere Nachrichten findest du im Verlauf."
+                  : "Der Event- und Gruppen-Chat öffnet, sobald die Entscheidung für diesen Cardiotag steht."}
+              </Text>
             </View>
           ) : null}
 
@@ -350,7 +374,7 @@ export default function ChatScreen() {
           ) : null}
 
           <ScrollView ref={scrollRef} contentContainerStyle={styles.messages} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            {messagesBusy && messages.length === 0 ? <LoadingState /> : null}
+            {messagesBusy && messages.length === 0 ? <ScreenLoader /> : null}
             {messages.length === 0 && !messagesBusy ? <Text style={[styles.empty, { color: theme.mcc.textSecondary }]}>Noch keine Nachrichten.</Text> : null}
             {messages.map((message) => {
               const mine = message.user_id === user.id;
@@ -532,12 +556,30 @@ function buildEventChannels(state: MccEventState | null): EventChatChannel[] {
   return [eventChannel, ...activityChannels];
 }
 
+const CHAT_CLOSE_AFTER_EVENT_MS = 2 * 24 * 60 * 60 * 1000; // through the day after the event
+
+function eventDecisionReady(state: MccEventState): boolean {
+  return (
+    state.event.status === "decided" ||
+    state.event.status === "completed" ||
+    isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day)
+  );
+}
+
+function eventChatClosesAt(state: MccEventState): number {
+  return getEventDate(state.event.week_start_date, state.event.event_day).getTime() + CHAT_CLOSE_AFTER_EVENT_MS;
+}
+
+// The event chat opens once the decision is ready and closes one day after the
+// event. Returns the phase so the UI can explain why it is locked.
+function eventChatPhase(state: MccEventState | null, now = Date.now()): "before" | "open" | "closed" {
+  if (!state) return "before";
+  if (!eventDecisionReady(state)) return "before";
+  return now > eventChatClosesAt(state) ? "closed" : "open";
+}
+
 function isEventChatOpen(state: MccEventState | null, now = Date.now()): boolean {
-  if (!state) return false;
-  if (state.event.status === "completed") return true;
-  if (state.event.status !== "decided") return false;
-  if (!state.event.starts_at) return false;
-  return new Date(state.event.starts_at).getTime() <= now;
+  return eventChatPhase(state, now) === "open";
 }
 
 function buildEventMembers(

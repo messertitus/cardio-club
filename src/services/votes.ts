@@ -155,8 +155,8 @@ async function listVotesForUser(
 async function getVoteEvent(
   supabase: AppSupabaseClient,
   eventId: string,
-): Promise<ServiceResult<Pick<Row<"weekly_events">, "status" | "week_start_date">>> {
-  const { data, error } = await supabase.from("weekly_events").select("status, week_start_date").eq("id", eventId).single();
+): Promise<ServiceResult<Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day">>> {
+  const { data, error } = await supabase.from("weekly_events").select("status, week_start_date, event_day").eq("id", eventId).single();
 
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Could not load event status.") };
@@ -184,6 +184,6 @@ async function getVoteAttendance(
   return ok(data);
 }
 
-function isVotingOpen(event: Pick<Row<"weekly_events">, "status" | "week_start_date">): boolean {
-  return (event.status === "proposing" || event.status === "voting") && isVotingInputOpen(event.week_start_date);
+function isVotingOpen(event: Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day">): boolean {
+  return (event.status === "proposing" || event.status === "voting") && isVotingInputOpen(event.week_start_date, event.event_day);
 }

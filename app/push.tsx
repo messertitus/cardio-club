@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
 import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../src/components/MccDesign";
+import { Reveal } from "../src/components/Motion";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
 import { requestWebPushSubscription, saveWebPushSubscription } from "../src/services";
@@ -32,17 +33,19 @@ export default function PushScreen() {
   return (
     <View style={{ flex: 1 }}>
       <MccScreen title="Push" kicker="Updates" subtitle="Benachrichtigungen fuer Entscheidungen und Event-Updates." bottomInset={96}>
-        <MccCard accent>
-          <MccBadge icon="bell-ring-outline">Live Updates</MccBadge>
-          <MccCardTitle>Cardio Club meldet sich, wenn es zaehlt</MccCardTitle>
-          <MccBody muted>Auf dem Handy funktioniert das nach dem Hinzufuegen zum Startbildschirm am zuverlaessigsten.</MccBody>
-          {message ? (
-            <MccBadge tone={success ? "success" : "danger"} icon={success ? "check-circle-outline" : "alert-circle-outline"}>
-              {message}
-            </MccBadge>
-          ) : null}
-          <MccButton label="Push erlauben" icon="bell-plus-outline" onPress={enablePush} />
-        </MccCard>
+        <Reveal>
+          <MccCard accent>
+            <MccBadge icon="bell-ring-outline">Live Updates</MccBadge>
+            <MccCardTitle>Cardio Club meldet sich, wenn es zaehlt</MccCardTitle>
+            <MccBody muted>Auf dem Handy funktioniert das nach dem Hinzufuegen zum Startbildschirm am zuverlaessigsten.</MccBody>
+            {message ? (
+              <MccBadge tone={success ? "success" : "danger"} icon={success ? "check-circle-outline" : "alert-circle-outline"}>
+                {message}
+              </MccBadge>
+            ) : null}
+            <MccButton label="Push erlauben" icon="bell-plus-outline" onPress={enablePush} />
+          </MccCard>
+        </Reveal>
       </MccScreen>
       <BottomNav active="menu" />
     </View>

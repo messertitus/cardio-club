@@ -2,8 +2,7 @@ import { Redirect } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, StyleSheet, TextInput, View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
-import { MccBadge, MccButton, MccCard, MccScreen } from "../src/components/MccDesign";
-import { LoadingState } from "../src/components/ui";
+import { MccBadge, MccButton, MccCard, MccScreen, ScreenLoader } from "../src/components/MccDesign";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -69,7 +68,12 @@ export default function PinScreen() {
     setBusy(false);
   }
 
-  if (loading) return <LoadingState />;
+  if (loading)
+    return (
+      <MccScreen>
+        <ScreenLoader />
+      </MccScreen>
+    );
   if (!user) return <Redirect href="/auth" />;
 
   return (

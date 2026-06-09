@@ -321,6 +321,7 @@ export type Database = {
           notes: string | null;
           decision_reason: string | null;
           activity_contact_id: string | null;
+          event_day: "saturday" | "sunday";
           created_at: string;
         };
         Insert: {
@@ -342,6 +343,7 @@ export type Database = {
           notes?: string | null;
           decision_reason?: string | null;
           activity_contact_id?: string | null;
+          event_day?: "saturday" | "sunday";
           created_at?: string;
         };
         Update: {
@@ -360,6 +362,7 @@ export type Database = {
           notes?: string | null;
           decision_reason?: string | null;
           activity_contact_id?: string | null;
+          event_day?: "saturday" | "sunday";
         };
         Relationships: [];
       };
@@ -938,7 +941,7 @@ export type Database = {
       };
       ensure_mcc_week: {
         Args: Record<PropertyKey, never>;
-        Returns: { mcc_club_id: string; mcc_event_id: string }[];
+        Returns: { mcc_club_id: string; mcc_event_id: string; mcc_event_day: "saturday" | "sunday" }[];
       };
       clear_mcc_test_chat: {
         Args: Record<PropertyKey, never>;
@@ -1053,6 +1056,38 @@ export type Database = {
           status: "pending" | "approved" | "rejected";
           reviewed_by: string | null;
           reviewed_at: string | null;
+          created_at: string;
+        };
+      };
+      event_close_readiness: {
+        Args: { target_event_id: string };
+        Returns: { has_results: boolean; attendance_reviewed: boolean; can_close: boolean }[];
+      };
+      event_can_be_closed_by: {
+        Args: { target_event_id: string; actor_id: string };
+        Returns: boolean;
+      };
+      close_weekly_event: {
+        Args: { target_event_id: string };
+        Returns: {
+          id: string;
+          club_id: string;
+          week_start_date: string;
+          selected_sport_id: string | null;
+          secondary_sport_id: string | null;
+          decision_type: EventDecisionType | null;
+          decision_scorecard: Json | null;
+          decision_character: string | null;
+          decision_explainability: Json | null;
+          losing_candidate_reasons: Json | null;
+          no_go_breakdown: Json | null;
+          weather_snapshot: Json | null;
+          status: WeeklyEventStatus;
+          location: string | null;
+          starts_at: string | null;
+          notes: string | null;
+          decision_reason: string | null;
+          activity_contact_id: string | null;
           created_at: string;
         };
       };

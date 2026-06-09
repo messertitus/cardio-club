@@ -1,9 +1,8 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { SearchField } from "../../../src/components/FormControls";
-import { MccBadge, MccBody, MccButton, MccScreen, SportVoteCard } from "../../../src/components/MccDesign";
+import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccScreen, SportVoteCard } from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
-import { ErrorText, LoadingState } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
 import { listEventProposals, listSports, proposeSport, type Row } from "../../../src/services";
@@ -70,11 +69,11 @@ export default function ProposeSportScreen() {
   }
 
   return (
-    <MccScreen title="Sportart vorschlagen" kicker="Ideen" subtitle="Nur vorgeschlagene Sportarten koennen diese Woche gewinnen.">
-      <ErrorText>{error}</ErrorText>
-      {loading ? <LoadingState /> : null}
+    <MccScreen title="Sportart vorschlagen" kicker="Ideen" subtitle="Nur vorgeschlagene Sportarten können diese Woche gewinnen.">
+      <InlineError>{error}</InlineError>
+      {loading ? <LoadingSkeleton lines={3} /> : null}
       <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart suchen" />
-      {!loading && filteredSports.length === 0 ? <MccBody muted>Keine Sportarten fuer diese Suche.</MccBody> : null}
+      {!loading && filteredSports.length === 0 ? <MccBody muted>Keine Sportarten für diese Suche.</MccBody> : null}
       {filteredSports.map((sport, index) => {
         const proposed = proposedSportIds.has(sport.id);
 

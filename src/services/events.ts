@@ -40,11 +40,15 @@ export async function getCurrentWeeklyEvent(
   input: { clubId: string; date?: Date },
 ): Promise<ServiceResult<Row<"weekly_events"> | null>> {
   const weekStartDate = getWeekStartDate(input.date);
+  // A week can hold a Saturday and a Sunday event — return the Sunday one by
+  // default (event_day 'sunday' sorts after 'saturday') so callers stay simple.
   const { data, error } = await supabase
     .from("weekly_events")
     .select()
     .eq("club_id", input.clubId)
     .eq("week_start_date", weekStartDate)
+    .order("event_day", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) {

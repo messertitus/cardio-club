@@ -1,7 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, WeeklyEventHeroCard } from "../../../src/components/MccDesign";
-import { ErrorText, LoadingState } from "../../../src/components/ui";
+import { InlineError, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader, WeeklyEventHeroCard } from "../../../src/components/MccDesign";
 import { formatCardioSunday } from "../../../src/services/date";
 import { supabase } from "../../../src/lib/supabase";
 import { getClub, getCurrentWeeklyEvent, type Row } from "../../../src/services";
@@ -43,14 +42,14 @@ export default function ClubDashboardScreen() {
   if (loading) {
     return (
       <MccScreen>
-        <LoadingState />
+        <ScreenLoader />
       </MccScreen>
     );
   }
 
   return (
     <MccScreen title={club?.name ?? "Club"} kicker="Dashboard" subtitle={club?.description ?? "Gemeinsamer Cardiotag ohne Wiederholung von letzter Woche."}>
-      <ErrorText>{error}</ErrorText>
+      <InlineError>{error}</InlineError>
       <WeeklyEventHeroCard
         title="Diese Woche"
         subtitle={event ? `Cardiotag am ${formatCardioSunday(event.starts_at ?? event.week_start_date)}` : "Fuer diese Woche gibt es noch kein Event."}

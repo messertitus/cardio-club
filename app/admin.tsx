@@ -6,10 +6,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { MapLocationPicker, SearchField } from "../src/components/FormControls";
 import { MapRouteButton } from "../src/components/MapRouteButton";
-import { MccBadge, MccBody, MccCardTitle, MotionBackground } from "../src/components/MccDesign";
+import { MccBadge, MccBody, MccCardTitle, MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { SPORT_ICON_OPTIONS, SportIconBadge } from "../src/components/SportIcon";
-import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -547,7 +546,7 @@ export default function AdminScreen() {
     await load();
   }
 
-  if (loading) return <LoadingState />;
+  if (loading) return <ScreenLoader />;
   if (!user) return <Redirect href="/auth" />;
 
   return (
@@ -558,7 +557,7 @@ export default function AdminScreen() {
           <PageHeader kicker="Admin" title={sectionTitle(activeSection)} onBack={activeSection === "overview" ? undefined : () => setActiveSection("overview")} />
 
           {message ? <Text style={styles.notice}>{message}</Text> : null}
-          {busy ? <LoadingState /> : null}
+          {busy ? <ScreenLoader /> : null}
           {!busy && !isAdmin ? <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Dieser Bereich ist nur für Admins sichtbar.</Text> : null}
 
           {isAdmin && activeSection === "overview" ? (

@@ -3,9 +3,8 @@ import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
-import { MotionBackground } from "../src/components/MccDesign";
+import { MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
-import { LoadingState } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -171,7 +170,7 @@ export default function ProfileScreen() {
     setSuccess(null);
   }
 
-  if (loading) return <LoadingState />;
+  if (loading) return <ScreenLoader />;
   if (!user) return <Redirect href="/auth" />;
 
   return (
