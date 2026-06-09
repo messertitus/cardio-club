@@ -159,19 +159,17 @@ begin
     end if;
   end loop;
 
+  -- Seed each new event with the currently ACTIVE sports as candidates, so a
+  -- fresh week always has something to vote on. Driven entirely by the active
+  -- sports an admin manages in the UI — no hardcoded sport ids. Members add or
+  -- refine candidates through the app (proposeSport / voteForSport).
   insert into public.sport_proposals (event_id, sport_id, proposed_by, note)
-  select we.id, s.id, auth.uid(), 'Standardauswahl fuer die Testphase'
+  select we.id, s.id, auth.uid(), 'Automatische Auswahl fuer den neuen Cardiotag'
   from public.weekly_events we
   cross join public.sports s
   where we.club_id = resolved_club_id
     and we.week_start_date in (current_week, next_week)
-    and s.id in (
-      '10000000-0000-4000-8000-000000000001',
-      '10000000-0000-4000-8000-000000000002',
-      '10000000-0000-4000-8000-000000000003',
-      '10000000-0000-4000-8000-000000000004',
-      '10000000-0000-4000-8000-000000000008'
-    )
+    and s.is_active = true
   on conflict (event_id, sport_id) do nothing;
 
   return query
