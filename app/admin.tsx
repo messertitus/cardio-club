@@ -16,8 +16,11 @@ import {
   deactivateMccMember,
   deleteSportProfile,
   deleteMccSport,
+  getMccEventSchedule,
   getMccEventState,
   isCurrentUserAdmin,
+  isValidTime,
+  setMccEventSchedule,
   listInvitationTree,
   listMccMembers,
   listMccSports,
@@ -32,6 +35,7 @@ import {
   upsertMccSport,
   upsertSportProfile,
   type ClubMemberRole,
+  type EventSchedule,
   type InvitationTreeEntry,
   type MccEventState,
   type MccMember,
@@ -61,7 +65,7 @@ const defaultSportCategoryOptions = [
   "unbekannt",
 ];
 
-type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests";
+type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule";
 type PendingConfirm = { title: string; detail: string; onConfirm: () => void } | null;
 type InvitationTreeNode = {
   id: string;
@@ -196,6 +200,8 @@ export default function AdminScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  const [schedule, setSchedule] = useState<EventSchedule | null>(null);
+  const [scheduleBusy, setScheduleBusy] = useState(false);
 
   const profilesBySport = useMemo(() => {
     const query = profileSearch.trim().toLowerCase();
@@ -284,6 +290,25 @@ export default function AdminScreen() {
       ...current,
       sportIds: current.sportIds.length > 0 ? current.sportIds : sportsResult.data[0]?.id ? [sportsResult.data[0].id] : [],
     }));
+
+    const scheduleResult = await getMccEventSchedule(supabase, eventResult.data.clubId);
+    if (scheduleResult.data) setSchedule(scheduleResult.data);
+  }
+
+  async function saveSchedule() {
+    if (!schedule) return;
+    if (!isValidTime(schedule.saturdayTime) || !isValidTime(schedule.sundayTime)) {
+      setMessage("Bitte gültige Uhrzeiten im Format HH:MM eingeben.");
+      return;
+    }
+    setScheduleBusy(true);
+    const result = await setMccEventSchedule(supabase, schedule);
+    setScheduleBusy(false);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    setMessage("Eventzeiten gespeichert. Sie gelten ab der aktuellen Woche.");
   }
 
   useEffect(() => {
@@ -564,6 +589,7 @@ export default function AdminScreen() {
             <View style={styles.adminGrid}>
               <AdminMenuCard title="Sportarten" body="Abstrakte Sportarten anlegen, ändern und löschen" onPress={() => setActiveSection("sports")} />
               <AdminMenuCard title="Sportprofile" body="Orte, Profilkontakte, Wetter und Gruppengrößen pflegen" onPress={() => setActiveSection("profiles")} />
+              <AdminMenuCard title="Eventzeiten" body="Uhrzeiten der Cardiotage und ob sie stattfinden" onPress={() => setActiveSection("schedule")} />
               <AdminMenuCard title="Mitglieder" body="Rechte und Deaktivierung" onPress={() => setActiveSection("members")} />
               <AdminMenuCard title="Einladungsbaum" body="Sehen, wer wen eingeladen hat" onPress={() => setActiveSection("inviteTree")} />
               <AdminMenuCard title="Namensanfragen" body={`${nameRequests.length} offene Freigaben`} onPress={() => setActiveSection("nameRequests")} />
@@ -1014,6 +1040,58 @@ export default function AdminScreen() {
               })}
             </View>
           ) : null}
+
+          {isAdmin && activeSection === "schedule" && schedule ? (
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Eventzeiten</Text>
+              <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
+                Lege fest, wann die Cardiotage starten und ob sie stattfinden. Gilt ab der aktuellen Woche – der Algorithmus nutzt die Uhrzeit automatisch (Wetter zur Eventzeit).
+              </Text>
+
+              {(
+                [
+                  { key: "saturday" as const, label: "Samstag", enabled: schedule.saturdayEnabled, time: schedule.saturdayTime },
+                  { key: "sunday" as const, label: "Sonntag", enabled: schedule.sundayEnabled, time: schedule.sundayTime },
+                ]
+              ).map((day) => (
+                <View key={day.key} style={[styles.scheduleRow, { borderTopColor: theme.mcc.line }]}>
+                  <View style={styles.scheduleInfo}>
+                    <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{day.label}</Text>
+                    <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{day.enabled ? "findet statt" : "deaktiviert"}</Text>
+                  </View>
+                  <TextInput
+                    value={day.time}
+                    onChangeText={(value) => {
+                      const sanitized = value.replace(/[^\d:]/g, "").slice(0, 5);
+                      setSchedule((current) =>
+                        current ? (day.key === "saturday" ? { ...current, saturdayTime: sanitized } : { ...current, sundayTime: sanitized }) : current,
+                      );
+                    }}
+                    placeholder="HH:MM"
+                    placeholderTextColor={theme.mcc.textMuted}
+                    editable={day.enabled}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={5}
+                    style={[styles.timeInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface, color: theme.mcc.textPrimary, opacity: day.enabled ? 1 : 0.4 }]}
+                  />
+                  <Pressable
+                    style={[styles.roleButton, day.enabled ? { backgroundColor: theme.mcc.accentDeep } : { backgroundColor: theme.mcc.surface, borderWidth: 1, borderColor: theme.mcc.line }]}
+                    onPress={() =>
+                      setSchedule((current) =>
+                        current ? (day.key === "saturday" ? { ...current, saturdayEnabled: !current.saturdayEnabled } : { ...current, sundayEnabled: !current.sundayEnabled }) : current,
+                      )
+                    }
+                  >
+                    <Text style={[styles.roleText, { color: day.enabled ? "#FFFFFF" : theme.mcc.textPrimary }]}>{day.enabled ? "Aktiv" : "Inaktiv"}</Text>
+                  </Pressable>
+                </View>
+              ))}
+
+              <Pressable style={[styles.roleButton, styles.scheduleSave, { backgroundColor: theme.mcc.accentDeep }, scheduleBusy && { opacity: 0.5 }]} disabled={scheduleBusy} onPress={() => void saveSchedule()}>
+                <Text style={[styles.roleText, { color: "#FFFFFF" }]}>{scheduleBusy ? "Speichern…" : "Zeitplan speichern"}</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </ScrollView>
         {iconPickerOpen ? (
           <SportIconPicker
@@ -1228,11 +1306,20 @@ function sectionTitle(section: AdminSection): string {
   if (section === "members") return "Mitglieder";
   if (section === "inviteTree") return "Einladungsbaum";
   if (section === "nameRequests") return "Namensanfragen";
+  if (section === "schedule") return "Eventzeiten";
   return "Club steuern";
 }
 
 function isAdminSection(value: string): value is AdminSection {
-  return value === "overview" || value === "sports" || value === "profiles" || value === "members" || value === "inviteTree" || value === "nameRequests";
+  return (
+    value === "overview" ||
+    value === "sports" ||
+    value === "profiles" ||
+    value === "members" ||
+    value === "inviteTree" ||
+    value === "nameRequests" ||
+    value === "schedule"
+  );
 }
 
 function buildInvitationTree(entries: InvitationTreeEntry[]): InvitationTreeNode[] {
@@ -1508,6 +1595,10 @@ const styles = StyleSheet.create({
   body: { fontSize: 15, lineHeight: 22 },
   muted: { fontSize: 13, lineHeight: 19 },
   adminGrid: { gap: 10 },
+  scheduleRow: { alignItems: "center", borderTopWidth: 1, flexDirection: "row", gap: 10, paddingTop: 12 },
+  scheduleInfo: { flex: 1, minWidth: 0 },
+  timeInput: { borderRadius: 14, borderWidth: 1, fontSize: 16, fontWeight: "900", minWidth: 76, paddingHorizontal: 12, paddingVertical: 9, textAlign: "center" } as object,
+  scheduleSave: { alignItems: "center", marginTop: 4 },
   adminSectionHeading: { gap: 6, paddingTop: 8 },
   previewPanel: { gap: 12, borderRadius: 22, borderWidth: 1, padding: 14 },
   previewChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
