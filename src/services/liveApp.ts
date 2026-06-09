@@ -120,6 +120,37 @@ export async function getMccEventState(
     status: row.status,
   }));
 
+  return buildEventState(supabase, userId, event, bootstrap.data.clubId, weekEvents);
+}
+
+// Loads a single event's full state directly by id, without the weekly bootstrap.
+// Faster when the events were already ensured (e.g. by getMccWeekEvents).
+export async function getEventStateById(
+  supabase: AppSupabaseClient,
+  userId: string,
+  eventId: string,
+): Promise<ServiceResult<MccEventState>> {
+  const { data: event, error } = await supabase.from("weekly_events").select().eq("id", eventId).single();
+  if (error || !event) {
+    return { data: null, error: fromPostgrestError(error, "Event konnte nicht geladen werden.") };
+  }
+  const summary: WeekEventSummary = {
+    id: event.id,
+    eventDay: event.event_day,
+    startsAt: event.starts_at,
+    weekStartDate: event.week_start_date,
+    status: event.status,
+  };
+  return buildEventState(supabase, userId, event, event.club_id, [summary]);
+}
+
+async function buildEventState(
+  supabase: AppSupabaseClient,
+  userId: string,
+  event: Row<"weekly_events">,
+  clubId: string,
+  weekEvents: WeekEventSummary[],
+): Promise<ServiceResult<MccEventState>> {
   const [sports, proposals, votes, attendance, noGos, decisionPreview, eventActivities] = await Promise.all([
     listSports(supabase),
     listEventProposals(supabase, event.id),
@@ -149,7 +180,7 @@ export async function getMccEventState(
   const names = new Map(sports.data.map((sport) => [sport.id, sport.name]));
 
   return ok({
-    clubId: bootstrap.data.clubId,
+    clubId,
     event,
     eventDay: event.event_day,
     weekEvents,

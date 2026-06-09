@@ -15,6 +15,7 @@ import {
   saveReadNotifications,
   type ReadNotificationMap,
 } from "../src/lib/adminNotifications";
+import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { getMyProfile, isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas, updateProfileCity } from "../src/services";
 
@@ -117,8 +118,8 @@ export default function MenuScreen() {
     const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
     setPostalCode(nextPostalCode);
     if (nextPostalCode.length !== 5) return;
-    const onlineCity = await fetchGermanCityByPostalCode(nextPostalCode);
-    setCity(onlineCity ?? inferCityFromPostalCode(nextPostalCode));
+    const resolvedCity = await lookupCityByPostalCode(nextPostalCode);
+    if (resolvedCity) setCity(resolvedCity);
   }
 
   async function saveLocation() {
@@ -326,39 +327,6 @@ function NotificationPreviewPanel({
       })}
     </View>
   );
-}
-
-async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
-  try {
-    const response = await fetch(`https://api.zippopotam.us/de/${postalCode}`);
-    if (!response.ok) return null;
-    const payload = (await response.json()) as { places?: Array<{ "place name"?: string }> };
-    return payload.places?.[0]?.["place name"] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function inferCityFromPostalCode(postalCode: string): string {
-  const exact: Record<string, string> = {
-    "10115": "Berlin",
-    "20095": "Hamburg",
-    "50667": "Köln",
-    "60311": "Frankfurt am Main",
-    "70173": "Stuttgart",
-    "80331": "München",
-    "78462": "Konstanz",
-  };
-  if (exact[postalCode]) return exact[postalCode];
-  const prefix = Number(postalCode.slice(0, 2));
-  if (prefix <= 14) return "Berlin";
-  if (prefix <= 22) return "Hamburg";
-  if (prefix <= 42) return "Düsseldorf";
-  if (prefix <= 53) return "Köln";
-  if (prefix <= 65) return "Frankfurt am Main";
-  if (prefix <= 79) return "Konstanz";
-  if (prefix <= 89) return "München";
-  return "";
 }
 
 function MenuItem({ title, body, onPress, index }: { title: string; body: string; onPress: () => void; index: number }) {
