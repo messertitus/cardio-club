@@ -1,13 +1,11 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect, router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandBackground } from "../src/components/BrandBackground";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
 import { SearchField } from "../src/components/FormControls";
-import { PageHeader } from "../src/components/PageHeader";
-import { LoadingState } from "../src/components/ui";
+import { MccBadge, MccScreen, ScreenLoader } from "../src/components/MccDesign";
+import { MainHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -34,6 +32,7 @@ export default function MembersScreen() {
     const cities = [...new Set(members.map((member) => member.city).filter((city): city is string => Boolean(city)))].sort((a, b) => a.localeCompare(b));
     return ["Alle", "Konstanz", ...cities.filter((city) => city !== "Konstanz")];
   }, [members]);
+
   const filteredMembers = useMemo(() => {
     const query = memberSearch.trim().toLowerCase();
     return members.filter((member) => {
@@ -64,7 +63,12 @@ export default function MembersScreen() {
     void load();
   }, [user]);
 
-  if (loading) return <LoadingState />;
+  if (loading)
+    return (
+      <MccScreen>
+        <ScreenLoader />
+      </MccScreen>
+    );
   if (!user) return <Redirect href="/auth" />;
 
   async function contactAdmin(member: MccMember) {
@@ -80,101 +84,104 @@ export default function MembersScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <BrandBackground />
-      <View style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <PageHeader
-            title="Mitglieder"
-            titleMeta={`${filteredMembers.length}`}
-            showBack={false}
-            showTheme
-            actions={<HeaderIconButton open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />}
-          />
-          {message ? <Text style={styles.notice}>{message}</Text> : null}
-          <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied, Stadt oder Rolle suchen" />
-          {filteredMembers.length === 0 ? <Text style={[styles.detail, { color: theme.muted }]}>Keine Mitglieder für diesen Filter.</Text> : null}
-          {filteredMembers.map((member) => {
-            const opened = openedUserId === member.userId;
+    <View style={styles.shell}>
+      <MccScreen bottomInset={96}>
+        <MainHeader title="Mitglieder" actions={<HeaderIconButton open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />} />
+        <View style={styles.toolRow}>
+          <MccBadge icon="account-heart-outline">{selectedCity}</MccBadge>
+          <MccBadge tone="neutral" icon="account-group-outline">{`${filteredMembers.length} Profile`}</MccBadge>
+        </View>
+        {message ? <Text style={[styles.notice, { color: theme.mcc.danger }]}>{message}</Text> : null}
+        <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied, Stadt oder Rolle suchen" />
+        {filteredMembers.length === 0 ? <Text style={[styles.detail, { color: theme.mcc.textSecondary }]}>Keine Mitglieder fuer diesen Filter.</Text> : null}
+        {filteredMembers.map((member) => {
+          const opened = openedUserId === member.userId;
+          return (
+            <Pressable
+              key={member.userId}
+              style={({ pressed }) => [
+                styles.card,
+                {
+                  borderColor: opened ? theme.mcc.strongLine : theme.mcc.line,
+                  backgroundColor: opened ? theme.mcc.surfaceRaised : theme.mcc.surface,
+                  shadowColor: theme.mcc.shadow,
+                },
+                pressed && styles.pressed,
+              ]}
+              onPress={() => setOpenedUserId(opened ? null : member.userId)}
+            >
+              <View style={styles.previewRow}>
+                <View style={styles.memberText}>
+                  <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{member.displayName}</Text>
+                  <Text style={[styles.detail, { color: theme.mcc.textSecondary }]}>{member.city ?? "Stadt noch offen"}</Text>
+                </View>
+                <View style={styles.badges}>
+                  {member.role === "admin" && member.userId !== user.id ? (
+                    <Pressable style={[styles.badgeStrong, { backgroundColor: theme.mcc.accentDeep }]} onPress={() => void contactAdmin(member)} disabled={startingChatUserId === member.userId}>
+                      <Text style={styles.badgeStrongText}>{startingChatUserId === member.userId ? "..." : "Kontakt"}</Text>
+                    </Pressable>
+                  ) : null}
+                  <Text style={[styles.badge, { backgroundColor: theme.mcc.surfaceSoft, borderColor: theme.mcc.line, color: theme.mcc.textPrimary }]}>{roleLabels[member.role]}</Text>
+                </View>
+              </View>
+              {opened ? (
+                <View style={[styles.detailPanel, { borderTopColor: theme.mcc.line }]}>
+                  <ProfileLine label="Beigetreten" value={formatJoinedAt(member.joinedAt)} />
+                  <ProfileLine label="Rolle" value={roleLabels[member.role]} />
+                  <ProfileLine label="Lieblingssportarten" value={member.favoriteSports ?? "Noch offen"} />
+                  <ProfileLine label="Alter" value={member.birthDate ? formatAge(member.birthDate) : "Noch offen"} />
+                  <ProfileLine label="Sportprofil-Kontakt" value={formatContactSports(member.contactSports)} />
+                  <ProfileLine label="Ideen" value={`${member.stats.ideasSuggested}`} />
+                  <ProfileLine label="Teilnahmen" value={`${member.stats.plannedAttendances} geplant, ${member.stats.actualAttendances} bestaetigt`} />
+                  <ProfileLine label="Verlaesslichkeit" value={member.stats.reliabilityPercent === null ? "Noch offen" : `${member.stats.reliabilityPercent}% (${member.stats.noShows} No-Shows)`} />
+                  {member.role === "admin" && member.userId !== user.id ? (
+                    <Pressable style={[styles.contactAdminButton, { backgroundColor: theme.mcc.accentDeep }]} onPress={() => void contactAdmin(member)} disabled={startingChatUserId === member.userId}>
+                      <Text style={styles.contactAdminText}>{startingChatUserId === member.userId ? "Oeffne Chat..." : "Admin kontaktieren"}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </MccScreen>
+      {locationFilterOpen ? (
+        <View style={[styles.filterPanel, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.surfaceRaised, shadowColor: theme.mcc.shadow }]}>
+          <Text style={[styles.filterPanelTitle, { color: theme.mcc.textPrimary }]}>Standortfilter</Text>
+          {cityOptions.map((city) => {
+            const active = selectedCity === city;
+            const cityMembers = membersForCity(members, city);
             return (
               <Pressable
-                key={member.userId}
-                style={({ pressed }) => [styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }, pressed && styles.pressed]}
-                onPress={() => setOpenedUserId(opened ? null : member.userId)}
+                key={city}
+                style={[styles.filterRow, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surfaceSoft }]}
+                onPress={() => {
+                  setSelectedCity(city);
+                  setLocationFilterOpen(false);
+                }}
               >
-                <View style={styles.previewRow}>
-                  <View style={styles.memberText}>
-                    <Text style={[styles.name, { color: theme.text }]}>{member.displayName}</Text>
-                    <Text style={[styles.detail, { color: theme.muted }]}>{member.city ?? "Stadt noch offen"}</Text>
-                  </View>
-                  <View style={styles.badges}>
-                    {member.role === "admin" && member.userId !== user.id ? (
-                      <Pressable style={[styles.badgeStrong, { backgroundColor: theme.button }]} onPress={() => void contactAdmin(member)} disabled={startingChatUserId === member.userId}>
-                        <Text style={[styles.badgeStrongText, { color: theme.inverse }]}>{startingChatUserId === member.userId ? "..." : "Kontakt"}</Text>
-                      </Pressable>
-                    ) : null}
-                    <Text style={[styles.badge, { backgroundColor: theme.surface, color: theme.text }]}>{roleLabels[member.role]}</Text>
-                  </View>
+                <View style={styles.filterRowText}>
+                  <Text style={[styles.filterCity, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{city}</Text>
+                  <Text style={[styles.filterPreview, { color: active ? "#FFFFFF" : theme.mcc.textSecondary }]} numberOfLines={1}>
+                    {cityMembers.length === 1 ? "1 Mitglied" : `${cityMembers.length} Mitglieder`}
+                  </Text>
                 </View>
-                {opened ? (
-                  <View style={[styles.detailPanel, { borderTopColor: theme.border }]}>
-                    <ProfileLine label="Beigetreten" value={formatJoinedAt(member.joinedAt)} />
-                    <ProfileLine label="Rolle" value={roleLabels[member.role]} />
-                    <ProfileLine label="Lieblingssportarten" value={member.favoriteSports ?? "Noch offen"} />
-                    <ProfileLine label="Alter" value={member.birthDate ? formatAge(member.birthDate) : "Noch offen"} />
-                    <ProfileLine label="Sportprofil-Kontakt" value={formatContactSports(member.contactSports)} />
-                    <ProfileLine label="Ideen" value={`${member.stats.ideasSuggested}`} />
-                    <ProfileLine label="Teilnahmen" value={`${member.stats.plannedAttendances} geplant, ${member.stats.actualAttendances} bestätigt`} />
-                    <ProfileLine label="Verlässlichkeit" value={member.stats.reliabilityPercent === null ? "Noch offen" : `${member.stats.reliabilityPercent}% (${member.stats.noShows} No-Shows)`} />
-                    {member.role === "admin" && member.userId !== user.id ? (
-                      <Pressable style={[styles.contactAdminButton, { backgroundColor: theme.button }]} onPress={() => void contactAdmin(member)} disabled={startingChatUserId === member.userId}>
-                        <Text style={[styles.contactAdminText, { color: theme.inverse }]}>{startingChatUserId === member.userId ? "Öffne Chat..." : "Admin kontaktieren"}</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
+                <Text style={[styles.filterCount, { color: active ? "#FFFFFF" : theme.mcc.textSecondary }]}>{cityMembers.length}</Text>
               </Pressable>
             );
           })}
-        </ScrollView>
-        {locationFilterOpen ? (
-          <View style={[styles.filterPanel, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-            <Text style={[styles.filterPanelTitle, { color: theme.text }]}>Standortfilter</Text>
-            {cityOptions.map((city) => {
-              const active = selectedCity === city;
-              const cityMembers = membersForCity(members, city);
-              return (
-                <Pressable
-                  key={city}
-                  style={[styles.filterRow, { backgroundColor: active ? theme.button : theme.surface }]}
-                  onPress={() => {
-                    setSelectedCity(city);
-                    setLocationFilterOpen(false);
-                  }}
-                >
-                  <View style={styles.filterRowText}>
-                    <Text style={[styles.filterCity, { color: active ? theme.inverse : theme.text }]}>{city}</Text>
-                    <Text style={[styles.filterPreview, { color: active ? theme.inverse : theme.muted }]} numberOfLines={1}>
-                      {cityMembers.length === 1 ? "1 Mitglied" : `${cityMembers.length} Mitglieder`}
-                    </Text>
-                  </View>
-                  <Text style={[styles.filterCount, { color: active ? theme.inverse : theme.muted }]}>{cityMembers.length}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
-        <BottomNav active="members" />
-      </View>
-    </SafeAreaView>
+        </View>
+      ) : null}
+      <BottomNav active="members" />
+    </View>
   );
 }
 
 function HeaderIconButton({ open, onPress }: { open: boolean; onPress: () => void }) {
   const { theme } = useTheme();
   return (
-    <Pressable style={[styles.headerIconButton, { borderColor: open ? theme.accent : theme.border, backgroundColor: theme.softSurface }]} onPress={onPress}>
-      <MaterialCommunityIcons name={open ? "close" : "filter-variant"} size={22} color={open ? theme.accent : theme.text} />
+    <Pressable style={[styles.headerIconButton, { borderColor: open ? theme.mcc.accent : theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={onPress}>
+      <MaterialCommunityIcons name={open ? "close" : "filter-variant"} size={22} color={open ? theme.mcc.accent : theme.mcc.textPrimary} />
     </Pressable>
   );
 }
@@ -185,10 +192,11 @@ function membersForCity(members: MccMember[], city: string): MccMember[] {
 }
 
 function ProfileLine({ label, value }: { label: string; value: string }) {
+  const { theme } = useTheme();
   return (
     <View style={styles.profileLine}>
-      <Text style={styles.profileLabel}>{label}</Text>
-      <Text style={styles.profileValue}>{value}</Text>
+      <Text style={[styles.profileLabel, { color: theme.mcc.textMuted }]}>{label}</Text>
+      <Text style={[styles.profileValue, { color: theme.mcc.textPrimary }]}>{value}</Text>
     </View>
   );
 }
@@ -217,62 +225,77 @@ function formatAge(value: string): string {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
   shell: { flex: 1 },
-  content: { gap: 12, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
-  title: { fontSize: 32, fontWeight: "900", letterSpacing: 0 },
-  notice: { color: "#ffb4a8", fontSize: 14, fontWeight: "800" },
+  toolRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  notice: { fontSize: 14, fontWeight: "800" },
   headerIconButton: {
     alignItems: "center",
     borderRadius: 999,
     borderWidth: 1,
     height: 42,
     justifyContent: "center",
-    width: 42,
     position: "relative",
+    width: 42,
   },
-  filterPanel: { borderRadius: 22, borderWidth: 1, gap: 8, maxWidth: 360, padding: 10, position: "absolute", right: 16, top: 72, width: "82%", zIndex: 20 },
+  filterPanel: {
+    borderRadius: 22,
+    borderWidth: 1,
+    gap: 8,
+    maxWidth: 360,
+    padding: 10,
+    position: "absolute",
+    right: 16,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    top: 96,
+    width: "82%",
+    zIndex: 20,
+  },
   filterPanelTitle: { fontSize: 13, fontWeight: "900", paddingHorizontal: 4 },
   filterRow: { alignItems: "center", borderRadius: 16, flexDirection: "row", gap: 10, justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10 },
-  filterRowText: { flex: 1, minWidth: 0, gap: 2 },
+  filterRowText: { flex: 1, gap: 2, minWidth: 0 },
   filterCity: { fontSize: 14, fontWeight: "900" },
   filterPreview: { fontSize: 12, fontWeight: "700" },
   filterCount: { fontSize: 13, fontWeight: "900" },
   card: {
-    gap: 10,
     borderRadius: 22,
     borderWidth: 1,
+    gap: 10,
     padding: 14,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
   },
-  previewRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  memberText: { flex: 1, minWidth: 0, gap: 3 },
+  previewRow: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  memberText: { flex: 1, gap: 3, minWidth: 0 },
   name: { fontSize: 18, fontWeight: "900" },
   detail: { fontSize: 14, lineHeight: 20 },
   badges: { alignItems: "flex-end", flexDirection: "row", flexWrap: "wrap", gap: 8 },
   badge: {
-    overflow: "hidden",
     borderRadius: 999,
+    borderWidth: 1,
     fontSize: 12,
     fontWeight: "900",
+    overflow: "hidden",
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   badgeStrong: {
     alignItems: "center",
-    overflow: "hidden",
     borderRadius: 999,
     fontSize: 12,
     fontWeight: "900",
+    overflow: "hidden",
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  badgeStrongText: { fontSize: 12, fontWeight: "900" },
-  detailPanel: { gap: 9, borderTopWidth: 1, paddingTop: 11 },
+  badgeStrongText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
+  detailPanel: { borderTopWidth: 1, gap: 9, paddingTop: 11 },
   profileLine: { gap: 2 },
-  profileLabel: { color: "#728197", fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
-  profileValue: { color: "#d9ecff", fontSize: 14, fontWeight: "800", lineHeight: 20 },
+  profileLabel: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
+  profileValue: { fontSize: 14, fontWeight: "800", lineHeight: 20 },
   contactAdminButton: { alignItems: "center", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 11 },
-  contactAdminText: { fontSize: 13, fontWeight: "900" },
+  contactAdminText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.84 },
 });

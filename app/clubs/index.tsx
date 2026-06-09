@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Text } from "react-native";
-import { Button, Card, EmptyState, ErrorText, LoadingState, Pill, Screen, ui } from "../../src/components/ui";
+import { View } from "react-native";
+import { EmptyState, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../src/components/MccDesign";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
 import { listClubsForUser, type ClubWithRole } from "../../src/services";
@@ -43,20 +43,26 @@ export default function ClubListScreen() {
   );
 
   return (
-    <Screen title="Deine Clubs" subtitle="Wähle einen Club aus oder erstelle einen neuen gemeinsamen Cardiotag.">
-      <Button label="Club erstellen" onPress={() => router.push("/clubs/create")} />
-      <ErrorText>{error}</ErrorText>
-      {loading ? <LoadingState /> : null}
+    <MccScreen title="Deine Clubs" kicker="MCC" subtitle="Waehle deinen Club aus oder starte einen neuen gemeinsamen Cardiotag.">
+      <MccButton label="Club erstellen" icon="plus-circle-outline" onPress={() => router.push("/clubs/create")} />
+      {error ? (
+        <MccBadge tone="danger" icon="alert-circle-outline">
+          {error}
+        </MccBadge>
+      ) : null}
+      {loading ? <LoadingSkeleton lines={3} /> : null}
       {!loading && clubs.length === 0 ? <EmptyState title="Noch kein Club" body="Erstelle einen Club und lade deine Gruppe ein." /> : null}
       {clubs.map((club) => (
-        <Card key={club.id}>
-          <Pill>{club.role}</Pill>
-          <Text style={ui.cardTitle}>{club.name}</Text>
-          {club.description ? <Text style={ui.body}>{club.description}</Text> : null}
-          <Button label="Öffnen" variant="secondary" onPress={() => router.push(`/clubs/${club.id}`)} />
-        </Card>
+        <MccCard key={club.id} accent>
+          <View style={{ gap: 10 }}>
+            <MccBadge icon="account-group-outline">{club.role}</MccBadge>
+            <MccCardTitle>{club.name}</MccCardTitle>
+            {club.description ? <MccBody muted>{club.description}</MccBody> : null}
+          </View>
+          <MccButton label="Oeffnen" icon="arrow-right" variant="secondary" onPress={() => router.push(`/clubs/${club.id}`)} />
+        </MccCard>
       ))}
-      <Button label="Abmelden" variant="ghost" onPress={() => supabase.auth.signOut()} />
-    </Screen>
+      <MccButton label="Abmelden" icon="logout" variant="ghost" onPress={() => supabase.auth.signOut()} />
+    </MccScreen>
   );
 }

@@ -1,20 +1,22 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandBackground } from "../src/components/BrandBackground";
 import { BottomNav } from "../src/components/BottomNav";
+import { MotionBackground } from "../src/components/MccDesign";
 import { MotionPressable, Reveal } from "../src/components/Motion";
-import { ThemeToggle } from "../src/components/ThemeToggle";
+import { MainHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
+import {
+  directChatNotificationId,
+  isNotificationVisible,
+  loadReadNotifications,
+  saveReadNotifications,
+  type ReadNotificationMap,
+} from "../src/lib/adminNotifications";
 import { supabase } from "../src/lib/supabase";
 import { getMyProfile, isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas, updateProfileCity } from "../src/services";
-
-const darkLogo = require("../assets/mcc-logo-white-symbol-transparent.png");
-const lightLogo = require("../assets/mcc-logo-color-symbol.png");
-const READ_NOTIFICATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type AdminNotification = {
   id: string;
@@ -25,7 +27,7 @@ type AdminNotification = {
 
 export default function MenuScreen() {
   const { user } = useAuth();
-  const { mode, theme } = useTheme();
+  const { theme } = useTheme();
   const [isAdmin, setIsAdmin] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [readNotifications, setReadNotifications] = useState<Record<string, number>>({});
@@ -77,7 +79,7 @@ export default function MenuScreen() {
         directChatsResult.data
           ?.filter((chat) => chat.status === "open" && chat.admin_id === user.id)
           .map((chat) => ({
-            id: `direct-chat:${chat.id}:${chat.last_message_at}`,
+            id: directChatNotificationId(chat),
             title: "Kontaktanfrage",
             body: chat.requesterName,
             href: `/chat?directChatId=${chat.id}`,
@@ -128,37 +130,28 @@ export default function MenuScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <BrandBackground />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+      <MotionBackground />
       <View style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <View style={styles.headerBrand}>
-              <Image source={mode === "dark" ? darkLogo : lightLogo} style={styles.logo} resizeMode="contain" />
-              <View style={styles.headerText}>
-                <Text style={[styles.kicker, { color: theme.muted }]}>Messers Cardio Club</Text>
-                <Text style={[styles.title, { color: theme.text }]}>Menü</Text>
-              </View>
-            </View>
-            <View style={styles.headerActions}>
-              {isAdmin ? <AdminNoticeButton count={unreadNotifications.length} open={notificationsOpen} onPress={() => setNotificationsOpen((open) => !open)} /> : null}
-              <ThemeToggle />
-            </View>
-          </View>
+          <MainHeader
+            title="Menü"
+            actions={isAdmin ? <AdminNoticeButton count={unreadNotifications.length} open={notificationsOpen} onPress={() => setNotificationsOpen((open) => !open)} /> : null}
+          />
 
           <Reveal index={0}>
             <MotionPressable
-              style={[styles.inviteCard, { borderColor: theme.border, backgroundColor: theme.surface }]}
+              style={[styles.inviteCard, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}
               pressedStyle={styles.itemPressed}
               onPress={() => router.push("/invites")}
             >
               <View style={styles.inviteText}>
-                <Text style={[styles.inviteKicker, { color: theme.accent }]}>Exklusiver Zugang</Text>
-                <Text style={[styles.inviteTitle, { color: theme.text }]}>Einladungscodes</Text>
-                <Text style={[styles.inviteBody, { color: theme.muted }]}>Codes erstellen, teilen und sehen, wer sie verwendet hat.</Text>
+                <Text style={[styles.inviteKicker, { color: theme.mcc.accent }]}>Exklusiver Zugang</Text>
+                <Text style={[styles.inviteTitle, { color: theme.mcc.textPrimary }]}>Einladungscodes</Text>
+                <Text style={[styles.inviteBody, { color: theme.mcc.textSecondary }]}>Codes erstellen, teilen und sehen, wer sie verwendet hat.</Text>
               </View>
-              <View style={[styles.inviteArrow, { backgroundColor: theme.button }]}>
-                <Text style={[styles.arrow, { color: theme.inverse }]}>›</Text>
+              <View style={[styles.inviteArrow, { backgroundColor: theme.mcc.accentDeep }]}>
+                <Text style={[styles.arrow, { color: "#FFFFFF" }]}>›</Text>
               </View>
             </MotionPressable>
           </Reveal>
@@ -172,8 +165,8 @@ export default function MenuScreen() {
             {isAdmin ? <MenuItem index={6} title="Admin" body="Mitglieder und Rechte verwalten" onPress={() => router.push("/admin")} /> : null}
           </View>
 
-          <Pressable style={({ pressed }) => [styles.signOut, { borderColor: theme.border }, pressed && styles.itemPressed]} onPress={signOut}>
-            <Text style={[styles.signOutText, { color: theme.muted }]}>Abmelden</Text>
+          <Pressable style={({ pressed }) => [styles.signOut, { borderColor: theme.mcc.line }, pressed && styles.itemPressed]} onPress={signOut}>
+            <Text style={[styles.signOutText, { color: theme.mcc.textSecondary }]}>Abmelden</Text>
           </Pressable>
         </ScrollView>
         {isAdmin && notificationsOpen ? (
@@ -199,13 +192,13 @@ function AdminNoticeButton({ count, open, onPress }: { count: number; open: bool
   const { theme } = useTheme();
   return (
     <Pressable
-      style={({ pressed }) => [styles.noticeButton, { borderColor: theme.border, backgroundColor: theme.softSurface }, pressed && styles.itemPressed]}
+      style={({ pressed }) => [styles.noticeButton, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }, pressed && styles.itemPressed]}
       onPress={onPress}
     >
-      <Text style={[styles.noticeIcon, { color: theme.text }]}>{open ? "×" : "!"}</Text>
+      <Text style={[styles.noticeIcon, { color: theme.mcc.textPrimary }]}>{open ? "×" : "!"}</Text>
       {count > 0 ? (
-        <View style={[styles.noticeBadge, { backgroundColor: theme.accent }]}>
-          <Text style={[styles.noticeBadgeText, { color: theme.inverse }]}>{count > 9 ? "9+" : count}</Text>
+        <View style={[styles.noticeBadge, { backgroundColor: theme.mcc.accent }]}>
+          <Text style={[styles.noticeBadgeText, { color: "#FFFFFF" }]}>{count > 9 ? "9+" : count}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -235,36 +228,36 @@ function LocationPrompt({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={undefined} style={styles.locationOverlay}>
-        <View style={[styles.locationCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-          <Text style={[styles.locationKicker, { color: theme.accent }]}>Standort</Text>
-          <Text style={[styles.locationTitle, { color: theme.text }]}>Aus welcher Stadt kommst du?</Text>
+        <View style={[styles.locationCard, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+          <Text style={[styles.locationKicker, { color: theme.mcc.accent }]}>Standort</Text>
+          <Text style={[styles.locationTitle, { color: theme.mcc.textPrimary }]}>Aus welcher Stadt kommst du?</Text>
           <TextInput
             value={postalCode}
             onChangeText={onPostalCodeChange}
             placeholder="PLZ"
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mcc.textSecondary}
             keyboardType="number-pad"
             inputMode="numeric"
             maxLength={5}
-            style={[styles.locationInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+            style={[styles.locationInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
           />
           <TextInput
             value={city}
             onChangeText={onCityChange}
             placeholder="Stadt"
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mcc.textSecondary}
             autoCapitalize="words"
-            style={[styles.locationInput, { borderColor: theme.border, backgroundColor: theme.softSurface, color: theme.text }]}
+            style={[styles.locationInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
           />
           <Pressable
-            style={[styles.locationButton, { backgroundColor: theme.button }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
+            style={[styles.locationButton, { backgroundColor: theme.mcc.accentDeep }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
             onPress={onSave}
             disabled={postalCode.length < 5 || !city.trim() || busy}
           >
-            <Text style={[styles.locationButtonText, { color: theme.inverse }]}>{busy ? "Speichern..." : "Speichern"}</Text>
+            <Text style={[styles.locationButtonText, { color: "#FFFFFF" }]}>{busy ? "Speichern..." : "Speichern"}</Text>
           </Pressable>
           <Pressable style={styles.locationClose} onPress={onClose}>
-            <Text style={[styles.locationCloseText, { color: theme.muted }]}>Schließen</Text>
+            <Text style={[styles.locationCloseText, { color: theme.mcc.textSecondary }]}>Schließen</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -275,19 +268,19 @@ function LocationPrompt({
 function NotificationPreview({ notifications, onSelect }: { notifications: AdminNotification[]; onSelect: (notification: AdminNotification) => void }) {
   const { theme } = useTheme();
   return (
-    <View style={[styles.notificationPanel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-      <Text style={[styles.notificationTitle, { color: theme.text }]}>Anfragen</Text>
-      {notifications.length === 0 ? <Text style={[styles.notificationEmpty, { color: theme.muted }]}>Keine neuen Meldungen.</Text> : null}
+    <View style={[styles.notificationPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+      <Text style={[styles.notificationTitle, { color: theme.mcc.textPrimary }]}>Anfragen</Text>
+      {notifications.length === 0 ? <Text style={[styles.notificationEmpty, { color: theme.mcc.textSecondary }]}>Keine neuen Meldungen.</Text> : null}
       {notifications.map((notification) => (
-        <Pressable key={notification.id} style={[styles.notificationRow, { borderTopColor: theme.border }]} onPress={() => onSelect(notification)}>
+        <Pressable key={notification.id} style={[styles.notificationRow, { borderTopColor: theme.mcc.line }]} onPress={() => onSelect(notification)}>
           <View style={styles.notificationDot} />
           <View style={styles.notificationText}>
-            <Text style={[styles.notificationKicker, { color: theme.accent }]}>{notification.title}</Text>
-            <Text style={[styles.notificationBody, { color: theme.text }]} numberOfLines={1}>
+            <Text style={[styles.notificationKicker, { color: theme.mcc.accent }]}>{notification.title}</Text>
+            <Text style={[styles.notificationBody, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
               {notification.body}
             </Text>
           </View>
-          <Text style={[styles.itemArrow, { color: theme.muted }]}>›</Text>
+          <Text style={[styles.itemArrow, { color: theme.mcc.textSecondary }]}>›</Text>
         </Pressable>
       ))}
     </View>
@@ -307,50 +300,32 @@ function NotificationPreviewPanel({
 }) {
   const { theme } = useTheme();
   return (
-    <View style={[styles.notificationPanel, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-      <Text style={[styles.notificationTitle, { color: theme.text }]}>Anfragen</Text>
-      {notifications.length === 0 ? <Text style={[styles.notificationEmpty, { color: theme.muted }]}>Keine neuen Meldungen.</Text> : null}
+    <View style={[styles.notificationPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+      <Text style={[styles.notificationTitle, { color: theme.mcc.textPrimary }]}>Anfragen</Text>
+      {notifications.length === 0 ? <Text style={[styles.notificationEmpty, { color: theme.mcc.textSecondary }]}>Keine neuen Meldungen.</Text> : null}
       {notifications.map((notification) => {
         const readAt = readNotifications[notification.id];
         return (
-          <View key={notification.id} style={[styles.notificationRow, { borderTopColor: theme.border }]}>
+          <View key={notification.id} style={[styles.notificationRow, { borderTopColor: theme.mcc.line }]}>
             <View style={[styles.notificationDot, readAt ? styles.notificationDotRead : null]} />
             <Pressable style={styles.notificationText} onPress={() => onSelect(notification)}>
-              <Text style={[styles.notificationKicker, { color: readAt ? theme.muted : theme.accent }]}>{readAt ? "Gelesen" : notification.title}</Text>
-              <Text style={[styles.notificationBody, { color: theme.text }]} numberOfLines={1}>
+              <Text style={[styles.notificationKicker, { color: readAt ? theme.mcc.textSecondary : theme.mcc.accent }]}>{readAt ? "Gelesen" : notification.title}</Text>
+              <Text style={[styles.notificationBody, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
                 {notification.body}
               </Text>
             </Pressable>
             {readAt ? (
-              <Pressable style={[styles.markUnreadButton, { backgroundColor: theme.softSurface }]} onPress={() => onMarkUnread(notification)}>
-                <Text style={[styles.markUnreadText, { color: theme.text }]}>Ungelesen</Text>
+              <Pressable style={[styles.markUnreadButton, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => onMarkUnread(notification)}>
+                <Text style={[styles.markUnreadText, { color: theme.mcc.textPrimary }]}>Ungelesen</Text>
               </Pressable>
             ) : (
-              <Text style={[styles.itemArrow, { color: theme.muted }]}>›</Text>
+              <Text style={[styles.itemArrow, { color: theme.mcc.textSecondary }]}>›</Text>
             )}
           </View>
         );
       })}
     </View>
   );
-}
-
-async function loadReadNotifications(userId: string): Promise<Record<string, number>> {
-  const value = await AsyncStorage.getItem(readNotificationsKey(userId));
-  if (!value) return {};
-  try {
-    return pruneReadNotifications(JSON.parse(value) as Record<string, number>);
-  } catch {
-    return {};
-  }
-}
-
-async function saveReadNotifications(userId: string, readNotifications: Record<string, number>): Promise<void> {
-  await AsyncStorage.setItem(readNotificationsKey(userId), JSON.stringify(pruneReadNotifications(readNotifications)));
-}
-
-function readNotificationsKey(userId: string): string {
-  return `mcc:admin-notifications-read:${userId}`;
 }
 
 async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
@@ -386,31 +361,21 @@ function inferCityFromPostalCode(postalCode: string): string {
   return "";
 }
 
-function isNotificationVisible(id: string, readNotifications: Record<string, number>): boolean {
-  const readAt = readNotifications[id];
-  return !readAt || Date.now() - readAt < READ_NOTIFICATION_TTL_MS;
-}
-
-function pruneReadNotifications(readNotifications: Record<string, number>): Record<string, number> {
-  const now = Date.now();
-  return Object.fromEntries(Object.entries(readNotifications).filter(([, readAt]) => now - readAt < READ_NOTIFICATION_TTL_MS));
-}
-
 function MenuItem({ title, body, onPress, index }: { title: string; body: string; onPress: () => void; index: number }) {
   const { theme } = useTheme();
 
   return (
     <Reveal index={index}>
-      <MotionPressable style={[styles.item, { borderColor: theme.border, backgroundColor: theme.softSurface }]} pressedStyle={styles.itemPressed} onPress={onPress}>
+      <MotionPressable style={[styles.item, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} pressedStyle={styles.itemPressed} onPress={onPress}>
         <View style={styles.itemText}>
-          <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>
+          <Text style={[styles.itemTitle, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={[styles.itemBody, { color: theme.muted }]} numberOfLines={2}>
+          <Text style={[styles.itemBody, { color: theme.mcc.textSecondary }]} numberOfLines={2}>
             {body}
           </Text>
         </View>
-        <Text style={[styles.itemArrow, { color: theme.muted }]}>›</Text>
+        <Text style={[styles.itemArrow, { color: theme.mcc.textSecondary }]}>›</Text>
       </MotionPressable>
     </Reveal>
   );

@@ -16,7 +16,7 @@ export function BottomNav({ active }: { active: BottomNavKey }) {
   ] as const;
 
   return (
-    <View style={[styles.outer, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
+    <View style={[styles.outer, { borderTopColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
       <View style={styles.wrap}>
         {items.map((item) => {
           const isActive = active === item.key;
@@ -27,8 +27,8 @@ export function BottomNav({ active }: { active: BottomNavKey }) {
               style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
               onPress={() => router.push(item.href)}
             >
-              <View style={[styles.activeLine, { backgroundColor: isActive ? theme.accent : "transparent" }]} />
-              <Text style={[styles.label, compact && styles.labelCompact, { color: isActive ? theme.text : theme.muted }]} numberOfLines={1}>
+              <View style={[styles.activeLine, { backgroundColor: isActive ? theme.mcc.accent : "transparent" }]} />
+              <Text style={[styles.label, compact && styles.labelCompact, { color: isActive ? theme.mcc.textPrimary : theme.mcc.textMuted }]} numberOfLines={1}>
                 {item.label}
               </Text>
             </Pressable>

@@ -19,15 +19,15 @@ export function MapRouteButton({ target, compact = false }: { target?: MapTarget
       style={({ pressed }) => [
         styles.button,
         compact && styles.compact,
-        { borderColor: theme.border, backgroundColor: theme.surface },
+        { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft },
         pressed && styles.pressed,
       ]}
       onPress={() => {
         void Linking.openURL(url);
       }}
     >
-      <MaterialCommunityIcons name="map-marker-outline" size={compact ? 16 : 18} color={theme.accent} />
-      {!compact ? <Text style={[styles.text, { color: theme.text }]}>Karte</Text> : null}
+      <MaterialCommunityIcons name="map-marker-outline" size={compact ? 16 : 18} color={theme.mcc.accent} />
+      {!compact ? <Text style={[styles.text, { color: theme.mcc.textPrimary }]}>Karte</Text> : null}
     </Pressable>
   );
 }

@@ -1,11 +1,8 @@
 import { Redirect } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandBackground } from "../src/components/BrandBackground";
+import { KeyboardAvoidingView, StyleSheet, TextInput, View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
-import { PageHeader } from "../src/components/PageHeader";
-import { LoadingState } from "../src/components/ui";
+import { MccBadge, MccButton, MccCard, MccScreen, ScreenLoader } from "../src/components/MccDesign";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -13,7 +10,6 @@ import { getMyProfile } from "../src/services";
 
 export default function PinScreen() {
   const { loading, user } = useAuth();
-  const { theme } = useTheme();
   const [currentPin, setCurrentPin] = useState("");
   const [nextPin, setNextPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -28,13 +24,13 @@ export default function PinScreen() {
     setSuccess(null);
 
     if (!isValidPin(currentPin) || !isValidPin(nextPin)) {
-      setMessage("PINs müssen mindestens 4 Ziffern haben.");
+      setMessage("PINs muessen mindestens 4 Ziffern haben.");
       setBusy(false);
       return;
     }
 
     if (nextPin !== confirmPin) {
-      setMessage("Die neue PIN stimmt nicht überein.");
+      setMessage("Die neue PIN stimmt nicht ueberein.");
       setBusy(false);
       return;
     }
@@ -68,56 +64,57 @@ export default function PinScreen() {
     setCurrentPin("");
     setNextPin("");
     setConfirmPin("");
-    setSuccess("PIN geändert.");
+    setSuccess("PIN geaendert.");
     setBusy(false);
   }
 
-  if (loading) return <LoadingState />;
+  if (loading)
+    return (
+      <MccScreen>
+        <ScreenLoader />
+      </MccScreen>
+    );
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <BrandBackground />
-      <View style={styles.shell}>
-        <KeyboardAvoidingView behavior={undefined} style={styles.shell}>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <PageHeader kicker="Sicherheit" title="PIN ändern" />
-
-            {message ? <Text style={styles.notice}>{message}</Text> : null}
-            {success ? <Text style={styles.success}>{success}</Text> : null}
-
-            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.softSurface }]}>
-              <PinInput value={currentPin} onChangeText={setCurrentPin} placeholder="Aktuelle PIN" />
-              <PinInput value={nextPin} onChangeText={setNextPin} placeholder="Neue PIN" showFeedback />
-              <PinInput value={confirmPin} onChangeText={setConfirmPin} placeholder="Neue PIN wiederholen" showFeedback />
-              <Pressable
-                style={({ pressed }) => [styles.button, { backgroundColor: theme.button }, (!canSubmit(currentPin, nextPin, confirmPin) || busy) && styles.disabled, pressed && styles.pressed]}
-                onPress={changePin}
-                disabled={!canSubmit(currentPin, nextPin, confirmPin) || busy}
-              >
-                <Text style={[styles.buttonText, { color: theme.inverse }]}>{busy ? "Speichere..." : "PIN speichern"}</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-        <BottomNav active="menu" />
-      </View>
-    </SafeAreaView>
+    <View style={styles.shell}>
+      <KeyboardAvoidingView behavior={undefined} style={styles.shell}>
+        <MccScreen title="PIN aendern" kicker="Sicherheit" subtitle="Halte deinen Clubzugang kurz, privat und robust." bottomInset={96}>
+          {message ? (
+            <MccBadge tone="danger" icon="alert-circle-outline">
+              {message}
+            </MccBadge>
+          ) : null}
+          {success ? (
+            <MccBadge tone="success" icon="check-circle-outline">
+              {success}
+            </MccBadge>
+          ) : null}
+          <MccCard accent>
+            <PinInput value={currentPin} onChangeText={setCurrentPin} placeholder="Aktuelle PIN" />
+            <PinInput value={nextPin} onChangeText={setNextPin} placeholder="Neue PIN" showFeedback />
+            <PinInput value={confirmPin} onChangeText={setConfirmPin} placeholder="Neue PIN wiederholen" showFeedback />
+            <MccButton label={busy ? "Speichere..." : "PIN speichern"} icon="shield-check-outline" onPress={changePin} disabled={!canSubmit(currentPin, nextPin, confirmPin) || busy} />
+          </MccCard>
+        </MccScreen>
+      </KeyboardAvoidingView>
+      <BottomNav active="menu" />
+    </View>
   );
 }
 
 function PinInput({ showFeedback, style, ...props }: React.ComponentProps<typeof TextInput> & { showFeedback?: boolean }) {
   const { theme } = useTheme();
   const value = String(props.value ?? "");
-  const feedbackColor = !showFeedback || value.length === 0 ? theme.border : value.length >= 4 ? "#4ade80" : "#ff6b57";
+  const feedbackColor = !showFeedback || value.length === 0 ? theme.mcc.line : value.length >= 4 ? theme.mcc.success : theme.mcc.danger;
   return (
     <TextInput
       keyboardType="number-pad"
       inputMode="numeric"
       secureTextEntry
       maxLength={16}
-      placeholderTextColor={theme.muted}
-      style={[styles.input, { borderColor: feedbackColor, backgroundColor: theme.surface, color: theme.text }, style]}
+      placeholderTextColor={theme.mcc.textMuted}
+      style={[styles.input, { borderColor: feedbackColor, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }, style]}
       {...props}
       onChangeText={(text) => props.onChangeText?.(text.replace(/\D/g, ""))}
     />
@@ -138,27 +135,14 @@ function appPinToAuthPassword(phoneValue: string, pinValue: string): string {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
   shell: { flex: 1 },
-  content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
-  header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  headerText: { flex: 1, minWidth: 0 },
-  kicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { fontSize: 34, fontWeight: "900", letterSpacing: 0 },
-  notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "900" },
-  success: { color: "#5eead4", fontSize: 14, fontWeight: "900" },
-  card: { gap: 12, borderRadius: 24, borderWidth: 1, padding: 14 },
   input: {
-    minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
     fontSize: 16,
     fontWeight: "800",
-    paddingHorizontal: 14,
+    minHeight: 54,
     outlineStyle: "none",
+    paddingHorizontal: 14,
   } as object,
-  button: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
-  buttonText: { fontSize: 15, fontWeight: "900" },
-  disabled: { opacity: 0.42 },
-  pressed: { transform: [{ scale: 0.99 }], opacity: 0.86 },
 });

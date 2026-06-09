@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Button, Card, ErrorText, Field, Screen } from "../../src/components/ui";
+import { LabeledInput } from "../../src/components/FormControls";
+import { InlineError, MccButton, MccCard, MccScreen } from "../../src/components/MccDesign";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
 import { createClub } from "../../src/services";
@@ -37,13 +38,13 @@ export default function CreateClubScreen() {
   }
 
   return (
-    <Screen title="Club erstellen" subtitle="Halte es einfach: Name, kurzer Zweck, fertig.">
-      <Card>
-        <Field label="Clubname" value={name} onChangeText={setName} placeholder="Messers Cardio Club" />
-        <Field label="Beschreibung" value={description} onChangeText={setDescription} placeholder="Wöchentlicher Sporttag" multiline />
-        <ErrorText>{error}</ErrorText>
-        <Button label="Club speichern" onPress={submit} disabled={loading || name.trim().length === 0} />
-      </Card>
-    </Screen>
+    <MccScreen title="Club erstellen" kicker="Setup" subtitle="Name, kurzer Zweck, fertig. Der gemeinsame Cardiotag bleibt sonntags.">
+      <MccCard accent>
+        <LabeledInput label="Clubname" value={name} onChangeText={setName} placeholder="Messers Cardio Club" />
+        <LabeledInput label="Beschreibung" value={description} onChangeText={setDescription} placeholder="Woechentlicher Sporttag" multiline />
+        <InlineError>{error}</InlineError>
+        <MccButton label="Club speichern" icon="content-save-outline" onPress={submit} disabled={loading || name.trim().length === 0} />
+      </MccCard>
+    </MccScreen>
   );
 }

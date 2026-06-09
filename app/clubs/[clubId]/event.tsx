@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { LabeledInput } from "../../../src/components/FormControls";
 import { MapRouteButton } from "../../../src/components/MapRouteButton";
+import { InlineError, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader, SundayRibbon } from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
-import { Button, Card, ErrorText, Field, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
 import { supabase } from "../../../src/lib/supabase";
+import { formatCardioSunday, getCardioSundayDate } from "../../../src/services/date";
 import {
   createWeeklyEvent,
   getCurrentWeeklyEvent,
@@ -55,7 +57,7 @@ export default function CurrentWeeklyEventScreen() {
     const result = await createWeeklyEvent(supabase, {
       clubId,
       location: location || null,
-      startsAt: startsAt || null,
+      startsAt: startsAt || defaultSundayStartIso(),
       notes: notes || null,
     });
     setSaving(false);
@@ -70,61 +72,69 @@ export default function CurrentWeeklyEventScreen() {
 
   if (loading) {
     return (
-      <Screen>
-        <LoadingState />
-      </Screen>
+      <MccScreen>
+        <ScreenLoader />
+      </MccScreen>
     );
   }
 
   return (
-    <Screen title="Diese Woche" subtitle="Plane den gemeinsamen Cardiotag und halte die Entscheidung sichtbar.">
-      <ErrorText>{error}</ErrorText>
+    <MccScreen title="Diese Woche" kicker="Club Event" subtitle="Plane den Cardiotag am Sonntag und halte die Entscheidung sichtbar.">
+      <InlineError>{error}</InlineError>
       {event ? (
         <>
-          <Card>
-            <Pill>{event.status}</Pill>
-            <Text style={ui.cardTitle}>{event.decision_type ? eventTypeLabel(event.decision_type) : event.selected_sport_id ? "Sportart entschieden" : "Noch offen"}</Text>
-            <Text style={ui.body}>Woche ab {event.week_start_date}</Text>
-            {event.location ? <Text style={ui.body}>Ort: {event.location}</Text> : null}
-            {event.starts_at ? <Text style={ui.body}>Zeit: {new Date(event.starts_at).toLocaleString("de-DE")}</Text> : null}
-            {event.notes ? <Text style={ui.body}>{event.notes}</Text> : null}
+          <MccCard accent>
+            <MccBadge icon="calendar-star">{event.status}</MccBadge>
+            <MccCardTitle>{event.decision_type ? eventTypeLabel(event.decision_type) : event.selected_sport_id ? "Sportart entschieden" : "Noch offen"}</MccCardTitle>
+            <SundayRibbon date={formatCardioSunday(event.starts_at ?? event.week_start_date)} />
+            {event.location ? <MccBody>Ort: {event.location}</MccBody> : null}
+            {event.starts_at ? <MccBody muted>Zeit: {new Date(event.starts_at).toLocaleString("de-DE")}</MccBody> : null}
+            {event.notes ? <MccBody muted>{event.notes}</MccBody> : null}
             {eventActivities.length > 0 ? (
               <>
-                <Text style={ui.body}>Aktivitäten:</Text>
+                <MccBody>Aktivitaeten:</MccBody>
                 {eventActivities.map((activity) => {
                   const sport = sports.find((entry) => entry.id === activity.sport_id);
                   const profile = sportProfiles.find((entry) => entry.id === activity.sport_profile_id);
                   return (
                     <View key={activity.id} style={styles.activityRow}>
                       <SportIconBadge sport={sport} size={34} />
-                      <Text style={[ui.body, styles.activityText]}>
+                      <MccBody style={styles.activityText}>
                         {activity.title || sportName(sports, activity.sport_id)}
-                        {activity.location ? ` · ${activity.location}` : ""}
-                        {(activity.assigned_user_ids ?? []).length > 0 ? ` · ${(activity.assigned_user_ids ?? []).length} Personen` : ""}
-                      </Text>
+                        {activity.location ? ` - ${activity.location}` : ""}
+                        {(activity.assigned_user_ids ?? []).length > 0 ? ` - ${(activity.assigned_user_ids ?? []).length} Personen` : ""}
+                      </MccBody>
                       <MapRouteButton target={profile ? profileMapTarget(profile) : activity.location ? { label: activity.location } : null} compact />
                     </View>
                   );
                 })}
               </>
             ) : null}
-          </Card>
-          <Button label="Sportart vorschlagen" onPress={() => router.push(`/events/${event.id}/propose`)} />
-          <Button label="Abstimmen" variant="secondary" onPress={() => router.push(`/events/${event.id}/vote`)} />
-          <Button label="Entscheidung anzeigen" variant="secondary" onPress={() => router.push(`/events/${event.id}/decision`)} />
-          <Button label="Teilnahme" variant="secondary" onPress={() => router.push(`/events/${event.id}/attendance`)} />
+          </MccCard>
+          <MccButton label="Sportart vorschlagen" icon="lightbulb-on-outline" onPress={() => router.push(`/events/${event.id}/propose`)} />
+          <MccButton label="Abstimmen" icon="vote-outline" variant="secondary" onPress={() => router.push(`/events/${event.id}/vote`)} />
+          <MccButton label="Entscheidung anzeigen" icon="trophy-outline" variant="secondary" onPress={() => router.push(`/events/${event.id}/decision`)} />
+          <MccButton label="Teilnahme" icon="account-group-outline" variant="secondary" onPress={() => router.push(`/events/${event.id}/attendance`)} />
         </>
       ) : (
-        <Card>
-          <Text style={ui.cardTitle}>Event anlegen</Text>
-          <Field label="Ort" value={location} onChangeText={setLocation} placeholder="See, Park, Halle..." />
-          <Field label="Startzeit" value={startsAt} onChangeText={setStartsAt} placeholder="2026-05-12T18:00:00+02:00" />
-          <Field label="Notizen" value={notes} onChangeText={setNotes} placeholder="Locker, gemeinsam, danach optional Kaffee." multiline />
-          <Button label="Diese Woche erstellen" onPress={createEvent} disabled={saving} />
-        </Card>
+        <MccCard accent>
+          <MccBadge icon="plus-circle-outline">Sonntag</MccBadge>
+          <MccCardTitle>Event anlegen</MccCardTitle>
+          <SundayRibbon date={formatCardioSunday(defaultSundayStartIso())} />
+          <LabeledInput label="Ort" value={location} onChangeText={setLocation} placeholder="See, Park, Halle..." />
+          <LabeledInput label="Startzeit" value={startsAt} onChangeText={setStartsAt} placeholder={defaultSundayStartIso()} />
+          <LabeledInput label="Notizen" value={notes} onChangeText={setNotes} placeholder="Locker, gemeinsam, danach optional Kaffee." multiline />
+          <MccButton label="Sonntag erstellen" icon="calendar-plus" onPress={createEvent} disabled={saving} />
+        </MccCard>
       )}
-    </Screen>
+    </MccScreen>
   );
+}
+
+function defaultSundayStartIso(): string {
+  const sunday = getCardioSundayDate();
+  sunday.setUTCHours(16, 0, 0, 0);
+  return sunday.toISOString();
 }
 
 function eventTypeLabel(type: Row<"weekly_events">["decision_type"]): string {

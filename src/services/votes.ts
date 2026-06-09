@@ -1,5 +1,6 @@
 import type { Row } from "./database.types";
 import { isVoteRank, MAX_VOTES_PER_EVENT, rankToVoteWeight, type VoteRank } from "../lib/votingRules";
+import { isVotingInputOpen } from "./date";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -30,8 +31,8 @@ export async function voteForSport(
     return { data: null, error: eventResult.error };
   }
 
-  if (!isVotingOpen(eventResult.data.status)) {
-    return fail("Die Abstimmung ist geschlossen, weil die Entscheidung bereits festgelegt wurde.");
+  if (!isVotingOpen(eventResult.data)) {
+    return fail("Die Abstimmung ist geschlossen. Ihr habt Montag bis Mittwoch Zeit, danach erscheint am Donnerstag die Auswertung.");
   }
 
   const attendanceResult = await getVoteAttendance(supabase, input.eventId, input.userId);
@@ -102,8 +103,8 @@ export async function removeVote(
     return { data: null, error: eventResult.error };
   }
 
-  if (!isVotingOpen(eventResult.data.status)) {
-    return fail("Die Abstimmung ist geschlossen, weil die Entscheidung bereits festgelegt wurde.");
+  if (!isVotingOpen(eventResult.data)) {
+    return fail("Die Abstimmung ist geschlossen. Ihr habt Montag bis Mittwoch Zeit, danach erscheint am Donnerstag die Auswertung.");
   }
 
   const { error } = await supabase
@@ -154,8 +155,8 @@ async function listVotesForUser(
 async function getVoteEvent(
   supabase: AppSupabaseClient,
   eventId: string,
-): Promise<ServiceResult<Pick<Row<"weekly_events">, "status">>> {
-  const { data, error } = await supabase.from("weekly_events").select("status").eq("id", eventId).single();
+): Promise<ServiceResult<Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day">>> {
+  const { data, error } = await supabase.from("weekly_events").select("status, week_start_date, event_day").eq("id", eventId).single();
 
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Could not load event status.") };
@@ -183,6 +184,6 @@ async function getVoteAttendance(
   return ok(data);
 }
 
-function isVotingOpen(status: Row<"weekly_events">["status"]): boolean {
-  return status === "proposing" || status === "voting";
+function isVotingOpen(event: Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day">): boolean {
+  return (event.status === "proposing" || event.status === "voting") && isVotingInputOpen(event.week_start_date, event.event_day);
 }

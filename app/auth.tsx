@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthIntro } from "../src/components/AuthIntro";
+import { InlineError } from "../src/components/MccDesign";
 import { ThemeToggle } from "../src/components/ThemeToggle";
-import { Button, ErrorText } from "../src/components/ui";
+import { Button } from "../src/components/ui";
 import { useTheme } from "../src/context/ThemeContext";
 import { isSupabaseConfigured, supabase } from "../src/lib/supabase";
 import { consumeInvitationCode, ensureProfile, validateInvitationCode } from "../src/services";
@@ -451,7 +452,7 @@ export default function AuthScreen() {
                   onPhoneChange={setPhone}
                 />
                 <PinField value={pin} onChangeText={setPin} placeholder="App-PIN" />
-                <ErrorText>{message}</ErrorText>
+                <InlineError>{message}</InlineError>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Logge ein..." : "Einloggen"} onPress={submitLogin} disabled={loading || !isValidPhone(normalizedPhone) || !isValidPin(pin)} />
                 <Pressable onPress={() => switchStep("resetPhone")} style={styles.subtleTextButton}>
@@ -472,7 +473,7 @@ export default function AuthScreen() {
                   inputMode="numeric"
                   placeholder="12-stelliger Code"
                 />
-                <ErrorText>{message}</ErrorText>
+                <InlineError>{message}</InlineError>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Prüfe..." : "Code prüfen"} onPress={verifyInvite} disabled={loading || inviteValue.length < 8} />
                 <Pressable onPress={() => switchStep("login")} style={styles.textButton}>
@@ -495,7 +496,7 @@ export default function AuthScreen() {
                   onPhoneChange={setPhone}
                 />
                 <PinField value={pin} onChangeText={setPin} placeholder="App-PIN ab 4 Ziffern" showFeedback />
-                <ErrorText>{message}</ErrorText>
+                <InlineError>{message}</InlineError>
                 <Button
                   label={loading ? "Erstelle..." : "SMS-Code senden"}
                   onPress={submitSignup}
@@ -517,7 +518,7 @@ export default function AuthScreen() {
                   textContentType="oneTimeCode"
                   placeholder="Code"
                 />
-                <ErrorText>{message}</ErrorText>
+                <InlineError>{message}</InlineError>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Bestätige..." : "Telefon bestätigen"} onPress={submitSmsCode} disabled={loading || smsCode.length < 4} />
                 <View style={styles.smsActions}>
@@ -542,7 +543,7 @@ export default function AuthScreen() {
                   phone={phone}
                   onPhoneChange={setPhone}
                 />
-                <ErrorText>{message}</ErrorText>
+                <InlineError>{message}</InlineError>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Sende..." : "SMS-Code senden"} onPress={startPinReset} disabled={loading || !isValidPhone(normalizedPhone)} />
                 <Pressable onPress={() => switchStep("login")} disabled={loading} style={styles.textButton}>
@@ -561,7 +562,7 @@ export default function AuthScreen() {
                   textContentType="oneTimeCode"
                   placeholder="SMS-Code"
                 />
-                <ErrorText>{message}</ErrorText>
+                <InlineError>{message}</InlineError>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Prüfe..." : "Code prüfen"} onPress={verifyPinResetSmsCode} disabled={loading || smsCode.length < 4} />
                 <View style={styles.smsActions}>
@@ -578,7 +579,7 @@ export default function AuthScreen() {
             {step === "resetPin" ? (
               <View style={styles.form}>
                 <PinField value={pin} onChangeText={setPin} placeholder="Neue App-PIN" showFeedback />
-                <ErrorText>{message}</ErrorText>
+                <InlineError>{message}</InlineError>
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Speichere..." : "PIN speichern"} onPress={submitPinReset} disabled={loading || !isValidPin(pin)} />
               </View>

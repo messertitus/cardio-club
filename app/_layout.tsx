@@ -1,5 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { AppNotificationBridge } from "../src/components/AppNotificationBridge";
+import { SwipeNavigator } from "../src/components/SwipeNavigator";
 import { AuthProvider } from "../src/context/AuthContext";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 
@@ -17,16 +19,18 @@ function RootStack() {
   return (
     <AuthProvider>
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          headerStyle: { backgroundColor: theme.background },
-          headerTitleStyle: { color: theme.text },
-          headerTintColor: theme.text,
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: theme.background },
-        }}
-      >
+      <AppNotificationBridge />
+      <SwipeNavigator>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            headerStyle: { backgroundColor: theme.background },
+            headerTitleStyle: { color: theme.text },
+            headerTintColor: theme.text,
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: theme.background },
+          }}
+        >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="profile" options={{ title: "Profil" }} />
           <Stack.Screen name="ideas" options={{ title: "Sportarten und Standorte" }} />
@@ -47,7 +51,9 @@ function RootStack() {
           <Stack.Screen name="events/[eventId]/vote" options={{ title: "Abstimmen" }} />
           <Stack.Screen name="events/[eventId]/decision" options={{ title: "Entscheidung" }} />
           <Stack.Screen name="events/[eventId]/attendance" options={{ title: "Teilnahme" }} />
-      </Stack>
+          <Stack.Screen name="events/[eventId]/close" options={{ title: "Event abschließen" }} />
+        </Stack>
+      </SwipeNavigator>
     </AuthProvider>
   );
 }

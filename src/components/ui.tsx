@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { PropsWithChildren, ReactNode } from "react";
+import { useTheme } from "../context/ThemeContext";
 
 export function Screen({ children, title, subtitle }: PropsWithChildren<{ title?: string; subtitle?: string }>) {
   return (
@@ -29,6 +30,11 @@ export function Button({
   variant?: "primary" | "secondary" | "ghost";
   disabled?: boolean;
 }) {
+  const { theme } = useTheme();
+  const backgroundColor =
+    variant === "primary" ? theme.mcc.accentDeep : variant === "secondary" ? theme.mcc.surfaceSoft : "transparent";
+  const textColor = variant === "primary" ? "#FFFFFF" : theme.mcc.textPrimary;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -36,13 +42,12 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        variant === "secondary" && styles.buttonSecondary,
-        variant === "ghost" && styles.buttonGhost,
+        { backgroundColor, borderColor: variant === "secondary" ? theme.mcc.line : "transparent", borderWidth: variant === "secondary" ? 1 : 0 },
         disabled && styles.buttonDisabled,
         pressed && !disabled && styles.buttonPressed,
       ]}
     >
-      <Text style={[styles.buttonText, variant !== "primary" && styles.buttonTextSecondary]}>{label}</Text>
+      <Text style={[styles.buttonText, { color: textColor }]}>{label}</Text>
     </Pressable>
   );
 }

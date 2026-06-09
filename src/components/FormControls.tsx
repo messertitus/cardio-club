@@ -47,15 +47,15 @@ export function LabeledInput({
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
-        <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
+        <Text style={[styles.label, { color: theme.mcc.textPrimary }]}>{label}</Text>
       </View>
-      {helper ? <Text style={[styles.helper, { color: theme.muted }]}>{helper}</Text> : null}
+      {helper ? <Text style={[styles.helper, { color: theme.mcc.textSecondary }]}>{helper}</Text> : null}
       <TextInput
-        placeholderTextColor={theme.muted}
-        style={[styles.input, props.multiline && styles.textArea, { borderColor: error ? "#ff8d7a" : theme.border, backgroundColor: theme.surface, color: theme.text }]}
+        placeholderTextColor={theme.mcc.textMuted}
+        style={[styles.input, props.multiline && styles.textArea, { borderColor: error ? theme.mcc.danger : theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
         {...props}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: theme.mcc.danger }]}>{error}</Text> : null}
     </View>
   );
 }
@@ -74,14 +74,14 @@ export function SegmentedControl<T extends string>({
   const { theme } = useTheme();
   return (
     <View style={styles.field}>
-      {label ? <Text style={[styles.label, { color: theme.text }]}>{label}</Text> : null}
+      {label ? <Text style={[styles.label, { color: theme.mcc.textPrimary }]}>{label}</Text> : null}
       <View style={styles.segmentRow}>
         {options.map((option) => {
           const active = option.value === value;
           return (
-            <Pressable key={option.value} style={[styles.segment, { backgroundColor: active ? theme.button : theme.surface, borderColor: theme.border }]} onPress={() => onChange(option.value)}>
-              <Text style={[styles.segmentLabel, { color: active ? theme.inverse : theme.text }]}>{option.label}</Text>
-              {option.helper ? <Text style={[styles.segmentHelper, { color: active ? theme.inverse : theme.muted }]}>{option.helper}</Text> : null}
+            <Pressable key={option.value} style={[styles.segment, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surfaceSoft, borderColor: active ? theme.mcc.accent : theme.mcc.line }]} onPress={() => onChange(option.value)}>
+              <Text style={[styles.segmentLabel, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{option.label}</Text>
+              {option.helper ? <Text style={[styles.segmentHelper, { color: active ? "#FFFFFF" : theme.mcc.textSecondary }]}>{option.helper}</Text> : null}
             </Pressable>
           );
         })}
@@ -95,8 +95,8 @@ export function DetailLine({ label, value }: { label: string; value?: string | n
   if (!value) return null;
   return (
     <View style={styles.detailLine}>
-      <Text style={[styles.detailLabel, { color: theme.muted }]}>{label}</Text>
-      <Text style={[styles.detailValue, { color: theme.text }]}>{value}</Text>
+      <Text style={[styles.detailLabel, { color: theme.mcc.textMuted }]}>{label}</Text>
+      <Text style={[styles.detailValue, { color: theme.mcc.textPrimary }]}>{value}</Text>
     </View>
   );
 }
@@ -104,13 +104,13 @@ export function DetailLine({ label, value }: { label: string; value?: string | n
 export function SearchField({ value, onChangeText, placeholder }: { value: string; onChangeText: (value: string) => void; placeholder: string }) {
   const { theme } = useTheme();
   return (
-    <View style={[styles.searchField, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+    <View style={[styles.searchField, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={theme.muted}
-        style={[styles.searchInput, { color: theme.text }]}
+        placeholderTextColor={theme.mcc.textMuted}
+        style={[styles.searchInput, { color: theme.mcc.textPrimary }]}
       />
     </View>
   );
@@ -230,7 +230,7 @@ export function MapLocationPicker({
     <View style={styles.field}>
       {label ? (
         <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
+          <Text style={[styles.label, { color: theme.mcc.textPrimary }]}>{label}</Text>
         </View>
       ) : null}
       {showNameInput ? (
@@ -243,28 +243,28 @@ export function MapLocationPicker({
           error={error}
         />
       ) : null}
-      <Text style={[styles.mapSectionLabel, { color: theme.text }]}>Online suchen</Text>
+      <Text style={[styles.mapSectionLabel, { color: theme.mcc.textPrimary }]}>Online suchen</Text>
       <View style={styles.mapSearchRow}>
         <TextInput
           value={searchText}
           onChangeText={setSearchText}
           placeholder="z. B. Hörnle Konstanz oder Stadtgarten Basketballplatz"
-          placeholderTextColor={theme.muted}
-          style={[styles.mapSearchInput, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]}
+          placeholderTextColor={theme.mcc.textMuted}
+          style={[styles.mapSearchInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
         />
-        <Pressable style={[styles.mapButton, { backgroundColor: theme.button }]} onPress={searchLocation}>
-          <Text style={[styles.mapButtonText, { color: theme.inverse }]}>{searching ? "Suche..." : "Suchen"}</Text>
+        <Pressable style={[styles.mapButton, { backgroundColor: theme.mcc.accentDeep }]} onPress={searchLocation}>
+          <Text style={styles.mapButtonText}>{searching ? "Suche..." : "Suchen"}</Text>
         </Pressable>
       </View>
       {results.map((result) => (
-        <Pressable key={`${result.latitude}-${result.longitude}-${result.label}`} style={[styles.mapResult, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => selectResult(result)}>
-          <Text style={[styles.mapResultText, { color: theme.text }]} numberOfLines={2}>{result.label}</Text>
-          <Text style={[styles.mapResultMeta, { color: theme.muted }]}>Übernehmen als {shortLocationName(result.label)}</Text>
+        <Pressable key={`${result.latitude}-${result.longitude}-${result.label}`} style={[styles.mapResult, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => selectResult(result)}>
+          <Text style={[styles.mapResultText, { color: theme.mcc.textPrimary }]} numberOfLines={2}>{result.label}</Text>
+          <Text style={[styles.mapResultMeta, { color: theme.mcc.textSecondary }]}>Übernehmen als {shortLocationName(result.label)}</Text>
         </Pressable>
       ))}
-      <Pressable style={[styles.mapGhostButton, { borderColor: theme.border }]} onPress={openMapPicker}>
-        <MaterialCommunityIcons name="map-marker-plus" size={18} color={theme.text} />
-        <Text style={[styles.mapGhostText, { color: theme.text }]}>{selectedCoordinates ? "Markierung prüfen" : "In Karte markieren"}</Text>
+      <Pressable style={[styles.mapGhostButton, { borderColor: theme.mcc.line }]} onPress={openMapPicker}>
+        <MaterialCommunityIcons name="map-marker-plus" size={18} color={theme.mcc.textPrimary} />
+        <Text style={[styles.mapGhostText, { color: theme.mcc.textPrimary }]}>{selectedCoordinates ? "Markierung prüfen" : "In Karte markieren"}</Text>
       </Pressable>
       {mapOpen ? (
         <MapPickerModal
@@ -277,11 +277,11 @@ export function MapLocationPicker({
         />
       ) : null}
       {selectedCoordinates ? (
-        <Text style={[styles.helper, { color: theme.muted }]}>
+        <Text style={[styles.helper, { color: theme.mcc.textSecondary }]}>
           Markiert: {selectedCoordinates.latitude.toFixed(5)}, {selectedCoordinates.longitude.toFixed(5)}
         </Text>
       ) : null}
-      {mapNotice ? <Text style={[styles.helper, { color: mapNotice.startsWith("Koordinaten") || mapNotice.includes("Treffer gefunden") ? theme.accent : "#ffb5a8" }]}>{mapNotice}</Text> : null}
+      {mapNotice ? <Text style={[styles.helper, { color: mapNotice.startsWith("Koordinaten") || mapNotice.includes("Treffer gefunden") ? theme.mcc.accent : theme.mcc.danger }]}>{mapNotice}</Text> : null}
     </View>
   );
 }
@@ -489,18 +489,18 @@ function MapPickerModal({
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.mapModalOverlay}>
-        <View style={[styles.mapModalCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+        <View style={[styles.mapModalCard, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.surfaceRaised }]}>
           <View style={styles.inlineMapHeader}>
             <View style={styles.inlineMapTitleWrap}>
-              <Text style={[styles.inlineMapTitle, { color: theme.text }]}>Wo genau ist der Standort?</Text>
-              <Text style={[styles.inlineMapHelper, { color: theme.muted }]}>Tippen setzt die Markierung. Ziehen verschiebt die Karte, Mausrad oder zwei Finger zoomen.</Text>
+              <Text style={[styles.inlineMapTitle, { color: theme.mcc.textPrimary }]}>Wo genau ist der Standort?</Text>
+              <Text style={[styles.inlineMapHelper, { color: theme.mcc.textSecondary }]}>Tippen setzt die Markierung. Ziehen verschiebt die Karte, Mausrad oder zwei Finger zoomen.</Text>
             </View>
-            <Pressable style={[styles.inlineMapClose, { backgroundColor: theme.softSurface }]} onPress={onClose}>
-              <MaterialCommunityIcons name="close" size={19} color={theme.text} />
+            <Pressable style={[styles.inlineMapClose, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={onClose}>
+              <MaterialCommunityIcons name="close" size={19} color={theme.mcc.textPrimary} />
             </Pressable>
           </View>
           <View
-            style={[styles.inlineMapCanvas, { borderColor: theme.border, backgroundColor: theme.softSurface }]}
+            style={[styles.inlineMapCanvas, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}
             onLayout={(event) => {
               const nextWidth = Math.max(260, event.nativeEvent.layout.width);
               setSize({ width: nextWidth, height: 380 });
@@ -517,31 +517,31 @@ function MapPickerModal({
             {tiles.map((tile) => (
               <Image key={`${tile.x}-${tile.y}-${zoom}`} source={{ uri: tile.url }} style={[styles.mapTile, styles.mapTilePassive, { left: tile.left, top: tile.top }]} />
             ))}
-            <View style={[styles.mapCrosshairHorizontal, { backgroundColor: theme.border }]} />
-            <View style={[styles.mapCrosshairVertical, { backgroundColor: theme.border }]} />
+            <View style={[styles.mapCrosshairHorizontal, { backgroundColor: theme.mcc.line }]} />
+            <View style={[styles.mapCrosshairVertical, { backgroundColor: theme.mcc.line }]} />
             {markerStyle ? (
               <View style={[styles.mapMarker, markerStyle]}>
-                <MaterialCommunityIcons name="map-marker" size={34} color={theme.accent} />
+                <MaterialCommunityIcons name="map-marker" size={34} color={theme.mcc.accent} />
               </View>
             ) : null}
             <View style={styles.mapZoomControls}>
-              <Pressable style={[styles.mapZoomButton, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => zoomBy(1)}>
-                <MaterialCommunityIcons name="plus" size={18} color={theme.text} />
+              <Pressable style={[styles.mapZoomButton, { backgroundColor: theme.mcc.surfaceRaised, borderColor: theme.mcc.line }]} onPress={() => zoomBy(1)}>
+                <MaterialCommunityIcons name="plus" size={18} color={theme.mcc.textPrimary} />
               </Pressable>
-              <Pressable style={[styles.mapZoomButton, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => zoomBy(-1)}>
-                <MaterialCommunityIcons name="minus" size={18} color={theme.text} />
+              <Pressable style={[styles.mapZoomButton, { backgroundColor: theme.mcc.surfaceRaised, borderColor: theme.mcc.line }]} onPress={() => zoomBy(-1)}>
+                <MaterialCommunityIcons name="minus" size={18} color={theme.mcc.textPrimary} />
               </Pressable>
             </View>
           </View>
           {marker ? (
-            <Text style={[styles.inlineMapHelper, { color: theme.muted }]}>
+            <Text style={[styles.inlineMapHelper, { color: theme.mcc.textSecondary }]}>
               Markierung: {marker.latitude.toFixed(5)}, {marker.longitude.toFixed(5)}
             </Text>
           ) : (
             <Text style={[styles.inlineMapHelper, { color: "#ffb5a8" }]}>Tippe einmal auf die Karte, bevor du übernimmst.</Text>
           )}
-          <Pressable style={[styles.mapUseButton, { backgroundColor: theme.button, opacity: marker ? 1 : 0.44 }]} onPress={onUse} disabled={!marker}>
-            <Text style={[styles.mapUseButtonText, { color: theme.inverse }]}>Markierung übernehmen</Text>
+          <Pressable style={[styles.mapUseButton, { backgroundColor: theme.mcc.accentDeep, opacity: marker ? 1 : 0.44 }]} onPress={onUse} disabled={!marker}>
+            <Text style={styles.mapUseButtonText}>Markierung übernehmen</Text>
           </Pressable>
         </View>
       </View>
@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
     outlineStyle: "none",
   } as object,
   mapButton: { alignItems: "center", borderRadius: 18, flexGrow: 1, minHeight: 48, minWidth: 96, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 12 },
-  mapButtonText: { fontSize: 13, fontWeight: "900" },
+  mapButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   mapGhostButton: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 8, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 11 },
   mapGhostText: { fontSize: 12, fontWeight: "900" },
   mapResult: { borderRadius: 18, borderWidth: 1, gap: 4, padding: 12 },
@@ -712,5 +712,5 @@ const styles = StyleSheet.create({
   mapZoomControls: { gap: 8, position: "absolute", right: 12, top: 12 },
   mapZoomButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 38, justifyContent: "center", width: 38 },
   mapUseButton: { alignItems: "center", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13 },
-  mapUseButtonText: { fontSize: 12, fontWeight: "900" },
+  mapUseButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
 });

@@ -1,9 +1,10 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Text, View } from "react-native";
-import { Button, Card, ErrorText, LoadingState, Pill, Screen, ui } from "../../../src/components/ui";
+import { View } from "react-native";
+import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
+import { isVotingInputOpen } from "../../../src/services/date";
 import {
   isCurrentUserAdmin,
   listAttendance,
@@ -108,51 +109,61 @@ export default function AttendanceScreen() {
     if (!user || !reviewerIsParticipant) return false;
     return isAdmin || event?.activity_contact_id === user.id || eventActivities.some((activity) => activity.activity_contact_id === user.id);
   }, [event?.activity_contact_id, eventActivities, isAdmin, ownStatus, user]);
+  const rsvpOpen = Boolean(event && isVotingInputOpen(event.week_start_date, event.event_day));
 
   return (
-    <Screen title="Teilnahme" subtitle="Schnell sagen, ob du dabei bist. Keine Ranglisten, kein Druck.">
-      <ErrorText>{error}</ErrorText>
-      {loading ? <LoadingState /> : null}
-      <Card>
-        <Pill>Dein Status: {ownStatus ?? "offen"}</Pill>
-        <Text style={ui.cardTitle}>Bist du dabei?</Text>
-        <Button label="Ich bin dabei" onPress={() => setStatus("going")} />
-        <Button label="Vielleicht" variant="secondary" onPress={() => setStatus("maybe")} />
-        <Button label="Nicht dabei" variant="secondary" onPress={() => setStatus("not_going")} />
-      </Card>
-      <Card>
-        <Text style={ui.cardTitle}>Teilnehmende</Text>
-        <Text style={ui.body}>Dabei: {going}</Text>
-        <Text style={ui.body}>Vielleicht: {maybe}</Text>
-        <Text style={ui.body}>Nicht dabei: {notGoing}</Text>
-      </Card>
-      <Card>
-        <Text style={ui.cardTitle}>AP-Nachbereitung</Text>
-        <Text style={ui.body}>Geplantes RSVP bleibt getrennt von der tatsächlichen Anwesenheit.</Text>
-        <Text style={ui.body}>Auch Personen mit "Nicht dabei" können hier als tatsächlich anwesend markiert werden.</Text>
-        {!canReview ? <Text style={ui.body}>Die Prüfung ist nur für Admins, Event-Kontakt oder Profil-AP sichtbar, wenn diese Person selbst Dabei oder Vielleicht gesetzt hat.</Text> : null}
+    <MccScreen title="Teilnahme" kicker="RSVP" subtitle="Plane deine Teilnahme — und trage nach dem Event die tatsächliche Anwesenheit ein.">
+      <InlineError>{error}</InlineError>
+      {loading ? <LoadingSkeleton lines={3} /> : null}
+      {rsvpOpen ? (
+        <MccCard accent>
+          <MccBadge icon="account-check-outline">Dein Status: {attendanceStatusLabel(ownStatus)}</MccBadge>
+          <MccCardTitle>Bist du dabei?</MccCardTitle>
+          <MccButton label="Ich bin dabei" onPress={() => setStatus("going")} />
+          <MccButton label="Vielleicht" variant="secondary" onPress={() => setStatus("maybe")} />
+          <MccButton label="Nicht dabei" variant="secondary" onPress={() => setStatus("not_going")} />
+        </MccCard>
+      ) : null}
+      <MccCard>
+        <MccCardTitle>Teilnehmende</MccCardTitle>
+        <MccBody>Dabei: {going}</MccBody>
+        <MccBody>Vielleicht: {maybe}</MccBody>
+        <MccBody>Nicht dabei: {notGoing}</MccBody>
+      </MccCard>
+      <MccCard>
+        <MccCardTitle>AP-Nachbereitung</MccCardTitle>
+        <MccBody muted>Geplantes RSVP bleibt getrennt von der tatsächlichen Anwesenheit.</MccBody>
+        <MccBody muted>Auch Personen mit "Nicht dabei" können hier als tatsächlich anwesend markiert werden.</MccBody>
+        {!canReview ? <MccBody muted>Die Prüfung ist nur für Admins, Event-Kontakt oder Profil-AP sichtbar, wenn diese Person selbst Dabei oder Vielleicht gesetzt hat.</MccBody> : null}
         {attendance.map((entry) => (
           <View key={entry.id} style={{ gap: 8 }}>
-            <Text style={ui.body}>
+            <MccBody>
               {displayName(entry, profileNames, user?.id)} · geplant: {plannedLabel(entry.status)} · tatsächlich: {actualLabel(entry.actual_status)}
-            </Text>
+            </MccBody>
             {canReview ? (
               <>
-                <Button label={entry.status === "not_going" ? "War doch da" : "War da"} variant="secondary" onPress={() => setActualStatus(entry, "present")} />
-                <Button label="Nicht erschienen" variant="secondary" onPress={() => setActualStatus(entry, "absent")} />
-                <Button label="Entschuldigt" variant="ghost" onPress={() => setActualStatus(entry, "excused")} />
+                <MccButton label={entry.status === "not_going" ? "War doch da" : "War da"} variant="secondary" onPress={() => setActualStatus(entry, "present")} />
+                <MccButton label="Nicht erschienen" variant="secondary" onPress={() => setActualStatus(entry, "absent")} />
+                <MccButton label="Entschuldigt" variant="ghost" onPress={() => setActualStatus(entry, "excused")} />
               </>
             ) : null}
           </View>
         ))}
-      </Card>
-    </Screen>
+      </MccCard>
+    </MccScreen>
   );
 }
 
 function displayName(entry: Row<"attendance">, names: Map<string, string>, ownUserId?: string): string {
   if (entry.user_id === ownUserId) return "Du";
   return names.get(entry.user_id) ?? "Mitglied";
+}
+
+function attendanceStatusLabel(status?: AttendanceStatus): string {
+  if (status === "going") return "Dabei";
+  if (status === "maybe") return "Vielleicht";
+  if (status === "not_going") return "Nicht dabei";
+  return "Offen";
 }
 
 function plannedLabel(status: AttendanceStatus): string {

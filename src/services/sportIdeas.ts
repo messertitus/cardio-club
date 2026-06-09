@@ -166,6 +166,28 @@ export async function saveSportIdeaAdminEdits(
   return ok(data);
 }
 
+export async function linkSportIdeaToSports(
+  supabase: AppSupabaseClient,
+  input: { ideaId: string; sportIds: string[] },
+): Promise<ServiceResult<Row<"sport_ideas">>> {
+  const sportIds = normalizeSportIds(input.sportIds);
+  if (sportIds.length === 0) return fail("Bitte wähle mindestens eine abstrakte Sportart aus.");
+
+  const { data, error } = await supabase
+    .from("sport_ideas")
+    .update({ sport_id: sportIds[0], sport_ids: sportIds })
+    .eq("id", input.ideaId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Sportidee konnte nicht mit der Sportart verknüpft werden.") };
+  }
+
+  await removeLocalCache([SPORT_IDEAS_CACHE_KEY]);
+  return ok(data);
+}
+
 export async function reviewSportIdea(
   supabase: AppSupabaseClient,
   input: { ideaId: string; status: "approved" | "rejected"; reviewedBy?: string | null; reviewNote?: string | null },
@@ -222,7 +244,7 @@ function ideaPayload(input: SportIdeaInput, isDraft: boolean): Omit<Partial<Row<
     name: textOrNull(input.name),
     profile_name: textOrNull(input.profileName) ?? textOrNull(input.name),
     note: textOrNull(input.note),
-    sport_id: sportIds[0] ?? input.sportId ?? null,
+    sport_id: sportIds[0] ?? textOrNull(input.sportId) ?? null,
     sport_ids: sportIds,
     location_mode: input.locationMode ?? "fixed",
     location: textOrNull(input.location),

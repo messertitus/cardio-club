@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandBackground } from "../src/components/BrandBackground";
+import { Animated, Share, StyleSheet, Text, View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
-import { PageHeader } from "../src/components/PageHeader";
+import { EmptyState, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../src/components/MccDesign";
+import { Reveal } from "../src/components/Motion";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -34,7 +33,7 @@ export default function InvitesScreen() {
   const usedSlots = codes.length;
   const remaining = isAdmin ? Number.POSITIVE_INFINITY : Math.max(0, 3 - usedSlots);
   const canCreate = isAdmin || remaining > 0;
-  const slotLabels = useMemo(() => (isAdmin ? ["∞"] : ["1", "2", "3"]), [isAdmin]);
+  const slotLabels = useMemo(() => (isAdmin ? ["unlimited"] : ["1", "2", "3"]), [isAdmin]);
 
   async function createCode() {
     if (!canCreate || busy) return;
@@ -51,7 +50,7 @@ export default function InvitesScreen() {
     if (result.error) {
       setMessage(
         isAdmin && result.error.message.includes("3 Einladungscodes")
-          ? "Supabase nutzt noch die alte Code-Funktion. Bitte Migration 017_admin_invites_unlimited.sql ausführen."
+          ? "Supabase nutzt noch die alte Code-Funktion. Bitte Migration 017_admin_invites_unlimited.sql ausfuehren."
           : result.error.message,
       );
       return;
@@ -65,60 +64,62 @@ export default function InvitesScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <BrandBackground />
-      <View style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <PageHeader kicker="Exklusiver Zugang" title="Einmalige Einladungscodes" />
-          <Text style={[styles.body, { color: theme.muted }]}>{isAdmin ? "Du kannst unbegrenzt Codes erstellen." : `Noch ${remaining} von 3 Codes verfügbar.`}</Text>
-
+    <View style={{ flex: 1 }}>
+      <MccScreen title="Einladungscodes" kicker="Exklusiver Zugang" subtitle={isAdmin ? "Admin-Kontingent: unbegrenzt." : `Noch ${remaining} von 3 Codes verfuegbar.`} bottomInset={96}>
+        <MccCard accent>
+          <MccBadge icon="ticket-confirmation-outline">Slots</MccBadge>
+          <MccCardTitle>Zugang kontrolliert, aber schnell geteilt</MccCardTitle>
           <View style={styles.slotRow}>
             {slotLabels.map((slot, index) => {
               const filled = isAdmin || index < usedSlots;
               return (
-                <View key={slot} style={[styles.slot, { borderColor: theme.border, backgroundColor: theme.softSurface }, filled && { borderColor: theme.accent }]}>
-                  <Text style={[styles.slotText, { color: filled ? theme.text : theme.muted }]}>{slot}</Text>
+                <View
+                  key={slot}
+                  style={[
+                    styles.slot,
+                    {
+                      borderColor: filled ? theme.mcc.accent : theme.mcc.line,
+                      backgroundColor: filled ? theme.mcc.accentSoft : theme.mcc.surfaceSoft,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.slotText, { color: filled ? theme.mcc.textPrimary : theme.mcc.textMuted }]}>{slot === "unlimited" ? "max" : slot}</Text>
                 </View>
               );
             })}
           </View>
-
           <Animated.View style={{ transform: [{ scale: pulse }] }}>
-            <Pressable
-              style={({ pressed }) => [styles.button, { backgroundColor: theme.button }, (!canCreate || busy) && styles.disabled, pressed && canCreate && styles.pressed]}
-              onPress={createCode}
-              disabled={!canCreate || busy}
-            >
-              <Text style={[styles.buttonText, { color: theme.inverse }]}>{busy ? "Erstelle..." : canCreate ? "Neuen Code erzeugen" : "Kontingent genutzt"}</Text>
-            </Pressable>
+            <MccButton label={busy ? "Erstelle..." : canCreate ? "Neuen Code erzeugen" : "Kontingent genutzt"} icon="plus-circle-outline" onPress={createCode} disabled={!canCreate || busy} />
           </Animated.View>
+          {message ? (
+            <MccBadge tone="danger" icon="alert-circle-outline">
+              {message}
+            </MccBadge>
+          ) : null}
+        </MccCard>
 
-          {message ? <Text style={styles.notice}>{message}</Text> : null}
-
-          <View style={styles.codes}>
-            {codes.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>Noch kein Code erstellt.</Text> : null}
-            {codes.map((code) => (
-              <View key={code.code} style={[styles.codeCard, { borderColor: theme.border, backgroundColor: theme.softSurface }, code.used_at && styles.codeCardUsed]}>
-                <Text style={[styles.code, { color: theme.text }]}>{code.code}</Text>
-                <Text style={[styles.codeMeta, { color: theme.muted }]}>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Bereit zum Teilen"}</Text>
-                {code.usedByPhone ? <Text style={[styles.codePhone, { color: theme.accent }]}>{code.usedByPhone}</Text> : null}
-                {!code.used_at ? (
-                  <Pressable style={[styles.shareIconButton, { borderColor: theme.border, backgroundColor: theme.surface }]} onPress={() => shareCode(code.code)}>
-                    <Text style={[styles.shareLabel, { color: theme.text }]}>Teilen</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-        <BottomNav active="menu" />
-      </View>
-    </SafeAreaView>
+        {codes.length === 0 ? <EmptyState title="Noch kein Code erstellt" body="Erzeuge einen Code und teile ihn direkt mit einem neuen Mitglied." icon="ticket-outline" /> : null}
+        {codes.map((code, index) => (
+          <Reveal key={code.code} index={index}>
+            <MccCard style={code.used_at ? styles.usedCard : undefined}>
+              <MccBadge tone={code.used_at ? "neutral" : "success"} icon={code.used_at ? "check-outline" : "share-variant-outline"}>
+                {code.used_at ? "Verwendet" : "Bereit zum Teilen"}
+              </MccBadge>
+              <Text style={[styles.code, { color: theme.mcc.textPrimary }]}>{code.code}</Text>
+              <MccBody muted>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Einmalig gueltig fuer den Clubzugang."}</MccBody>
+              {code.usedByPhone ? <MccBody style={{ color: theme.mcc.accent }}>{code.usedByPhone}</MccBody> : null}
+              {!code.used_at ? <MccButton label="Teilen" icon="share-outline" variant="secondary" onPress={() => shareCode(code.code)} /> : null}
+            </MccCard>
+          </Reveal>
+        ))}
+      </MccScreen>
+      <BottomNav active="menu" />
+    </View>
   );
 }
 
 function buildInviteMessage(code: string): string {
-  return `Hey du, dein Einladungscode für den Cardio Club lautet: ${code}\nLink: ${getInviteLink()}`;
+  return `Hey du, dein Einladungscode fuer den Cardio Club lautet: ${code}\nLink: ${getInviteLink()}`;
 }
 
 function getInviteLink(): string {
@@ -130,40 +131,16 @@ function getInviteLink(): string {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  shell: { flex: 1 },
-  content: { gap: 18, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
-  header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  headerText: { flex: 1, minWidth: 0 },
-  kicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
-  body: { fontSize: 15, lineHeight: 22 },
   slotRow: { flexDirection: "row", gap: 10 },
   slot: {
     alignItems: "center",
-    justifyContent: "center",
-    width: 52,
-    height: 52,
     borderRadius: 18,
     borderWidth: 1,
+    height: 52,
+    justifyContent: "center",
+    width: 52,
   },
   slotText: { fontSize: 16, fontWeight: "900" },
-  notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "900" },
-  button: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
-  buttonText: { fontSize: 15, fontWeight: "900" },
-  pressed: { transform: [{ scale: 0.99 }], opacity: 0.86 },
-  disabled: { opacity: 0.42 },
-  codes: { gap: 10 },
-  empty: { fontSize: 15, lineHeight: 22 },
-  codeCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 18,
-  },
-  codeCardUsed: { opacity: 0.52 },
-  code: { fontSize: 28, fontWeight: "900", letterSpacing: 1, textAlign: "center" },
-  codeMeta: { fontSize: 12, fontWeight: "900", marginTop: 8, textAlign: "center", textTransform: "uppercase" },
-  codePhone: { fontSize: 13, fontWeight: "800", marginTop: 4, textAlign: "center" },
-  shareIconButton: { alignItems: "center", alignSelf: "center", justifyContent: "center", minWidth: 92, height: 48, borderRadius: 999, borderWidth: 1, marginTop: 14, paddingHorizontal: 16 },
-  shareLabel: { fontSize: 14, fontWeight: "900", lineHeight: 18 },
+  code: { fontSize: 30, fontWeight: "900", letterSpacing: 1, textAlign: "center" },
+  usedCard: { opacity: 0.58 },
 });
