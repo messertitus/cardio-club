@@ -10,7 +10,7 @@ import {
   canCloseEvent,
   clearMccNoGo,
   clearMccVote,
-  getMccEventState,
+  getEventStateById,
   proposeSport,
   saveMccAttendance,
   saveMccNoGo,
@@ -18,6 +18,7 @@ import {
   type AttendanceStatus,
   type MccEventState,
 } from "../services";
+import { readLocalCache, writeLocalCache } from "../services/localCache";
 import { FlowStepRail, ScreenLoader, SmoothReveal, WeeklyEventHeroCard } from "./MccDesign";
 import { MapRouteButton } from "./MapRouteButton";
 import { MotionPressable, Reveal } from "./Motion";
@@ -54,28 +55,45 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const initRef = useRef(false);
   const doneRef = useRef(false);
 
+  const cacheKey = `mcc.eventState.${event.id}.${userId}`;
+
+  function initExpansion(snapshot: MccEventState) {
+    if (initRef.current) return;
+    initRef.current = true;
+    const done = computeUserDone(snapshot, event.eventDay, event.weekStartDate);
+    doneRef.current = done;
+    setExpanded(!done);
+  }
+
   const load = useCallback(async () => {
+    // Show cached state instantly, then refresh in the background.
+    const cached = await readLocalCache<MccEventState>(cacheKey, 15 * 60 * 1000);
+    if (cached) {
+      setState((current) => current ?? cached);
+      initExpansion(cached);
+    }
     setBusy(true);
-    const result = await getMccEventState(supabase, userId, event.id);
+    const result = await getEventStateById(supabase, userId, event.id);
     setBusy(false);
     if (result.error) {
-      setNotice(result.error.message);
+      if (!cached) setNotice(result.error.message);
       return;
     }
     setNotice(null);
     setState(result.data);
-    if (!initRef.current) {
-      initRef.current = true;
-      const done = computeUserDone(result.data, event.eventDay, event.weekStartDate);
-      doneRef.current = done;
-      setExpanded(!done);
-    }
+    void writeLocalCache(cacheKey, result.data);
+    initExpansion(result.data);
+    const decided =
+      result.data.event.status === "decided" || result.data.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+    const past = isEventPast(event.weekStartDate, event.eventDay);
     const manage = await canCloseEvent(supabase, event.id, userId);
     const isManager = Boolean(manage.data);
     setCanManage(isManager);
-    // Managers keep the flow open so results/attendance/closing stay reachable.
-    if (isManager) setExpanded(true);
-  }, [event.eventDay, event.id, event.weekStartDate, userId]);
+    // Managers keep the flow open during the wrap-up phase so results / attendance /
+    // closing stay reachable. While voting, even managers collapse once done.
+    if (isManager && (decided || past)) setExpanded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey, event.eventDay, event.id, event.weekStartDate, userId]);
 
   useEffect(() => {
     void load();
@@ -85,14 +103,17 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   // a moment later so the next open Cardiotag moves into the foreground.
   const userDone = state ? computeUserDone(state, event.eventDay, event.weekStartDate) : false;
   useEffect(() => {
-    if (!initRef.current || canManage) return;
+    if (!initRef.current || !state) return;
+    const decided = state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+    const past = isEventPast(event.weekStartDate, event.eventDay);
+    if (canManage && (decided || past)) return; // managers keep the wrap-up view open
     if (userDone && !doneRef.current) {
       doneRef.current = true;
       const timer = setTimeout(() => setExpanded(false), 1100);
       return () => clearTimeout(timer);
     }
     if (!userDone) doneRef.current = false;
-  }, [canManage, userDone]);
+  }, [canManage, event.eventDay, event.weekStartDate, state, userDone]);
 
   if (!state) {
     return <ScreenLoader />;
@@ -127,6 +148,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "Bald";
   const myFairness = state.decision.explainability.fairnessByUser.find((entry) => entry.userId === userId) ?? null;
   const isExpanded = expanded ?? !userDone;
+  const attending = state.myAttendance?.status === "going" || state.myAttendance?.status === "maybe";
   const myChoiceSummary =
     state.myAttendance?.status === "not_going"
       ? "Nicht dabei"
@@ -378,8 +400,20 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
           style={({ pressed }) => [styles.collapsed, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }, pressed && styles.pressed]}
           onPress={() => setExpanded(true)}
         >
-          <View style={[styles.collapsedIcon, { backgroundColor: theme.mcc.surfaceSoft, borderColor: theme.mcc.line }]}>
-            <SportIconBadge sport={isDecided ? state.sports.find((sport) => sport.id === state.decision.selectedSportId) : undefined} size={36} />
+          <View
+            style={[
+              styles.collapsedIcon,
+              { backgroundColor: theme.mcc.surfaceSoft, borderColor: theme.mcc.line },
+              attending && { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.strongLine },
+            ]}
+          >
+            {isDecided ? (
+              <SportIconBadge sport={state.sports.find((sport) => sport.id === state.decision.selectedSportId)} size={36} />
+            ) : attending ? (
+              <MaterialCommunityIcons name="heart-pulse" size={22} color={theme.mcc.accent} />
+            ) : (
+              <MaterialCommunityIcons name="calendar-blank-outline" size={20} color={theme.mcc.textMuted} />
+            )}
           </View>
           <View style={styles.collapsedText}>
             <Text style={[styles.collapsedTitle, { color: theme.mcc.textPrimary }]}>{heroTitle}</Text>

@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { getEventDate, isDecisionReleaseOpen } from "../src/services/date";
+import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { supabase } from "../src/lib/supabase";
 import {
   closeDirectChat,
@@ -106,20 +107,31 @@ export default function ChatScreen() {
   useEffect(() => {
     async function loadInitial() {
       if (!user) return;
-      setBusy(true);
+      const cacheKey = `mcc.chat.${user.id}`;
+      const cached = await readLocalCache<{ state: MccEventState; members: MccMember[]; directChats: DirectChatWithNames[] }>(cacheKey, 15 * 60 * 1000);
+      if (cached) {
+        setState(cached.state);
+        setMembers(cached.members);
+        setDirectChats(cached.directChats);
+        setBusy(false);
+      } else {
+        setBusy(true);
+      }
       const [nextState, directResult] = await Promise.all([getMccEventState(supabase, user.id), listDirectChats(supabase)]);
       if (nextState.error || directResult.error) {
-        setNotice(nextState.error?.message ?? directResult.error?.message ?? "Chat konnte nicht geladen werden.");
+        if (!cached) setNotice(nextState.error?.message ?? directResult.error?.message ?? "Chat konnte nicht geladen werden.");
         setBusy(false);
         return;
       }
 
       const membersResult = await listMccMembers(supabase, { clubId: nextState.data.clubId });
       if (membersResult.error) {
-        setNotice(membersResult.error.message);
+        if (!cached) setNotice(membersResult.error.message);
         setBusy(false);
         return;
       }
+
+      void writeLocalCache(cacheKey, { state: nextState.data, members: membersResult.data, directChats: directResult.data });
 
       const nextEventChatOpen = isEventChatOpen(nextState.data, Date.now());
       const nextEventChannels = nextEventChatOpen ? buildEventChannels(nextState.data) : [];

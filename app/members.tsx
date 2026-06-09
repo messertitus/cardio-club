@@ -9,7 +9,8 @@ import { MainHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
-import { getMccEventState, getOrCreateDirectChat, listMccMembers, type MccMember } from "../src/services";
+import { readLocalCache, writeLocalCache } from "../src/services/localCache";
+import { bootstrapMccWeek, getOrCreateDirectChat, listMccMembers, type MccMember } from "../src/services";
 
 const roleLabels = {
   admin: "Admin",
@@ -45,19 +46,21 @@ export default function MembersScreen() {
   useEffect(() => {
     async function load() {
       if (!user) return;
-      const state = await getMccEventState(supabase, user.id);
-      if (state.error) {
-        setMessage(state.error.message);
+      const cacheKey = `mcc.members.${user.id}`;
+      const cached = await readLocalCache<MccMember[]>(cacheKey, 15 * 60 * 1000);
+      if (cached) setMembers((current) => (current.length ? current : cached));
+      const boot = await bootstrapMccWeek(supabase);
+      if (boot.error) {
+        if (!cached) setMessage(boot.error.message);
         return;
       }
-      const result = await listMccMembers(supabase, {
-        clubId: state.data.clubId,
-      });
+      const result = await listMccMembers(supabase, { clubId: boot.data.clubId });
       if (result.error) {
-        setMessage(result.error.message);
+        if (!cached) setMessage(result.error.message);
         return;
       }
       setMembers(result.data);
+      void writeLocalCache(cacheKey, result.data);
     }
 
     void load();
@@ -88,7 +91,11 @@ export default function MembersScreen() {
       <MccScreen bottomInset={96}>
         <MainHeader title="Mitglieder" actions={<HeaderIconButton open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />} />
         <View style={styles.toolRow}>
-          <MccBadge icon="account-heart-outline">{selectedCity}</MccBadge>
+          <Pressable accessibilityRole="button" onPress={() => setLocationFilterOpen((open) => !open)} style={({ pressed }) => pressed && { opacity: 0.7 }}>
+            <MccBadge icon="map-marker-outline" tone="accent">
+              {selectedCity}
+            </MccBadge>
+          </Pressable>
           <MccBadge tone="neutral" icon="account-group-outline">{`${filteredMembers.length} Profile`}</MccBadge>
         </View>
         {message ? <Text style={[styles.notice, { color: theme.mcc.danger }]}>{message}</Text> : null}

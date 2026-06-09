@@ -11,6 +11,7 @@ import { MainHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
+import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
 
 const seenCityPromptUserIds = new Set<string>();
@@ -30,15 +31,19 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     if (!user) return;
+    const cacheKey = `mcc.weekEvents.${user.id}`;
+    const cached = await readLocalCache<Row<"weekly_events">[]>(cacheKey, 15 * 60 * 1000);
+    if (cached) setEvents((current) => current ?? cached);
     setBusy(true);
     const result = await getMccWeekEvents(supabase);
     setBusy(false);
     if (result.error) {
-      setNotice(result.error.message);
+      if (!cached) setNotice(result.error.message);
       return;
     }
     setNotice(null);
     setEvents(result.data.events);
+    void writeLocalCache(cacheKey, result.data.events);
   }, [user]);
 
   useEffect(() => {
@@ -195,7 +200,6 @@ function Header() {
 
   return (
     <MainHeader
-      title="Diese Woche"
       actions={
         <Pressable style={[styles.historyButton, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => router.push("/events/history")}>
           <MaterialCommunityIcons name="history" size={24} color={theme.mcc.textPrimary} />
