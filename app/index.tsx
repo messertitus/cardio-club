@@ -10,6 +10,7 @@ import { Reveal } from "../src/components/Motion";
 import { MainHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
+import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
@@ -68,13 +69,9 @@ export default function HomeScreen() {
     const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
     setPostalCode(nextPostalCode);
     if (nextPostalCode.length !== 5) return;
-    const onlineCity = await fetchGermanCityByPostalCode(nextPostalCode);
-    if (onlineCity) {
-      setCity(onlineCity);
-      return;
-    }
-    const fallbackCity = inferCityFromPostalCode(nextPostalCode);
-    if (fallbackCity) setCity(fallbackCity);
+    const resolvedCity = await lookupCityByPostalCode(nextPostalCode);
+    // Only auto-fill when we actually resolved a city — never guess a wrong one.
+    if (resolvedCity) setCity(resolvedCity);
   }
 
   async function saveCity(): Promise<boolean> {
@@ -292,60 +289,6 @@ function CityPrompt({
       </KeyboardAvoidingView>
     </Modal>
   );
-}
-
-async function fetchGermanCityByPostalCode(postalCode: string): Promise<string | null> {
-  try {
-    const response = await fetch(`https://api.zippopotam.us/de/${postalCode}`);
-    if (!response.ok) return null;
-    const payload = (await response.json()) as { places?: Array<{ "place name"?: string }> };
-    return payload.places?.[0]?.["place name"] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function inferCityFromPostalCode(postalCode: string): string {
-  const exact: Record<string, string> = {
-    "10115": "Berlin",
-    "20095": "Hamburg",
-    "28195": "Bremen",
-    "30159": "Hannover",
-    "40210": "Düsseldorf",
-    "50667": "Köln",
-    "60311": "Frankfurt am Main",
-    "70173": "Stuttgart",
-    "80331": "München",
-    "90402": "Nürnberg",
-    "78462": "Konstanz",
-  };
-
-  if (exact[postalCode]) return exact[postalCode];
-  if (postalCode.length < 2) return "";
-
-  const prefix = Number(postalCode.slice(0, 2));
-  if (prefix <= 14) return "Berlin";
-  if (prefix <= 19) return "Brandenburg";
-  if (prefix <= 22) return "Hamburg";
-  if (prefix <= 28) return "Bremen";
-  if (prefix <= 31) return "Hannover";
-  if (prefix <= 34) return "Kassel";
-  if (prefix <= 37) return "Göttingen";
-  if (prefix <= 40) return "Dortmund";
-  if (prefix <= 42) return "Düsseldorf";
-  if (prefix <= 47) return "Ruhrgebiet";
-  if (prefix <= 53) return "Köln";
-  if (prefix <= 56) return "Koblenz";
-  if (prefix <= 60) return "Frankfurt am Main";
-  if (prefix <= 65) return "Wiesbaden";
-  if (prefix <= 69) return "Mannheim";
-  if (prefix <= 73) return "Stuttgart";
-  if (prefix <= 79) return "Konstanz";
-  if (prefix <= 86) return "München";
-  if (prefix <= 89) return "Ulm";
-  if (prefix <= 91) return "Nürnberg";
-  if (prefix <= 96) return "Bamberg";
-  return "Leipzig";
 }
 
 const styles = StyleSheet.create({
