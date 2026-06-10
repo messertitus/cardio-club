@@ -47,7 +47,7 @@ begin
   if new.status = 'decided' and old.status is distinct from new.status then
     insert into public.app_notifications (user_id, kind, title, body, href, payload)
     select a.user_id, 'decision_released', 'Auswertung ist da',
-      'Die Entscheidung fuer deinen Cardiotag ist jetzt sichtbar.',
+      'Die Entscheidung für deinen Cardiotag ist jetzt sichtbar.',
       '/events/' || new.id || '/decision',
       jsonb_build_object('eventId', new.id, 'clubId', new.club_id)
     from public.attendance a
@@ -71,8 +71,8 @@ set search_path = public
 as $$
 begin
   insert into public.app_notifications (user_id, kind, title, body, href, payload)
-  select cm.user_id, 'vote_reminder', 'Stimme bald faellig',
-    'Die Abstimmung fuer deinen Cardiotag laeuft in Kuerze ab. Stimm jetzt ab.',
+  select cm.user_id, 'vote_reminder', 'Stimme bald fällig',
+    'Die Abstimmung für deinen Cardiotag läuft in Kürze ab. Stimm jetzt ab.',
     '/',
     jsonb_build_object('eventId', we.id, 'clubId', we.club_id)
   from public.weekly_events we
@@ -99,7 +99,7 @@ as $$
 begin
   insert into public.app_notifications (user_id, kind, title, body, href, payload)
   select a.user_id, 'decision_released', 'Auswertung ist da',
-    'Die Entscheidung fuer deinen Cardiotag ist jetzt sichtbar.',
+    'Die Entscheidung für deinen Cardiotag ist jetzt sichtbar.',
     '/events/' || we.id || '/decision',
     jsonb_build_object('eventId', we.id, 'clubId', we.club_id)
   from public.weekly_events we

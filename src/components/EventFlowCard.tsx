@@ -5,7 +5,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
-import { formatEventDayDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
+import { formatEventDayDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
 import {
   canCloseEvent,
   clearMccNoGo,
@@ -144,6 +144,14 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const secondaryDecisionName = isDecided ? (secondaryActivity?.sportName ?? undefined) : undefined;
   const decisionTitle = isDecided && secondaryDecisionName ? `${decisionSportName} + ${secondaryDecisionName}` : decisionSportName;
   const heroTitle = isDecided ? decisionTitle : event.eventDay === "saturday" ? "Cardio-Samstag" : "Cardio-Sonntag";
+  const isCurrentWeek = event.weekStartDate <= getWeekStartDate();
+  // The week badge distinguishes a decided event (get ready), an upcoming
+  // next-week event, and the current week's running vote.
+  const weekTag = isDecided
+    ? { label: "Mach dich bereit", icon: "rocket-launch-outline" as const }
+    : isCurrentWeek
+      ? { label: "Diese Woche", icon: "pulse" as const }
+      : { label: "Demnächst", icon: "calendar-arrow-right" as const };
   const goingCount = state.attendance.filter((entry) => entry.status === "going").length;
   const maybeCount = state.attendance.filter((entry) => entry.status === "maybe").length;
   const votersCount = new Set(state.votes.map((vote) => vote.user_id)).size;
@@ -458,6 +466,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         status={phaseLabel}
         dateLabel={formatEventDayDate(event.weekStartDate, event.eventDay)}
         flowTarget={heroFlowTarget}
+        weekTag={weekTag}
         chips={[
           { label: `${goingCount} + ${maybeCount} Dabei`, icon: "account-group-outline", tone: "neutral" },
           { label: `${votersCount} abgestimmt`, icon: "vote-outline", tone: "accent" },
@@ -479,6 +488,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
 
       {!eventPast ? (
         <FlowStepRail
+          completed={isDecided}
           activeIndex={["attendance", "sports", "overview"].indexOf(activeStep)}
           onStepPress={(stepIndex) => {
             // Decided events no longer change votes — the rail just reveals the

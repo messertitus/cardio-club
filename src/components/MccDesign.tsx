@@ -427,10 +427,12 @@ export function FlowStepRail({
   steps,
   activeIndex,
   onStepPress,
+  completed = false,
 }: {
   steps: Array<{ label: string; icon?: IconName }>;
   activeIndex: number;
   onStepPress?: (index: number) => void;
+  completed?: boolean;
 }) {
   const { theme } = useTheme();
   return (
@@ -447,11 +449,12 @@ export function FlowStepRail({
             accessibilityRole={onStepPress ? "button" : undefined}
           >
             <View style={styles.flowNodeWrap}>
-              {isCurrent ? (
+              {isCurrent && !completed ? (
                 <View style={StyleSheet.absoluteFill}>
                   <SpinnerRing size={42} duration={1300} />
                 </View>
               ) : null}
+              {isCurrent && completed ? <View style={[styles.flowReadyRing, { borderColor: theme.mcc.accent }]} /> : null}
               <View
                 style={[
                   styles.flowNode,
@@ -494,6 +497,7 @@ export function WeeklyEventHeroCard({
   onCtaPress,
   dateLabel,
   flowTarget,
+  weekTag,
 }: {
   title: string;
   subtitle?: string;
@@ -503,6 +507,7 @@ export function WeeklyEventHeroCard({
   onCtaPress?: () => void;
   dateLabel?: string;
   flowTarget?: { label: string; icon?: IconName; tone?: Tone };
+  weekTag?: { label: string; icon: IconName };
 }) {
   const { theme } = useTheme();
   return (
@@ -511,8 +516,8 @@ export function WeeklyEventHeroCard({
       <HeroFlowSignal target={flowTarget} />
       <View style={styles.weeklyTop}>
         <View style={styles.flexText}>
-          <MccBadge icon="pulse" tone="accent">
-            Diese Woche
+          <MccBadge icon={weekTag?.icon ?? "pulse"} tone="accent">
+            {weekTag?.label ?? "Diese Woche"}
           </MccBadge>
           <Text style={[styles.weeklyTitle, { color: theme.mcc.textPrimary }]}>{title}</Text>
           {subtitle ? <Text style={[styles.weeklySubtitle, { color: theme.mcc.textSecondary }]}>{subtitle}</Text> : null}
@@ -1014,6 +1019,7 @@ const styles = StyleSheet.create({
   flowStep: { alignItems: "center", flex: 1, gap: 5, minWidth: 0, position: "relative" },
   flowStepPressed: { opacity: 0.6, transform: [{ scale: 0.96 }] },
   flowNodeWrap: { alignItems: "center", height: 42, justifyContent: "center", width: 42 },
+  flowReadyRing: { borderRadius: 999, borderWidth: 2, height: 42, position: "absolute", width: 42 },
   flowNode: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 28, justifyContent: "center", width: 28, zIndex: 2 },
   flowLabel: { fontSize: 10, fontWeight: "900", maxWidth: "100%", textTransform: "uppercase" },
   flowConnector: { height: 2, left: "64%", position: "absolute", right: "-36%", top: 20, zIndex: 1 },
