@@ -306,7 +306,7 @@ export default function ChatScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+    <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.content}>

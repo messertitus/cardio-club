@@ -626,7 +626,7 @@ export default function AdminScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+    <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.shell}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
