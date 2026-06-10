@@ -606,11 +606,14 @@ const CHAT_CLOSE_AFTER_EVENT_MS = 2 * 24 * 60 * 60 * 1000; // through the day af
 function eventDecisionReady(state: MccEventState): boolean {
   // Skipped (too few voters) events never get an event chat.
   if (state.event.status === "cancelled") return false;
-  return (
-    state.event.status === "decided" ||
-    state.event.status === "completed" ||
-    isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day)
-  );
+  if (state.event.status === "decided" || state.event.status === "completed") return true;
+  const releaseOpen = isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day);
+  if (!releaseOpen) return false;
+  // Once the decision window is reached, an event with fewer than two distinct
+  // voters is treated as skipped (mirrors cancel_underused_events) — no chat,
+  // even before the server-side cancel job has run.
+  const voterCount = new Set(state.votes.map((vote) => vote.user_id)).size;
+  return voterCount >= 2;
 }
 
 function eventChatClosesAt(state: MccEventState): number {

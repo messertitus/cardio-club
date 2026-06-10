@@ -39,7 +39,6 @@ export type EventDay = "saturday" | "sunday";
 // Sunday event: voting Mon–Wed, decision Thursday (Monday + 3).
 // Saturday event: voting Sun(before)–Tue, decision Wednesday (Monday + 2).
 const DECISION_DAY_OFFSET: Record<EventDay, number> = { saturday: 2, sunday: 3 };
-const VOTING_START_OFFSET: Record<EventDay, number> = { saturday: -1, sunday: 0 };
 
 // The real calendar date of the event, derived from the week's Monday and the
 // event day (Saturday = Monday + 5, Sunday = Monday + 6). Independent of any
@@ -64,9 +63,11 @@ export function isDecisionReleaseOpen(weekStartDate: string, eventDay: EventDay 
   return startOfUtcDay(now).getTime() >= getDecisionReleaseDate(weekStartDate, eventDay).getTime();
 }
 
+// Voting is open from the moment an event is listed (current and next week)
+// until its decision is released — so members can already vote on upcoming
+// ("Demnächst") events, not only on the current week's Cardiotag.
 export function isVotingInputOpen(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
-  const today = startOfUtcDay(now).getTime();
-  return today >= addUtcDays(weekStartDate, VOTING_START_OFFSET[eventDay]).getTime() && today < getDecisionReleaseDate(weekStartDate, eventDay).getTime();
+  return startOfUtcDay(now).getTime() < getDecisionReleaseDate(weekStartDate, eventDay).getTime();
 }
 
 function addUtcDays(dateString: string, days: number): Date {

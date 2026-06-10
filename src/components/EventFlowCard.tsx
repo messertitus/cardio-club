@@ -20,7 +20,7 @@ import {
 } from "../services";
 import { readLocalCache, writeLocalCache } from "../services/localCache";
 import { categoryLabel, intensityLabel } from "../lib/sportLabels";
-import { FlowStepRail, ScreenLoader, SmoothReveal, WeeklyEventHeroCard } from "./MccDesign";
+import { FlowStepRail, ScreenLoader, SmoothReveal, SpinnerRing, WeeklyEventHeroCard } from "./MccDesign";
 import { MapRouteButton } from "./MapRouteButton";
 import { MotionPressable, Reveal } from "./Motion";
 import { SearchField } from "./FormControls";
@@ -432,12 +432,26 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
               styles.collapsedIcon,
               { backgroundColor: theme.mcc.surfaceSoft, borderColor: theme.mcc.line },
               attending && { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.strongLine },
+              isDecided && {
+                borderColor: theme.mcc.accent,
+                shadowColor: theme.mcc.accent,
+                shadowOpacity: 0.5,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 0 },
+              },
             ]}
           >
             {isDecided ? (
+              // Decision is in: the chosen sport's symbol, glowing.
               <SportIconBadge sport={state.sports.find((sport) => sport.id === state.decision.selectedSportId)} size={36} />
             ) : attending ? (
-              <MaterialCommunityIcons name="heart-pulse" size={22} color={theme.mcc.accent} />
+              // Voting in progress: a vote icon inside a loading ring until the decision lands.
+              <>
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <SpinnerRing size={44} duration={1500} stroke={2} />
+                </View>
+                <MaterialCommunityIcons name="vote-outline" size={20} color={theme.mcc.accent} />
+              </>
             ) : (
               <MaterialCommunityIcons name="calendar-blank-outline" size={20} color={theme.mcc.textMuted} />
             )}
