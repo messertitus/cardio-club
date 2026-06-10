@@ -1,11 +1,13 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 
 export type BottomNavKey = "event" | "chat" | "members" | "menu";
 
 export function BottomNav({ active }: { active: BottomNavKey }) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const compact = width < 360;
   const items = [
@@ -16,7 +18,7 @@ export function BottomNav({ active }: { active: BottomNavKey }) {
   ] as const;
 
   return (
-    <View style={[styles.outer, { borderTopColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+    <View style={[styles.outer, { borderTopColor: theme.mcc.line, backgroundColor: theme.mcc.surface, paddingBottom: 6 + insets.bottom }]}>
       <View style={styles.wrap}>
         {items.map((item) => {
           const isActive = active === item.key;
