@@ -92,7 +92,7 @@ export default function CurrentWeeklyEventScreen() {
             {event.notes ? <MccBody muted>{event.notes}</MccBody> : null}
             {eventActivities.length > 0 ? (
               <>
-                <MccBody>Aktivitaeten:</MccBody>
+                <MccBody>Aktivitäten:</MccBody>
                 {eventActivities.map((activity) => {
                   const sport = sports.find((entry) => entry.id === activity.sport_id);
                   const profile = sportProfiles.find((entry) => entry.id === activity.sport_profile_id);

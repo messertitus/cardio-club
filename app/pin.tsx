@@ -24,7 +24,7 @@ export default function PinScreen() {
     setSuccess(null);
 
     if (!isValidPin(currentPin) || !isValidPin(nextPin)) {
-      setMessage("PINs muessen mindestens 4 Ziffern haben.");
+      setMessage("PINs müssen mindestens 4 Ziffern haben.");
       setBusy(false);
       return;
     }

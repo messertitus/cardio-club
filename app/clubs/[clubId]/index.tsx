@@ -56,13 +56,13 @@ export default function ClubDashboardScreen() {
         dateLabel={event ? formatCardioSunday(event.starts_at ?? event.week_start_date) : undefined}
         status={event ? event.status : "offen"}
         chips={[{ label: eventTypeLabel(event?.decision_type ?? null), icon: "chart-donut" }]}
-        ctaLabel="Diese Woche oeffnen"
+        ctaLabel="Diese Woche öffnen"
         onCtaPress={() => router.push(`/clubs/${clubId}/event`)}
       />
       <MccCard>
         <MccBadge icon="clipboard-pulse-outline">Planung</MccBadge>
         <MccCardTitle>Club-Woche steuern</MccCardTitle>
-        <MccBody muted>Vorschlaege sammeln, abstimmen und die faire Entscheidung anzeigen.</MccBody>
+        <MccBody muted>Vorschläge sammeln, abstimmen und die faire Entscheidung anzeigen.</MccBody>
         {event ? (
           <>
             <MccButton label="Sportart vorschlagen" icon="lightbulb-on-outline" variant="secondary" onPress={() => router.push(`/events/${event.id}/propose`)} />

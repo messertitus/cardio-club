@@ -19,6 +19,7 @@ import {
   type MccEventState,
 } from "../services";
 import { readLocalCache, writeLocalCache } from "../services/localCache";
+import { categoryLabel, intensityLabel } from "../lib/sportLabels";
 import { FlowStepRail, ScreenLoader, SmoothReveal, WeeklyEventHeroCard } from "./MccDesign";
 import { MapRouteButton } from "./MapRouteButton";
 import { MotionPressable, Reveal } from "./Motion";
@@ -49,6 +50,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [manualStep, setManualStep] = useState<FlowStep | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [sportSearch, setSportSearch] = useState("");
   const [canManage, setCanManage] = useState(false);
   const [expanded, setExpanded] = useState<boolean | null>(null);
@@ -397,7 +399,22 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     return (
       <Reveal index={index}>
         <Pressable
-          style={({ pressed }) => [styles.collapsed, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.collapsed,
+            { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface },
+            attending
+              ? {
+                  opacity: 1,
+                  borderColor: theme.mcc.accent,
+                  backgroundColor: theme.mcc.accentFaint,
+                  shadowColor: theme.mcc.accent,
+                  shadowOpacity: 0.35,
+                  shadowRadius: 14,
+                  shadowOffset: { width: 0, height: 6 },
+                }
+              : styles.collapsedDim,
+            pressed && styles.pressed,
+          ]}
           onPress={() => setExpanded(true)}
         >
           <View
@@ -463,7 +480,15 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
       {!eventPast ? (
         <FlowStepRail
           activeIndex={["attendance", "sports", "overview"].indexOf(activeStep)}
-          onStepPress={(stepIndex) => setManualStep((["attendance", "sports", "overview"] as const)[stepIndex])}
+          onStepPress={(stepIndex) => {
+            // Decided events no longer change votes — the rail just reveals the
+            // collapsed details instead of reopening the voting panels.
+            if (isDecided) {
+              setDetailsOpen(true);
+              return;
+            }
+            setManualStep((["attendance", "sports", "overview"] as const)[stepIndex]);
+          }}
           steps={[
             { label: "Teilnahme", icon: "account-check-outline" },
             { label: "Sportwahl", icon: "vote-outline" },
@@ -492,6 +517,19 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         </View>
       ) : null}
 
+      {isDecided || eventPast ? (
+        <Pressable
+          style={({ pressed }) => [styles.detailsToggle, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }, pressed && styles.pressed]}
+          onPress={() => setDetailsOpen((open) => !open)}
+        >
+          <MaterialCommunityIcons name={detailsOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.mcc.accent} />
+          <Text style={[styles.detailsToggleText, { color: theme.mcc.textPrimary }]}>
+            {detailsOpen ? "Details ausblenden" : isDecided ? "Entscheidung & Details anzeigen" : "Details anzeigen"}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {(isDecided || eventPast) && !detailsOpen ? null : (
       <Stage stepKey={`${event.id}:${activeStep}`}>
         {activeStep === "attendance" && !eventPast ? (
           <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
@@ -560,7 +598,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
                       <View style={styles.sportTextWrap}>
                         <Text style={[styles.sportName, { color: vote ? "#FFFFFF" : theme.mcc.textPrimary }]}>{sport.name}</Text>
                         <Text style={[styles.sportMeta, { color: vote ? "#FFFFFF" : theme.mcc.textSecondary }]}>
-                          {sport.category} · {sport.intensity_level}
+                          {categoryLabel(sport.category)} · {intensityLabel(sport.intensity_level)}
                         </Text>
                         {profileHint ? <Text style={[styles.sportMeta, { color: vote ? "#FFFFFF" : theme.mcc.textSecondary }]}>{profileHint}</Text> : null}
                       </View>
@@ -673,6 +711,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
           </View>
         ) : null}
       </Stage>
+      )}
       {userDone ? (
         <Pressable style={styles.minimize} onPress={() => setExpanded(false)}>
           <MaterialCommunityIcons name="chevron-up" size={18} color={theme.mcc.textMuted} />
@@ -803,11 +842,14 @@ function homeActivityRows(
 const styles = StyleSheet.create({
   wrap: { gap: 14 },
   expandedInner: { gap: 14 },
-  collapsed: { alignItems: "center", borderRadius: 20, borderWidth: 1, flexDirection: "row", gap: 12, opacity: 0.7, paddingHorizontal: 14, paddingVertical: 12 },
+  collapsed: { alignItems: "center", borderRadius: 20, borderWidth: 1, flexDirection: "row", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  collapsedDim: { opacity: 0.5 },
   collapsedIcon: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   collapsedText: { flex: 1, minWidth: 0, gap: 2 },
   collapsedTitle: { fontSize: 17, fontWeight: "900" },
   collapsedMeta: { fontSize: 13, fontWeight: "700" },
+  detailsToggle: { alignItems: "center", borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 8, justifyContent: "center", paddingVertical: 13 },
+  detailsToggleText: { fontSize: 14, fontWeight: "900" },
   minimize: { alignItems: "center", alignSelf: "center", flexDirection: "row", gap: 4, paddingVertical: 6 },
   minimizeText: { fontSize: 13, fontWeight: "900" },
   panel: {

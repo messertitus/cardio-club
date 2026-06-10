@@ -936,7 +936,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   screenContent: { gap: 16, paddingHorizontal: 16, paddingTop: 16 },
-  screenBackRow: { alignItems: "flex-start", flexDirection: "row" },
+  screenBackRow: { alignItems: "center", flexDirection: "row", justifyContent: "flex-end" },
   backgroundBase: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   glowBlob: { borderRadius: 999, height: 300, position: "absolute", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 90, width: 300 },
   glowBlobTop: { left: -70, top: -110 },

@@ -87,7 +87,9 @@ export async function getMccWeekEvents(
   }
 
   const currentWeek = getWeekStartDate();
-  const events = orderEvents(data).filter((row) => row.week_start_date >= currentWeek);
+  // Skipped events (too few votes by decision time) move to the archive, so they
+  // are not listed on the event page anymore.
+  const events = orderEvents(data).filter((row) => row.week_start_date >= currentWeek && row.status !== "cancelled");
   return ok({ clubId: bootstrap.data.clubId, events });
 }
 

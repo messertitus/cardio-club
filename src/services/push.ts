@@ -55,7 +55,7 @@ export async function markAppNotificationsDelivered(
     .in("id", notificationIds);
 
   if (error) {
-    return { data: null, error: fromPostgrestError(error, "Benachrichtigungen konnten nicht bestaetigt werden.") };
+    return { data: null, error: fromPostgrestError(error, "Benachrichtigungen konnten nicht bestätigt werden.") };
   }
 
   return ok({ saved: true });

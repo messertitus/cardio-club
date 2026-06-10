@@ -43,7 +43,7 @@ export default function ClubListScreen() {
   );
 
   return (
-    <MccScreen title="Deine Clubs" kicker="MCC" subtitle="Waehle deinen Club aus oder starte einen neuen gemeinsamen Cardiotag.">
+    <MccScreen title="Deine Clubs" kicker="MCC" subtitle="Wähle deinen Club aus oder starte einen neuen gemeinsamen Cardiotag.">
       <MccButton label="Club erstellen" icon="plus-circle-outline" onPress={() => router.push("/clubs/create")} />
       {error ? (
         <MccBadge tone="danger" icon="alert-circle-outline">
@@ -59,7 +59,7 @@ export default function ClubListScreen() {
             <MccCardTitle>{club.name}</MccCardTitle>
             {club.description ? <MccBody muted>{club.description}</MccBody> : null}
           </View>
-          <MccButton label="Oeffnen" icon="arrow-right" variant="secondary" onPress={() => router.push(`/clubs/${club.id}`)} />
+          <MccButton label="Öffnen" icon="arrow-right" variant="secondary" onPress={() => router.push(`/clubs/${club.id}`)} />
         </MccCard>
       ))}
       <MccButton label="Abmelden" icon="logout" variant="ghost" onPress={() => supabase.auth.signOut()} />

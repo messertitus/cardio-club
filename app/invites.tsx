@@ -50,7 +50,7 @@ export default function InvitesScreen() {
     if (result.error) {
       setMessage(
         isAdmin && result.error.message.includes("3 Einladungscodes")
-          ? "Supabase nutzt noch die alte Code-Funktion. Bitte Migration 017_admin_invites_unlimited.sql ausfuehren."
+          ? "Supabase nutzt noch die alte Code-Funktion. Bitte Migration 017_admin_invites_unlimited.sql ausführen."
           : result.error.message,
       );
       return;
@@ -65,7 +65,7 @@ export default function InvitesScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <MccScreen title="Einladungscodes" kicker="Exklusiver Zugang" subtitle={isAdmin ? "Admin-Kontingent: unbegrenzt." : `Noch ${remaining} von 3 Codes verfuegbar.`} bottomInset={96}>
+      <MccScreen title="Einladungscodes" kicker="Exklusiver Zugang" subtitle={isAdmin ? "Admin-Kontingent: unbegrenzt." : `Noch ${remaining} von 3 Codes verfügbar.`} bottomInset={96}>
         <MccCard accent>
           <MccBadge icon="ticket-confirmation-outline">Slots</MccBadge>
           <MccCardTitle>Zugang kontrolliert, aber schnell geteilt</MccCardTitle>
@@ -106,7 +106,7 @@ export default function InvitesScreen() {
                 {code.used_at ? "Verwendet" : "Bereit zum Teilen"}
               </MccBadge>
               <Text style={[styles.code, { color: theme.mcc.textPrimary }]}>{code.code}</Text>
-              <MccBody muted>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Einmalig gueltig fuer den Clubzugang."}</MccBody>
+              <MccBody muted>{code.used_at ? `Verwendet von ${code.usedByName ?? "Mitglied"}` : "Einmalig gültig für den Clubzugang."}</MccBody>
               {code.usedByPhone ? <MccBody style={{ color: theme.mcc.accent }}>{code.usedByPhone}</MccBody> : null}
               {!code.used_at ? <MccButton label="Teilen" icon="share-outline" variant="secondary" onPress={() => shareCode(code.code)} /> : null}
             </MccCard>
@@ -119,7 +119,7 @@ export default function InvitesScreen() {
 }
 
 function buildInviteMessage(code: string): string {
-  return `Hey du, dein Einladungscode fuer den Cardio Club lautet: ${code}\nLink: ${getInviteLink()}`;
+  return `Hey du, dein Einladungscode für den Cardio Club lautet: ${code}\nLink: ${getInviteLink()}`;
 }
 
 function getInviteLink(): string {

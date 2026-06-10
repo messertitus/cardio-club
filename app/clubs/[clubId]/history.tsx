@@ -27,7 +27,7 @@ export default function EventHistoryScreen() {
   }, [clubId]);
 
   return (
-    <MccScreen title="Event-Verlauf" kicker="History" subtitle="Ein kurzer Blick darauf, was zuletzt gewaehlt wurde.">
+    <MccScreen title="Event-Verlauf" kicker="History" subtitle="Ein kurzer Blick darauf, was zuletzt gewählt wurde.">
       <InlineError>{error}</InlineError>
       {loading ? <LoadingSkeleton lines={3} /> : null}
       {!loading && events.length === 0 ? <EmptyState title="Noch kein Verlauf" /> : null}

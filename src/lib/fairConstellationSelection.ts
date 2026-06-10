@@ -470,7 +470,7 @@ export function selectFairConstellation(input: FairConstellationInput): FairCons
       normalized,
       context,
       [],
-      "Keine Entscheidung: Es gibt keine gueltigen Stimmen von teilnehmenden oder vielleicht teilnehmenden Mitgliedern.",
+      "Keine Entscheidung: Es gibt keine gültigen Stimmen von teilnehmenden oder vielleicht teilnehmenden Mitgliedern.",
     );
   }
 
@@ -929,7 +929,7 @@ function scoreWeather(
     return {
       score: -5,
       excluded: "Outdoor-Profil ohne Koordinaten oder PLZ ist nicht wetterfaehig.",
-      reasons: ["Outdoor-Profil braucht Koordinaten oder PLZ fuer Wetterbewertung."],
+      reasons: ["Outdoor-Profil braucht Koordinaten oder PLZ für Wetterbewertung."],
     };
   }
 
@@ -944,7 +944,7 @@ function scoreWeather(
   const windSpeed = weather.windSpeedKmh ?? weather.windGustsKmh ?? 0;
 
   if ((rules.thunderstormUnsafe ?? true) && weatherCode >= 95) {
-    return { score: -5, excluded: "Gefaehrliches Gewitterwetter schliesst dieses Outdoor-Profil aus.", reasons };
+    return { score: -5, excluded: "Gefährliches Gewitterwetter schließt dieses Outdoor-Profil aus.", reasons };
   }
 
   let score = 0.4;
@@ -953,7 +953,7 @@ function scoreWeather(
     reasons.push("Regen passt nur schlecht zu diesem Profil.");
   } else if (precipitation > 0.5 || precipitationProbability > 65) {
     score -= 0.35;
-    reasons.push("Das Wetter ist etwas ungemuetlich, aber nicht gefaehrlich.");
+    reasons.push("Das Wetter ist etwas ungemütlich, aber nicht gefährlich.");
   } else {
     score += 0.35;
     reasons.push("Das Wetter passt zum Outdoor-Profil.");
@@ -1002,7 +1002,7 @@ function scoreBasePracticality(
 
   if (profile.openingNotes) {
     score += 0.08;
-    reasons.push("Oeffnungszeiten sind fuer dieses Profil dokumentiert.");
+    reasons.push("Öffnungszeiten sind für dieses Profil dokumentiert.");
   }
 
   if (profile.transitNotes) {
@@ -1027,7 +1027,7 @@ function scoreBasePracticality(
 
   if (profile.reservationRequired) {
     score -= 0.12;
-    reasons.push("Reservierung muss geprueft werden.");
+    reasons.push("Reservierung muss geprüft werden.");
   }
 
   if (apRequirementLevel === "required" && !profile.apContactId) {
@@ -1042,7 +1042,7 @@ function scoreBasePracticality(
     const missingEquipment = requiredEquipment.filter((item) => !availableEquipment.has(item));
     if (missingEquipment.length === 0) {
       score += 0.14;
-      reasons.push("Noetige Ausstattung ist als verfuegbar markiert.");
+      reasons.push("Nötige Ausstattung ist als verfügbar markiert.");
     } else {
       score -= Math.min(0.4, 0.12 * missingEquipment.length);
       reasons.push(`Ausstattung offen: ${missingEquipment.slice(0, 3).join(", ")}.`);
@@ -1473,7 +1473,7 @@ function buildLosingCandidateReasons(winner: CandidateScore, scores: CandidateSc
 function buildLosingReasons(winner: CandidateScore, candidate: CandidateScore): string[] {
   const reasons: string[] = [];
   if (candidate.finalScore < winner.finalScore) reasons.push("Der Gesamtscore lag unter dem Gewinner.");
-  if (candidate.primaryVoteScore < winner.primaryVoteScore) reasons.push("Die Hauptaktivitaet hatte weniger aktuelle Unterstuetzung.");
+  if (candidate.primaryVoteScore < winner.primaryVoteScore) reasons.push("Die Hauptaktivität hatte weniger aktuelle Unterstützung.");
   if (candidate.noGoBreakdown.unresolved.length > winner.noGoBreakdown.unresolved.length) {
     reasons.push("Es blieben mehr No-Go-Konflikte ungeloest.");
   }
@@ -1505,26 +1505,26 @@ function buildDecisionReason(candidate: CandidateScore, character: DecisionChara
   const main = candidate.activities[0];
   const secondary = candidate.activities[1];
 
-  if (!main) return "Keine Entscheidung moeglich.";
+  if (!main) return "Keine Entscheidung möglich.";
 
   if (character === "majority_protected") {
     return `${main.sportName} bleibt vorne, weil die aktuelle Mehrheit klar war und keine starken Gegenfaktoren ueberwogen.`;
   }
 
   if (character === "fairness_adjusted") {
-    return `${main.sportName} wurde gewaehlt, weil es genug aktuelle Unterstuetzung und einen relevanten Fairness-Ausgleich gab.`;
+    return `${main.sportName} wurde gewählt, weil es genug aktuelle Unterstützung und einen relevanten Fairness-Ausgleich gab.`;
   }
 
   if (candidate.mode === "single") {
-    return `${main.sportName} (${main.profileName}) wurde gewaehlt, weil diese Konstellation Zustimmung, Fairness, Wetter und Machbarkeit am besten verbindet.`;
+    return `${main.sportName} (${main.profileName}) wurde gewählt, weil diese Konstellation Zustimmung, Fairness, Wetter und Machbarkeit am besten verbindet.`;
   }
 
   if (candidate.mode === "multi_sport" && secondary) {
-    return `${main.sportName} und ${secondary.sportName} wurden als Multi-Sport Event gewaehlt, weil beide Gruppen Rueckhalt haben und die Profile nah genug fuer ein gemeinsames Club-Event sind.`;
+    return `${main.sportName} und ${secondary.sportName} wurden als Multi-Sport Event gewählt, weil beide Gruppen Rückhalt haben und die Profile nah genug für ein gemeinsames Club-Event sind.`;
   }
 
   if (candidate.mode === "twin" && secondary) {
-    return `${main.sportName} und ${secondary.sportName} wurden als Twin Event gewaehlt, weil zwei echte Gruppen entstanden sind und diese Loesung fairer ist als eine Gruppe zu ignorieren.`;
+    return `${main.sportName} und ${secondary.sportName} wurden als Twin Event gewählt, weil zwei echte Gruppen entstanden sind und diese Lösung fairer ist als eine Gruppe zu ignorieren.`;
   }
 
   return candidate.reasonParts.join(" ");
