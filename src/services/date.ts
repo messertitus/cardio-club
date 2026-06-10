@@ -33,18 +33,42 @@ export function formatEventDate(value?: string | null): string {
   return base.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
 }
 
-export type EventDay = "saturday" | "sunday";
+export type EventDay = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
-// weekStartDate is the Monday of the week.
-// Sunday event: voting Mon–Wed, decision Thursday (Monday + 3).
-// Saturday event: voting Sun(before)–Tue, decision Wednesday (Monday + 2).
-const DECISION_DAY_OFFSET: Record<EventDay, number> = { saturday: 2, sunday: 3 };
+// Days offset from the week's Monday.
+const DAY_OFFSET: Record<EventDay, number> = {
+  monday: 0,
+  tuesday: 1,
+  wednesday: 2,
+  thursday: 3,
+  friday: 4,
+  saturday: 5,
+  sunday: 6,
+};
+
+export const WEEKDAY_LABELS: Record<EventDay, string> = {
+  monday: "Montag",
+  tuesday: "Dienstag",
+  wednesday: "Mittwoch",
+  thursday: "Donnerstag",
+  friday: "Freitag",
+  saturday: "Samstag",
+  sunday: "Sonntag",
+};
+
+export const WEEKDAY_ORDER: EventDay[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+// Title shown on the hero / chat for a Cardiotag, e.g. "Cardio-Samstag".
+export function eventDayTitle(eventDay: EventDay): string {
+  return `Cardio-${WEEKDAY_LABELS[eventDay]}`;
+}
 
 // The real calendar date of the event, derived from the week's Monday and the
-// event day (Saturday = Monday + 5, Sunday = Monday + 6). Independent of any
-// stored starts_at, so the weekday label is always correct.
+// event day. Independent of any stored starts_at, so the weekday label is
+// always correct. Decision releases 3 days before the event (Saturday →
+// Wednesday, Sunday → Thursday — unchanged for the existing two days).
 export function getEventDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
-  return addUtcDays(weekStartDate, eventDay === "saturday" ? 5 : 6);
+  return addUtcDays(weekStartDate, DAY_OFFSET[eventDay]);
 }
 
 export function formatEventDayDate(weekStartDate: string, eventDay: EventDay = "sunday"): string {
@@ -56,7 +80,7 @@ export function isEventPast(weekStartDate: string, eventDay: EventDay = "sunday"
 }
 
 export function getDecisionReleaseDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
-  return addUtcDays(weekStartDate, DECISION_DAY_OFFSET[eventDay]);
+  return addUtcDays(weekStartDate, DAY_OFFSET[eventDay] - 3);
 }
 
 export function isDecisionReleaseOpen(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {

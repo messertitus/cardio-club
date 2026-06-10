@@ -1,5 +1,25 @@
+import type { EventDay } from "./date";
 import { fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
+
+// Generic per-weekday schedule (replaces the Saturday/Sunday-only model).
+export type EventDayConfig = { weekday: EventDay; time: string };
+
+export async function getMccEventDays(supabase: AppSupabaseClient, clubId: string): Promise<ServiceResult<EventDayConfig[]>> {
+  const { data, error } = await supabase.from("mcc_event_days").select("weekday, start_time").eq("club_id", clubId);
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Eventtage konnten nicht geladen werden.") };
+  }
+  return ok(data.map((row) => ({ weekday: row.weekday, time: row.start_time.slice(0, 5) })));
+}
+
+export async function setMccEventDays(supabase: AppSupabaseClient, days: EventDayConfig[]): Promise<ServiceResult<EventDayConfig[]>> {
+  const { error } = await supabase.rpc("set_mcc_event_days", { days: days.map((day) => ({ weekday: day.weekday, time: day.time })) });
+  if (error) {
+    return { data: null, error: fromPostgrestError(error, "Eventtage konnten nicht gespeichert werden.") };
+  }
+  return ok(days);
+}
 
 export type EventSchedule = {
   saturdayEnabled: boolean;

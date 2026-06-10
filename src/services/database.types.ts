@@ -4,6 +4,7 @@ export type ClubMemberRole = "admin" | "mod" | "member";
 export type SportIntensityLevel = "low" | "medium" | "high";
 export type SportLocationType = "indoor" | "outdoor" | "water" | "field" | "flexible";
 export type WeeklyEventStatus = "proposing" | "voting" | "decided" | "completed" | "cancelled";
+export type EventDayValue = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 export type AttendanceStatus = "going" | "maybe" | "not_going";
 export type ActualAttendanceStatus = "present" | "absent" | "excused" | "unknown";
 export type EventDecisionType = "single" | "multi_sport" | "twin" | "none";
@@ -321,7 +322,7 @@ export type Database = {
           notes: string | null;
           decision_reason: string | null;
           activity_contact_id: string | null;
-          event_day: "saturday" | "sunday";
+          event_day: EventDayValue;
           city: string | null;
           created_at: string;
         };
@@ -344,7 +345,7 @@ export type Database = {
           notes?: string | null;
           decision_reason?: string | null;
           activity_contact_id?: string | null;
-          event_day?: "saturday" | "sunday";
+          event_day?: EventDayValue;
           city?: string | null;
           created_at?: string;
         };
@@ -364,7 +365,7 @@ export type Database = {
           notes?: string | null;
           decision_reason?: string | null;
           activity_contact_id?: string | null;
-          event_day?: "saturday" | "sunday";
+          event_day?: EventDayValue;
           city?: string | null;
         };
         Relationships: [];
@@ -373,6 +374,12 @@ export type Database = {
         Row: { club_id: string; city: string; created_at: string };
         Insert: { club_id: string; city: string; created_at?: string };
         Update: { city?: string };
+        Relationships: [];
+      };
+      mcc_event_days: {
+        Row: { club_id: string; weekday: EventDayValue; start_time: string };
+        Insert: { club_id: string; weekday: EventDayValue; start_time?: string };
+        Update: { start_time?: string };
         Relationships: [];
       };
       club_event_settings: {
@@ -970,6 +977,10 @@ export type Database = {
         Args: { cities: string[] };
         Returns: undefined;
       };
+      set_mcc_event_days: {
+        Args: { days: Json };
+        Returns: undefined;
+      };
       validate_invitation_code: {
         Args: { input_code: string };
         Returns: boolean;
@@ -984,7 +995,7 @@ export type Database = {
       };
       ensure_mcc_week: {
         Args: Record<PropertyKey, never>;
-        Returns: { mcc_club_id: string; mcc_event_id: string; mcc_event_day: "saturday" | "sunday" }[];
+        Returns: { mcc_club_id: string; mcc_event_id: string; mcc_event_day: EventDayValue }[];
       };
       clear_mcc_test_chat: {
         Args: Record<PropertyKey, never>;

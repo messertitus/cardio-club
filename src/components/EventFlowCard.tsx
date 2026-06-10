@@ -5,7 +5,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
-import { formatEventDayDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
+import { eventDayTitle, formatEventDayDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
 import {
   canCloseEvent,
   clearMccNoGo,
@@ -145,7 +145,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const decisionLocation = isDecided ? (primaryActivity?.locationName ?? null) : null;
   const secondaryDecisionName = isDecided ? (secondaryActivity?.sportName ?? undefined) : undefined;
   const decisionTitle = isDecided && secondaryDecisionName ? `${decisionSportName} + ${secondaryDecisionName}` : decisionSportName;
-  const heroTitle = isDecided ? decisionTitle : event.eventDay === "saturday" ? "Cardio-Samstag" : "Cardio-Sonntag";
+  const heroTitle = isDecided ? decisionTitle : eventDayTitle(event.eventDay);
   const isCurrentWeek = event.weekStartDate <= getWeekStartDate();
   // The week badge distinguishes a decided event (get ready), an upcoming
   // next-week event, and the current week's running vote.

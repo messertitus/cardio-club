@@ -16,7 +16,7 @@ import {
 } from "../src/lib/adminNotifications";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
-import { formatEventDayDate, getEventDate, getWeekStartDate, isDecisionReleaseOpen } from "../src/services/date";
+import { eventDayTitle, formatEventDayDate, getEventDate, getWeekStartDate, isDecisionReleaseOpen } from "../src/services/date";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { supabase } from "../src/lib/supabase";
 import {
@@ -111,7 +111,7 @@ export default function ChatScreen() {
     () =>
       openEventStates.map((entry) => ({
         key: entry.event.id,
-        title: `${entry.event.event_day === "saturday" ? "Cardio-Samstag" : "Cardio-Sonntag"} · ${formatEventDayDate(entry.event.week_start_date, entry.event.event_day)}`,
+        title: `${eventDayTitle(entry.event.event_day)} · ${formatEventDayDate(entry.event.week_start_date, entry.event.event_day)}`,
         channels: eventChannels.filter((channel) => channel.eventId === entry.event.id),
       })),
     [eventChannels, openEventStates],
@@ -573,7 +573,7 @@ function buildEventChannels(states: MccEventState[]): EventChatChannel[] {
   const channels: EventChatChannel[] = [];
 
   for (const state of states) {
-    const dayLabel = state.event.event_day === "saturday" ? "Cardio-Samstag" : "Cardio-Sonntag";
+    const dayLabel = eventDayTitle(state.event.event_day);
     const dateLabel = formatEventDayDate(state.event.week_start_date, state.event.event_day);
     const base = { eventId: state.event.id, clubId: state.clubId, dayLabel, dateLabel } as const;
 

@@ -14,7 +14,7 @@ import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
-import { formatEventDayDate } from "../src/services/date";
+import { eventDayTitle, formatEventDayDate } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
 
@@ -241,9 +241,7 @@ export default function HomeScreen() {
                         .map((event) => (
                           <View key={event.id} style={[styles.otherCityRow, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
                             <View style={styles.nextWeekText}>
-                              <Text style={[styles.nextWeekTitle, { color: theme.mcc.textPrimary }]}>
-                                {event.event_day === "saturday" ? "Cardio-Samstag" : "Cardio-Sonntag"}
-                              </Text>
+                              <Text style={[styles.nextWeekTitle, { color: theme.mcc.textPrimary }]}>{eventDayTitle(event.event_day)}</Text>
                               <Text style={[styles.nextWeekMeta, { color: theme.mcc.textSecondary }]}>{formatEventDayDate(event.week_start_date, event.event_day)}</Text>
                             </View>
                             <Pressable

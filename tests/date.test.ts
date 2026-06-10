@@ -16,6 +16,13 @@ describe("MCC event timing", () => {
     expect(isDecisionReleaseOpen("2026-06-08", "sunday", new Date("2026-06-11T00:00:00Z"))).toBe(true);
   });
 
+  it("any weekday works: Friday event decides 3 days earlier (Tuesday)", () => {
+    expect(getDecisionReleaseDate("2026-06-08", "friday").toISOString().slice(0, 10)).toBe("2026-06-09");
+    expect(isVotingInputOpen("2026-06-08", "friday", new Date("2026-06-08T12:00:00Z"))).toBe(true);
+    expect(isVotingInputOpen("2026-06-08", "friday", new Date("2026-06-09T00:00:00Z"))).toBe(false);
+    expect(isDecisionReleaseOpen("2026-06-08", "friday", new Date("2026-06-09T00:00:00Z"))).toBe(true);
+  });
+
   it("Saturday event: voting Sunday through Tuesday, decision Wednesday", () => {
     expect(getDecisionReleaseDate("2026-06-08", "saturday").toISOString().slice(0, 10)).toBe("2026-06-10");
     // Sunday before the week start (2026-06-07) is already open

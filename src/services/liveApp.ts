@@ -14,7 +14,8 @@ import { listEventVotes, removeVote, voteForSport } from "./votes";
 import type { FairConstellationDecision } from "../lib/fairConstellationSelection";
 import { getWeekStartDate, isDecisionReleaseOpen } from "./date";
 
-export type EventDay = "saturday" | "sunday";
+import type { EventDay } from "./date";
+export type { EventDay };
 
 export type WeekEventRef = { eventId: string; eventDay: EventDay };
 
