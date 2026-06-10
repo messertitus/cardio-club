@@ -133,7 +133,7 @@ export function MotionBackground() {
   const logoScale = drift.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] });
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backgroundClip]}>
       <View style={[styles.backgroundBase, { backgroundColor: theme.mcc.background }]} />
       <Animated.View
         style={[
@@ -950,6 +950,7 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1 },
   screenContent: { gap: 16, paddingHorizontal: 16, paddingTop: 16 },
   screenBackRow: { alignItems: "center", flexDirection: "row", justifyContent: "flex-end" },
+  backgroundClip: { overflow: "hidden" },
   backgroundBase: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   glowBlob: { borderRadius: 999, height: 300, position: "absolute", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 90, width: 300 },
   glowBlobTop: { left: -70, top: -110 },
