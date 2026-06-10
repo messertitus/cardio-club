@@ -109,7 +109,7 @@ export default function HomeScreen() {
 
   if (loading || (!events && busy)) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+      <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
         <MotionBackground />
         <View style={styles.appShell}>
           <View style={styles.screen}>
@@ -149,7 +149,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+    <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.appShell}>
         <Animated.ScrollView

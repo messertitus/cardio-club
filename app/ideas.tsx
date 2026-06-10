@@ -554,7 +554,7 @@ export default function IdeasScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <BrandBackground />
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.shell}>

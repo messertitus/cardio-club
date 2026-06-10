@@ -306,7 +306,7 @@ export default function ChatScreen() {
   if (!user) return <Redirect href="/auth" />;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+    <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.shell}>
         <KeyboardAvoidingView behavior={undefined} style={styles.content}>
@@ -498,11 +498,19 @@ function SwipeReplyBubble({ children, mine, onReply }: { children: ReactNode; mi
     [onReply, translateX],
   );
 
+  // The reply icon stays hidden at rest and fades + scales in on the left as the
+  // bubble is pushed right, so it never sits on top of the message.
+  const iconOpacity = translateX.interpolate({ inputRange: [0, 22, 52], outputRange: [0, 0, 1], extrapolate: "clamp" });
+  const iconScale = translateX.interpolate({ inputRange: [0, 52], outputRange: [0.6, 1], extrapolate: "clamp" });
+
   return (
     <View style={[styles.swipeWrap, mine && styles.swipeWrapMine]}>
-      <View style={[styles.replySwipeIcon, { backgroundColor: theme.mcc.accentFaint }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.replySwipeIcon, { backgroundColor: theme.mcc.accentFaint, opacity: iconOpacity, transform: [{ scale: iconScale }] }]}
+      >
         <MaterialCommunityIcons name="reply" size={18} color={theme.mcc.accent} />
-      </View>
+      </Animated.View>
       <Animated.View {...panResponder.panHandlers} style={{ transform: [{ translateX }] }}>
         {children}
       </Animated.View>
