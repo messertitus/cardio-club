@@ -101,21 +101,23 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     void load();
   }, [load]);
 
-  // When the user has just finished this event's input, gently collapse the flow
-  // a moment later so the next open Cardiotag moves into the foreground.
+  // When the user has finished this event's input, gently collapse the flow a
+  // moment later so the next open Cardiotag moves into the foreground. We only
+  // collapse once the user has reached the overview step (pressed "Weiter" or
+  // chose "nicht dabei") — picking a sport must NOT yank the card away mid-vote.
   const userDone = state ? computeUserDone(state, event.eventDay, event.weekStartDate) : false;
   useEffect(() => {
     if (!initRef.current || !state) return;
     const decided = state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
     const past = isEventPast(event.weekStartDate, event.eventDay);
     if (canManage && (decided || past)) return; // managers keep the wrap-up view open
-    if (userDone && !doneRef.current) {
+    if (userDone && manualStep === "overview" && !doneRef.current) {
       doneRef.current = true;
       const timer = setTimeout(() => setExpanded(false), 1100);
       return () => clearTimeout(timer);
     }
     if (!userDone) doneRef.current = false;
-  }, [canManage, event.eventDay, event.weekStartDate, state, userDone]);
+  }, [canManage, event.eventDay, event.weekStartDate, manualStep, state, userDone]);
 
   if (!state) {
     return <ScreenLoader />;
