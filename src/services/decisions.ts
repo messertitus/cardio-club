@@ -228,7 +228,12 @@ async function buildDecisionInput(
   if (sportsResult.error) return { data: null, error: sportsResult.error };
   if (profilesResult.error) return { data: null, error: profilesResult.error };
 
-  const sportProfiles = profilesResult.data.map(mapSportProfile);
+  // Events are local: only consider sport profiles in the event's city. Profiles
+  // without a recorded city are kept so events still work where city data is thin.
+  const cityScopedProfiles = event.city
+    ? profilesResult.data.filter((row) => !row.location_city || row.location_city === event.city)
+    : profilesResult.data;
+  const sportProfiles = cityScopedProfiles.map(mapSportProfile);
   const weatherSnapshot =
     input.context?.weatherSnapshot ??
     asWeatherSnapshot(event.weather_snapshot) ??

@@ -481,6 +481,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         }
         status={phaseLabel}
         dateLabel={formatEventDayDate(event.weekStartDate, event.eventDay)}
+        cityLabel={state.event.city ?? undefined}
         flowTarget={heroFlowTarget}
         weekTag={weekTag}
         chips={[

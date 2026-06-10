@@ -14,6 +14,7 @@ import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
+import { formatEventDayDate } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
 
@@ -29,6 +30,11 @@ export default function HomeScreen() {
   const [cityBusy, setCityBusy] = useState(false);
   const [citySkipped, setCitySkipped] = useState(false);
   const [showNextWeek, setShowNextWeek] = useState(false);
+  const [myCity, setMyCity] = useState<string | null>(null);
+  const [joinedEventIds, setJoinedEventIds] = useState<Set<string>>(new Set());
+  const [addedEventIds, setAddedEventIds] = useState<Set<string>>(new Set());
+  const [otherCitiesOpen, setOtherCitiesOpen] = useState(false);
+  const [citySearch, setCitySearch] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -45,6 +51,10 @@ export default function HomeScreen() {
     setNotice(null);
     setEvents(result.data.events);
     void writeLocalCache(cacheKey, result.data.events);
+
+    // Events the user already joined (any city) stay on the home page.
+    const { data: attendanceRows } = await supabase.from("attendance").select("event_id").eq("user_id", user.id);
+    if (attendanceRows) setJoinedEventIds(new Set(attendanceRows.map((row) => row.event_id)));
   }, [user]);
 
   useEffect(() => {
@@ -55,6 +65,7 @@ export default function HomeScreen() {
     async function loadProfileCity() {
       if (!user) return;
       const result = await getMyProfile(supabase, user.id);
+      if (result.data) setMyCity(result.data.city ?? null);
       if (result.data && !result.data.city && !citySkipped && !seenCityPromptUserIds.has(user.id)) {
         setNeedsCity(true);
         setPostalCode(result.data.postal_code ?? "");
@@ -84,6 +95,7 @@ export default function HomeScreen() {
       return false;
     }
     seenCityPromptUserIds.add(user.id);
+    setMyCity(city.trim());
     setCitySkipped(true);
     setNeedsCity(false);
     return true;
@@ -112,13 +124,28 @@ export default function HomeScreen() {
 
   if (!user) return <Redirect href="/auth" />;
 
-  const weeks = events ? [...new Set(events.map((event) => event.week_start_date))] : [];
+  // Events are local: show the user's own city plus any event they joined or
+  // added from another city. Unknown city → show everything.
+  const isVisibleEvent = (event: Row<"weekly_events">) =>
+    !myCity || event.city === myCity || joinedEventIds.has(event.id) || addedEventIds.has(event.id);
+  const visibleEvents = (events ?? []).filter(isVisibleEvent);
+  const otherCityEvents = (events ?? []).filter((event) => !isVisibleEvent(event));
+
+  const weeks = [...new Set(visibleEvents.map((event) => event.week_start_date))];
   const thisWeekStart = weeks[0];
-  const thisWeekEvents = (events ?? []).filter((event) => event.week_start_date === thisWeekStart);
-  const nextWeekEvents = (events ?? []).filter((event) => event.week_start_date !== thisWeekStart);
+  const thisWeekEvents = visibleEvents.filter((event) => event.week_start_date === thisWeekStart);
+  const nextWeekEvents = visibleEvents.filter((event) => event.week_start_date !== thisWeekStart);
+
+  const otherCitiesList = [...new Set(otherCityEvents.map((event) => event.city ?? "Andere Stadt"))].sort((a, b) => a.localeCompare(b));
+  const cityQuery = citySearch.trim().toLowerCase();
+  const filteredOtherCities = otherCitiesList.filter((cityName) => !cityQuery || cityName.toLowerCase().includes(cityQuery));
 
   function toWeekEvent(event: Row<"weekly_events">): WeekEvent {
     return { id: event.id, eventDay: event.event_day, weekStartDate: event.week_start_date, status: event.status };
+  }
+
+  function addOtherCityEvent(eventId: string) {
+    setAddedEventIds((current) => new Set(current).add(eventId));
   }
 
   return (
@@ -137,10 +164,14 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {events && events.length === 0 ? (
+          {visibleEvents.length === 0 ? (
             <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
               <Text style={[styles.panelTitle, { color: theme.mcc.textPrimary }]}>Noch kein Cardiotag</Text>
-              <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Diese Woche wird gerade vorbereitet. Schau gleich nochmal vorbei.</Text>
+              <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
+                {otherCityEvents.length > 0
+                  ? `In ${myCity ?? "deiner Stadt"} läuft gerade kein Cardiotag. Unten findest du Events anderer Städte – tritt einfach bei.`
+                  : "Diese Woche wird gerade vorbereitet. Schau gleich nochmal vorbei."}
+              </Text>
             </View>
           ) : null}
 
@@ -173,6 +204,64 @@ export default function HomeScreen() {
               {showNextWeek
                 ? nextWeekEvents.map((event, eventIndex) => <EventFlowCard key={event.id} userId={user.id} index={eventIndex} event={toWeekEvent(event)} />)
                 : null}
+            </View>
+          ) : null}
+
+          {otherCityEvents.length > 0 ? (
+            <View style={styles.weekGroup}>
+              <Pressable
+                style={({ pressed }) => [styles.nextWeekToggle, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }, pressed && styles.pressed]}
+                onPress={() => setOtherCitiesOpen((open) => !open)}
+              >
+                <View style={[styles.nextWeekIcon, { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.strongLine }]}>
+                  <MaterialCommunityIcons name="map-marker-radius" size={20} color={theme.mcc.accent} />
+                </View>
+                <View style={styles.nextWeekText}>
+                  <Text style={[styles.nextWeekTitle, { color: theme.mcc.textPrimary }]}>Events anderer Städte</Text>
+                  <Text style={[styles.nextWeekMeta, { color: theme.mcc.textSecondary }]}>
+                    {otherCitiesList.length} {otherCitiesList.length === 1 ? "Stadt" : "Städte"} · beitreten und mitstimmen
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name={otherCitiesOpen ? "chevron-up" : "chevron-down"} size={26} color={theme.mcc.textSecondary} />
+              </Pressable>
+              {otherCitiesOpen ? (
+                <View style={styles.otherCitiesBody}>
+                  <TextInput
+                    value={citySearch}
+                    onChangeText={setCitySearch}
+                    placeholder="Stadt suchen"
+                    placeholderTextColor={theme.mcc.textSecondary}
+                    style={[styles.citySearch, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
+                  />
+                  {filteredOtherCities.map((cityName) => (
+                    <View key={cityName} style={styles.otherCityGroup}>
+                      <Text style={[styles.weekLabel, { color: theme.mcc.accent }]}>{cityName}</Text>
+                      {otherCityEvents
+                        .filter((event) => (event.city ?? "Andere Stadt") === cityName)
+                        .map((event) => (
+                          <View key={event.id} style={[styles.otherCityRow, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+                            <View style={styles.nextWeekText}>
+                              <Text style={[styles.nextWeekTitle, { color: theme.mcc.textPrimary }]}>
+                                {event.event_day === "saturday" ? "Cardio-Samstag" : "Cardio-Sonntag"}
+                              </Text>
+                              <Text style={[styles.nextWeekMeta, { color: theme.mcc.textSecondary }]}>{formatEventDayDate(event.week_start_date, event.event_day)}</Text>
+                            </View>
+                            <Pressable
+                              style={({ pressed }) => [styles.joinButton, { backgroundColor: theme.mcc.accentDeep }, pressed && styles.pressed]}
+                              onPress={() => addOtherCityEvent(event.id)}
+                            >
+                              <MaterialCommunityIcons name="plus" size={18} color="#FFFFFF" />
+                              <Text style={styles.joinButtonText}>Beitreten</Text>
+                            </Pressable>
+                          </View>
+                        ))}
+                    </View>
+                  ))}
+                  {filteredOtherCities.length === 0 ? (
+                    <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Keine Stadt gefunden.</Text>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           ) : null}
         </Animated.ScrollView>
@@ -303,6 +392,12 @@ const styles = StyleSheet.create({
   nextWeekText: { flex: 1, minWidth: 0 },
   nextWeekTitle: { fontSize: 17, fontWeight: "900" },
   nextWeekMeta: { fontSize: 13, fontWeight: "700" },
+  otherCitiesBody: { gap: 12 },
+  citySearch: { minHeight: 48, borderRadius: 16, borderWidth: 1, fontSize: 15, paddingHorizontal: 14, outlineStyle: "none" } as object,
+  otherCityGroup: { gap: 8 },
+  otherCityRow: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  joinButton: { alignItems: "center", borderRadius: 999, flexDirection: "row", gap: 4, paddingHorizontal: 12, paddingVertical: 9 },
+  joinButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   panel: { gap: 10, borderRadius: 24, borderWidth: 1, padding: 16 },
   panelTitle: { fontSize: 22, fontWeight: "900" },

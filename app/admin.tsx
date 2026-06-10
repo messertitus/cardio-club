@@ -20,6 +20,8 @@ import {
   getMccEventState,
   isCurrentUserAdmin,
   isValidTime,
+  listMemberCities,
+  setActiveCities,
   setMccEventSchedule,
   listInvitationTree,
   listMccMembers,
@@ -36,6 +38,7 @@ import {
   upsertSportProfile,
   type ClubMemberRole,
   type EventSchedule,
+  type MemberCity,
   type InvitationTreeEntry,
   type MccEventState,
   type MccMember,
@@ -65,7 +68,7 @@ const defaultSportCategoryOptions = [
   "unbekannt",
 ];
 
-type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule";
+type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule" | "cities";
 type PendingConfirm = { title: string; detail: string; onConfirm: () => void } | null;
 type InvitationTreeNode = {
   id: string;
@@ -202,6 +205,9 @@ export default function AdminScreen() {
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [schedule, setSchedule] = useState<EventSchedule | null>(null);
   const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [memberCities, setMemberCities] = useState<MemberCity[]>([]);
+  const [activeCitySet, setActiveCitySet] = useState<Set<string>>(new Set());
+  const [citiesBusy, setCitiesBusy] = useState(false);
 
   const profilesBySport = useMemo(() => {
     const query = profileSearch.trim().toLowerCase();
@@ -293,6 +299,33 @@ export default function AdminScreen() {
 
     const scheduleResult = await getMccEventSchedule(supabase, eventResult.data.clubId);
     if (scheduleResult.data) setSchedule(scheduleResult.data);
+
+    const citiesResult = await listMemberCities(supabase);
+    if (citiesResult.data) {
+      setMemberCities(citiesResult.data);
+      setActiveCitySet(new Set(citiesResult.data.filter((entry) => entry.active).map((entry) => entry.city)));
+    }
+  }
+
+  function toggleActiveCity(cityName: string) {
+    setActiveCitySet((current) => {
+      const next = new Set(current);
+      if (next.has(cityName)) next.delete(cityName);
+      else next.add(cityName);
+      return next;
+    });
+  }
+
+  async function saveActiveCities() {
+    setCitiesBusy(true);
+    const result = await setActiveCities(supabase, [...activeCitySet]);
+    setCitiesBusy(false);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    setMemberCities((current) => current.map((entry) => ({ ...entry, active: activeCitySet.has(entry.city) })));
+    setMessage("Aktive Städte gespeichert. Events werden ab der nächsten Bereitstellung pro aktiver Stadt erzeugt.");
   }
 
   async function saveSchedule() {
@@ -590,6 +623,7 @@ export default function AdminScreen() {
               <AdminMenuCard title="Sportarten" body="Abstrakte Sportarten anlegen, ändern und löschen" onPress={() => setActiveSection("sports")} />
               <AdminMenuCard title="Sportprofile" body="Orte, Profilkontakte, Wetter und Gruppengrößen pflegen" onPress={() => setActiveSection("profiles")} />
               <AdminMenuCard title="Eventzeiten" body="Uhrzeiten der Cardiotage und ob sie stattfinden" onPress={() => setActiveSection("schedule")} />
+              <AdminMenuCard title="Aktive Städte" body="In welchen Städten Events laufen" onPress={() => setActiveSection("cities")} />
               <AdminMenuCard title="Mitglieder" body="Rechte und Deaktivierung" onPress={() => setActiveSection("members")} />
               <AdminMenuCard title="Einladungsbaum" body="Sehen, wer wen eingeladen hat" onPress={() => setActiveSection("inviteTree")} />
               <AdminMenuCard title="Namensanfragen" body={`${nameRequests.length} offene Freigaben`} onPress={() => setActiveSection("nameRequests")} />
@@ -1092,6 +1126,43 @@ export default function AdminScreen() {
               </Pressable>
             </View>
           ) : null}
+
+          {isAdmin && activeSection === "cities" ? (
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Aktive Städte</Text>
+              <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
+                Events laufen nur in aktiven Städten. In der Testphase ist das nur Konstanz. Hier siehst du alle Städte, aus denen es Mitglieder gibt – aktiviere eine Stadt, damit dort Cardiotage erzeugt werden.
+              </Text>
+
+              {memberCities.length === 0 ? (
+                <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Noch keine Städte hinterlegt.</Text>
+              ) : null}
+
+              {memberCities.map((entry) => {
+                const active = activeCitySet.has(entry.city);
+                return (
+                  <View key={entry.city} style={[styles.scheduleRow, { borderTopColor: theme.mcc.line }]}>
+                    <View style={styles.scheduleInfo}>
+                      <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{entry.city}</Text>
+                      <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
+                        {entry.memberCount} {entry.memberCount === 1 ? "Mitglied" : "Mitglieder"}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={[styles.roleButton, active ? { backgroundColor: theme.mcc.accentDeep } : { backgroundColor: theme.mcc.surface, borderWidth: 1, borderColor: theme.mcc.line }]}
+                      onPress={() => toggleActiveCity(entry.city)}
+                    >
+                      <Text style={[styles.roleText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{active ? "Aktiv" : "Inaktiv"}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+
+              <Pressable style={[styles.roleButton, styles.scheduleSave, { backgroundColor: theme.mcc.accentDeep }, citiesBusy && { opacity: 0.5 }]} disabled={citiesBusy} onPress={() => void saveActiveCities()}>
+                <Text style={[styles.roleText, { color: "#FFFFFF" }]}>{citiesBusy ? "Speichern…" : "Aktive Städte speichern"}</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </ScrollView>
         {iconPickerOpen ? (
           <SportIconPicker
@@ -1307,6 +1378,7 @@ function sectionTitle(section: AdminSection): string {
   if (section === "inviteTree") return "Einladungsbaum";
   if (section === "nameRequests") return "Namensanfragen";
   if (section === "schedule") return "Eventzeiten";
+  if (section === "cities") return "Aktive Städte";
   return "Club steuern";
 }
 
@@ -1318,7 +1390,8 @@ function isAdminSection(value: string): value is AdminSection {
     value === "members" ||
     value === "inviteTree" ||
     value === "nameRequests" ||
-    value === "schedule"
+    value === "schedule" ||
+    value === "cities"
   );
 }
 

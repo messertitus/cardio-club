@@ -155,7 +155,10 @@ export default function ChatScreen() {
       const currentWeek = getWeekStartDate();
       const weekRows = weekResult.data.events.filter((row) => row.week_start_date === currentWeek);
       const stateResults = await Promise.all(weekRows.map((row) => getEventStateById(supabase, user.id, row.id)));
-      const nextEventStates = stateResults.flatMap((result) => (result.data ? [result.data] : []));
+      const loadedStates = stateResults.flatMap((result) => (result.data ? [result.data] : []));
+      // Local chats: the user's own city plus any event they joined elsewhere.
+      const myCity = membersResult.data.find((member) => member.userId === user.id)?.city ?? null;
+      const nextEventStates = loadedStates.filter((entry) => !myCity || entry.event.city === myCity || entry.myAttendance != null);
 
       void writeLocalCache(cacheKey, { eventStates: nextEventStates, members: membersResult.data, directChats: directResult.data });
 
@@ -606,14 +609,13 @@ const CHAT_CLOSE_AFTER_EVENT_MS = 2 * 24 * 60 * 60 * 1000; // through the day af
 function eventDecisionReady(state: MccEventState): boolean {
   // Skipped (too few voters) events never get an event chat.
   if (state.event.status === "cancelled") return false;
-  if (state.event.status === "decided" || state.event.status === "completed") return true;
-  const releaseOpen = isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day);
-  if (!releaseOpen) return false;
-  // Once the decision window is reached, an event with fewer than two distinct
-  // voters is treated as skipped (mirrors cancel_underused_events) — no chat,
-  // even before the server-side cancel job has run.
+  // A completed (already played + reviewed) event keeps its chat for the close-out window.
+  if (state.event.status === "completed") return true;
+  // An event with fewer than two distinct voters is treated as skipped (mirrors
+  // cancel_underused_events) — no chat, even before the server cancel job runs.
   const voterCount = new Set(state.votes.map((vote) => vote.user_id)).size;
-  return voterCount >= 2;
+  if (voterCount < 2) return false;
+  return state.event.status === "decided" || isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day);
 }
 
 function eventChatClosesAt(state: MccEventState): number {

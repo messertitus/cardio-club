@@ -322,6 +322,7 @@ export type Database = {
           decision_reason: string | null;
           activity_contact_id: string | null;
           event_day: "saturday" | "sunday";
+          city: string | null;
           created_at: string;
         };
         Insert: {
@@ -344,6 +345,7 @@ export type Database = {
           decision_reason?: string | null;
           activity_contact_id?: string | null;
           event_day?: "saturday" | "sunday";
+          city?: string | null;
           created_at?: string;
         };
         Update: {
@@ -363,7 +365,14 @@ export type Database = {
           decision_reason?: string | null;
           activity_contact_id?: string | null;
           event_day?: "saturday" | "sunday";
+          city?: string | null;
         };
+        Relationships: [];
+      };
+      mcc_active_cities: {
+        Row: { club_id: string; city: string; created_at: string };
+        Insert: { club_id: string; city: string; created_at?: string };
+        Update: { city?: string };
         Relationships: [];
       };
       club_event_settings: {
@@ -953,6 +962,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      list_mcc_member_cities: {
+        Args: Record<PropertyKey, never>;
+        Returns: { city: string; member_count: number; active: boolean }[];
+      };
+      set_mcc_active_cities: {
+        Args: { cities: string[] };
+        Returns: undefined;
+      };
       validate_invitation_code: {
         Args: { input_code: string };
         Returns: boolean;
