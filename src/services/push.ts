@@ -61,6 +61,17 @@ export async function markAppNotificationsDelivered(
   return ok({ saved: true });
 }
 
+// Runs the time-based notification jobs (vote reminders, decision release,
+// weekly invite reminder). Dedup-safe, so the app can call it on each poll —
+// this keeps notifications flowing even without a server-side cron.
+export async function runNotificationJobs(supabase: AppSupabaseClient): Promise<void> {
+  try {
+    await supabase.rpc("run_mcc_notification_jobs");
+  } catch {
+    // Best-effort: never block notification delivery on the job run.
+  }
+}
+
 export function canUseWebPush(): boolean {
   return typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
 }
@@ -102,8 +113,8 @@ export async function showBrowserNotification(notification: Pick<Row<"app_notifi
   const options: NotificationOptions = {
     body: notification.body,
     tag: `mcc-${notification.kind}`,
-    icon: "/mcc-logo.png",
-    badge: "/mcc-logo.png",
+    icon: "/mcc-icon.png",
+    badge: "/mcc-icon.png",
     data: { href: notification.href },
   };
 
