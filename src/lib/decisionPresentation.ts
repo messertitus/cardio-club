@@ -299,7 +299,18 @@ function activityLabel(
   }
 
   const sportName = nameForSport(activity.sportId, sportNames);
-  return `${sportName} · ${activity.profileName}`;
+  // The profile name often already contains the sport (e.g. "Schwimmen: Herosee").
+  // Prefer the bare location so the label does not repeat the sport.
+  const place = activity.locationName ?? stripSportPrefix(activity.profileName, sportName);
+  return `${sportName} · ${place}`;
+}
+
+function stripSportPrefix(profileName: string, sportName: string): string {
+  const prefix = `${sportName}:`;
+  if (profileName.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return profileName.slice(prefix.length).trim() || profileName;
+  }
+  return profileName;
 }
 
 function nameForSport(sportId: string | undefined, sportNames: SportNameMap): string {

@@ -75,21 +75,27 @@ self.addEventListener("push", (event) => {
       data: payload.data ?? {},
       tag: payload.tag ?? "mcc-event-update",
       renotify: true,
-      icon: "/mcc-logo.png",
-      badge: "/mcc-logo.png",
+      icon: "/mcc-icon.png",
+      badge: "/mcc-icon.png",
     }),
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const href = (event.notification.data && event.notification.data.href) || "/";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if ("focus" in client) return client.focus();
+        if ("focus" in client) {
+          if ("navigate" in client && href !== "/") {
+            client.navigate(href).catch(() => {});
+          }
+          return client.focus();
+        }
       }
 
-      return clients.openWindow("/");
+      return clients.openWindow(href);
     }),
   );
 });

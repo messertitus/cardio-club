@@ -22,7 +22,7 @@ export async function voteForSport(
   input: VoteForSportInput,
 ): Promise<ServiceResult<Row<"sport_votes">>> {
   if (!isVoteRank(input.rank)) {
-    return fail("Bitte waehle Rang 1, 2 oder 3.");
+    return fail("Bitte wähle Rang 1, 2 oder 3.");
   }
 
   const eventResult = await getVoteEvent(supabase, input.eventId);

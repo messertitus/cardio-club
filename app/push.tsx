@@ -15,7 +15,7 @@ export default function PushScreen() {
     if (!user) return;
     const subscription = await requestWebPushSubscription();
     if (!subscription) {
-      setMessage("Push ist in diesem Browser nicht verfuegbar oder wurde abgelehnt.");
+      setMessage("Push ist in diesem Browser nicht verfügbar oder wurde abgelehnt.");
       return;
     }
 
@@ -32,11 +32,11 @@ export default function PushScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <MccScreen title="Push" kicker="Updates" subtitle="Benachrichtigungen fuer Entscheidungen und Event-Updates." bottomInset={96}>
+      <MccScreen title="Push" kicker="Updates" subtitle="Benachrichtigungen für Entscheidungen und Event-Updates." bottomInset={96}>
         <Reveal>
           <MccCard accent>
             <MccBadge icon="bell-ring-outline">Live Updates</MccBadge>
-            <MccCardTitle>Cardio Club meldet sich, wenn es zaehlt</MccCardTitle>
+            <MccCardTitle>Cardio Club meldet sich, wenn es zählt</MccCardTitle>
             <MccBody muted>Auf dem Handy funktioniert das nach dem Hinzufuegen zum Startbildschirm am zuverlaessigsten.</MccBody>
             {message ? (
               <MccBadge tone={success ? "success" : "danger"} icon={success ? "check-circle-outline" : "alert-circle-outline"}>

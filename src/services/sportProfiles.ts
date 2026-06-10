@@ -158,7 +158,7 @@ export async function upsertSportProfile(
   const sportIds = normalizeSportIds(input.sportIds ?? (input.sportId ? [input.sportId] : []));
   const primarySportId = sportIds[0];
   if (!primarySportId) {
-    return fail("Bitte waehle mindestens eine zugehoerige Sportart aus.");
+    return fail("Bitte wähle mindestens eine zugehörige Sportart aus.");
   }
   if (!input.locationName?.trim()) {
     return fail("Bitte gib einen kurzen Standortnamen ein.");

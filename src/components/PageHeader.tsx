@@ -19,7 +19,7 @@ export function MainHeader({ title, actions }: { title?: string; actions?: React
               Messers Cardio Club
             </Text>
           ) : null}
-          <Text style={[mainStyles.title, !title && mainStyles.titleBrand, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
+          <Text style={[mainStyles.title, !title && mainStyles.titleBrand, { color: theme.mcc.textPrimary }]} numberOfLines={title ? 1 : 2}>
             {title ?? "Messers Cardio Club"}
           </Text>
         </View>

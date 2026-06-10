@@ -6,6 +6,7 @@ import { BottomNav } from "../src/components/BottomNav";
 import { SearchField } from "../src/components/FormControls";
 import { MccBadge, MccScreen, ScreenLoader } from "../src/components/MccDesign";
 import { MainHeader } from "../src/components/PageHeader";
+import { Reveal } from "../src/components/Motion";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
@@ -100,12 +101,12 @@ export default function MembersScreen() {
         </View>
         {message ? <Text style={[styles.notice, { color: theme.mcc.danger }]}>{message}</Text> : null}
         <SearchField value={memberSearch} onChangeText={setMemberSearch} placeholder="Mitglied, Stadt oder Rolle suchen" />
-        {filteredMembers.length === 0 ? <Text style={[styles.detail, { color: theme.mcc.textSecondary }]}>Keine Mitglieder fuer diesen Filter.</Text> : null}
-        {filteredMembers.map((member) => {
+        {filteredMembers.length === 0 ? <Text style={[styles.detail, { color: theme.mcc.textSecondary }]}>Keine Mitglieder für diesen Filter.</Text> : null}
+        {filteredMembers.map((member, memberIndex) => {
           const opened = openedUserId === member.userId;
           return (
+            <Reveal key={member.userId} index={memberIndex}>
             <Pressable
-              key={member.userId}
               style={({ pressed }) => [
                 styles.card,
                 {
@@ -139,16 +140,17 @@ export default function MembersScreen() {
                   <ProfileLine label="Alter" value={member.birthDate ? formatAge(member.birthDate) : "Noch offen"} />
                   <ProfileLine label="Sportprofil-Kontakt" value={formatContactSports(member.contactSports)} />
                   <ProfileLine label="Ideen" value={`${member.stats.ideasSuggested}`} />
-                  <ProfileLine label="Teilnahmen" value={`${member.stats.plannedAttendances} geplant, ${member.stats.actualAttendances} bestaetigt`} />
-                  <ProfileLine label="Verlaesslichkeit" value={member.stats.reliabilityPercent === null ? "Noch offen" : `${member.stats.reliabilityPercent}% (${member.stats.noShows} No-Shows)`} />
+                  <ProfileLine label="Teilnahmen" value={`${member.stats.plannedAttendances} geplant, ${member.stats.actualAttendances} bestätigt`} />
+                  <ProfileLine label="Verlässlichkeit" value={member.stats.reliabilityPercent === null ? "Noch offen" : `${member.stats.reliabilityPercent}% (${member.stats.noShows} No-Shows)`} />
                   {member.role === "admin" && member.userId !== user.id ? (
                     <Pressable style={[styles.contactAdminButton, { backgroundColor: theme.mcc.accentDeep }]} onPress={() => void contactAdmin(member)} disabled={startingChatUserId === member.userId}>
-                      <Text style={styles.contactAdminText}>{startingChatUserId === member.userId ? "Oeffne Chat..." : "Admin kontaktieren"}</Text>
+                      <Text style={styles.contactAdminText}>{startingChatUserId === member.userId ? "Öffne Chat..." : "Admin kontaktieren"}</Text>
                     </Pressable>
                   ) : null}
                 </View>
               ) : null}
             </Pressable>
+            </Reveal>
           );
         })}
       </MccScreen>

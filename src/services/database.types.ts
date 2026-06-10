@@ -896,7 +896,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          kind: "event_created" | "decision_released" | "chat_message";
+          kind: "event_created" | "decision_released" | "chat_message" | "vote_reminder" | "invite_reminder";
           title: string;
           body: string;
           href: string;
@@ -908,7 +908,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
-          kind: "event_created" | "decision_released" | "chat_message";
+          kind: "event_created" | "decision_released" | "chat_message" | "vote_reminder" | "invite_reminder";
           title: string;
           body: string;
           href?: string;
@@ -1088,6 +1088,10 @@ export type Database = {
       event_close_readiness: {
         Args: { target_event_id: string };
         Returns: { has_results: boolean; attendance_reviewed: boolean; can_close: boolean }[];
+      };
+      run_mcc_notification_jobs: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
       };
       set_mcc_event_schedule: {
         Args: { sat_enabled: boolean; sat_time: string; sun_enabled: boolean; sun_time: string };

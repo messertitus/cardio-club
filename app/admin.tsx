@@ -616,7 +616,7 @@ export default function AdminScreen() {
                 <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={() => setIconPickerOpen(true)}>
                   <View style={styles.inlineIconLabel}>
                     <SportIconBadge sport={{ name: sportDraft.name, category: sportDraft.category, intensity_level: sportDraft.intensityLevel, icon_name: sportDraft.iconName }} size={28} />
-                    <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Icon waehlen</Text>
+                    <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Icon wählen</Text>
                   </View>
                 </Pressable>
               </View>
@@ -689,7 +689,7 @@ export default function AdminScreen() {
               <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Sportprofile verwalten</Text>
               <ProfileDraftPreview draft={profileDraft} members={members} editing={Boolean(editingProfileId)} />
 
-              <AdminSectionHeading label="Standort" body="Ort, PLZ und Karte entscheiden spaeter ueber Wege, Wetter und Kapazitaet." />
+              <AdminSectionHeading label="Standort" body="Ort, PLZ und Karte entscheiden später über Wege, Wetter und Kapazität." />
               <View style={styles.formGrid}>
                 <MapLocationPicker
                   label="Standort"
@@ -722,7 +722,7 @@ export default function AdminScreen() {
 
               <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
 
-              <AdminSectionHeading label="Kapazitaet" body="Gruppengroesse, Obergrenzen und passende Event-Zuordnung." />
+              <AdminSectionHeading label="Kapazität" body="Gruppengröße, Obergrenzen und passende Event-Zuordnung." />
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.minimumGroupSize} onChangeText={(minimumGroupSize) => setProfileDraft((draft) => ({ ...draft, minimumGroupSize: minimumGroupSize.replace(/\D/g, '') }))} placeholder="Standort-Minimum, z. B. 4" keyboardType="number-pad" inputMode="numeric" />
                 <AdminInput value={profileDraft.maximumGroupSize} onChangeText={(maximumGroupSize) => setProfileDraft((draft) => ({ ...draft, maximumGroupSize: maximumGroupSize.replace(/\D/g, '') }))} placeholder="Standort-Maximum, z. B. 12" keyboardType="number-pad" inputMode="numeric" />
@@ -771,7 +771,7 @@ export default function AdminScreen() {
                 </View>
               </View>
 
-              <AdminSectionHeading label="Kosten und Verfuegbarkeit" body="Zeitfenster, Reservierung und Kosten fuer die Entscheidung." />
+              <AdminSectionHeading label="Kosten und Verfügbarkeit" body="Zeitfenster, Reservierung und Kosten für die Entscheidung." />
               <View style={styles.formGrid}>
                 <AdminInput value={profileDraft.openingNotes} onChangeText={(openingNotes) => setProfileDraft((draft) => ({ ...draft, openingNotes }))} placeholder="Öffnungszeiten oder Zeitfenster, z. B. ab 18 Uhr frei" multiline />
                 <View style={styles.roleRow}>
@@ -1220,11 +1220,11 @@ function ProfileDraftPreview({ draft, members, editing }: { draft: ProfileDraft;
       <MccBody muted>{[draft.locationName || "Ort offen", draft.locationCity, draft.postalCode].filter(Boolean).join(" - ") || "Standort noch offen"}</MccBody>
       <View style={styles.previewChipRow}>
         <MccBadge tone="neutral">{locationLabel(draft.locationType)}</MccBadge>
-        <MccBadge tone={capacity ? "accent" : "neutral"}>{capacity || "Kapazitaet offen"}</MccBadge>
+        <MccBadge tone={capacity ? "accent" : "neutral"}>{capacity || "Kapazität offen"}</MccBadge>
         <MccBadge tone={draft.apRequirementLevel === "critical" ? "warning" : "neutral"}>AP {apRequirementLabel(draft.apRequirementLevel)}</MccBadge>
         <MccBadge tone={draft.costRequired ? "warning" : "neutral"}>{cost}</MccBadge>
       </View>
-      <MccBody muted>{apMember ? `Profil-AP: ${apMember.displayName}` : "Noch kein Profil-AP ausgewaehlt."}</MccBody>
+      <MccBody muted>{apMember ? `Profil-AP: ${apMember.displayName}` : "Noch kein Profil-AP ausgewählt."}</MccBody>
     </View>
   );
 }

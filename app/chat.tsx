@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { MainHeader } from "../src/components/PageHeader";
+import { Reveal } from "../src/components/Motion";
 import {
   directChatNotificationId,
   isNotificationUnread,
@@ -325,18 +326,18 @@ export default function ChatScreen() {
           ) : null}
 
           {eventChatOpen && eventChannels.length > 0 ? (
-            <View style={styles.channelBlock}>
+            <Reveal index={0} style={styles.channelBlock}>
               <Text style={[styles.channelSectionTitle, { color: theme.mcc.textSecondary }]}>Event & Gruppen</Text>
               <View style={styles.channelRow}>
                 {eventChannels.map((channel) => (
                   <ChannelChip key={channel.id} channel={channel} active={activeChannel?.id === channel.id} onPress={() => void switchChannel(channel)} />
                 ))}
               </View>
-            </View>
+            </Reveal>
           ) : null}
 
           {activeChannel?.kind === "event" && eventChatOpen ? (
-            <View style={[styles.membersPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+            <Reveal index={1} style={[styles.membersPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
               <Pressable style={styles.membersHeader} onPress={() => setMembersOpen((open) => !open)}>
                 <View>
                   <Text style={[styles.membersTitle, { color: theme.mcc.textPrimary }]}>Mitspieler</Text>
@@ -355,7 +356,7 @@ export default function ChatScreen() {
                   ))}
                 </View>
               ) : null}
-            </View>
+            </Reveal>
           ) : null}
 
           {state && !eventChatOpen ? (
@@ -391,7 +392,8 @@ export default function ChatScreen() {
             {messages.map((message) => {
               const mine = message.user_id === user.id;
               return (
-                <SwipeReplyBubble key={message.id} mine={mine} onReply={() => setReplyTo(message)}>
+                <Reveal key={message.id} index={0}>
+                <SwipeReplyBubble mine={mine} onReply={() => setReplyTo(message)}>
                   <View
                     style={[
                       styles.bubble,
@@ -406,6 +408,7 @@ export default function ChatScreen() {
                     <Text style={[styles.body, { color: theme.mcc.textPrimary }]}>{message.body}</Text>
                   </View>
                 </SwipeReplyBubble>
+                </Reveal>
               );
             })}
           </ScrollView>
