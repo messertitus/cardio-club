@@ -14,13 +14,11 @@ export function MainHeader({ title, actions }: { title?: string; actions?: React
       <View style={mainStyles.brand}>
         <Image source={mode === "dark" ? darkLogo : lightLogo} style={mainStyles.logo} resizeMode="contain" />
         <View style={mainStyles.textBlock}>
-          {title ? (
-            <Text style={[mainStyles.kicker, { color: theme.mcc.textSecondary }]} numberOfLines={1}>
-              Messers Cardio Club
-            </Text>
-          ) : null}
-          <Text style={[mainStyles.title, !title && mainStyles.titleBrand, { color: theme.mcc.textPrimary }]} numberOfLines={title ? 1 : 2}>
-            {title ?? "Messers Cardio Club"}
+          <Text style={[mainStyles.kicker, { color: theme.mcc.textSecondary }]} numberOfLines={1}>
+            Messers Cardio Club
+          </Text>
+          <Text style={[mainStyles.title, !title && mainStyles.titleBrand, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
+            {title ?? "MCC"}
           </Text>
         </View>
       </View>
@@ -39,7 +37,7 @@ const mainStyles = StyleSheet.create({
   textBlock: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 12, fontWeight: "800", lineHeight: 16 },
   title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 34 },
-  titleBrand: { fontSize: 22, lineHeight: 27 },
+  titleBrand: { fontSize: 34, fontWeight: "900", letterSpacing: 6, lineHeight: 38 },
   actions: { alignItems: "center", flexDirection: "row", gap: 8 },
 });
 
