@@ -16,12 +16,13 @@ import {
 } from "../src/lib/adminNotifications";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
-import { getEventDate, isDecisionReleaseOpen } from "../src/services/date";
+import { eventDayTitle, formatEventDayDate, getEventDate, getWeekStartDate, isDecisionReleaseOpen } from "../src/services/date";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { supabase } from "../src/lib/supabase";
 import {
   closeDirectChat,
-  getMccEventState,
+  getEventStateById,
+  getMccWeekEvents,
   listChatMessages,
   listDirectChatMessages,
   listDirectChats,
@@ -52,6 +53,11 @@ type EventChatChannel = {
   kind: "event";
   label: string;
   sportId: string | null;
+  eventId: string;
+  clubId: string;
+  activityId: string | null;
+  dayLabel: string;
+  dateLabel: string;
 };
 
 type DirectChatChannel = {
@@ -69,7 +75,7 @@ export default function ChatScreen() {
   const { directChatId } = useLocalSearchParams<{ directChatId?: string }>();
   const { loading, user } = useAuth();
   const { theme } = useTheme();
-  const [state, setState] = useState<MccEventState | null>(null);
+  const [eventStates, setEventStates] = useState<MccEventState[]>([]);
   const [members, setMembers] = useState<MccMember[]>([]);
   const [directChats, setDirectChats] = useState<DirectChatWithNames[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(directChatId ? `direct:${directChatId}` : null);
@@ -86,9 +92,9 @@ export default function ChatScreen() {
   const scale = useRef(new Animated.Value(1)).current;
   const scrollRef = useRef<ScrollView | null>(null);
 
-  const chatPhase = eventChatPhase(state, now);
-  const eventChatOpen = chatPhase === "open";
-  const eventChannels = useMemo(() => (eventChatOpen ? buildEventChannels(state) : []), [eventChatOpen, state]);
+  const openEventStates = useMemo(() => eventStates.filter((entry) => isEventChatOpen(entry, now)), [eventStates, now]);
+  const hasReadyButClosed = useMemo(() => eventStates.some((entry) => eventDecisionReady(entry) && now > eventChatClosesAt(entry)), [eventStates, now]);
+  const eventChannels = useMemo(() => buildEventChannels(openEventStates), [openEventStates]);
   const directChannels = useMemo(() => buildDirectChannels(directChats, user?.id ?? null), [directChats, user?.id]);
   const unreadDirectCount = useMemo(
     () => directChats.filter((chat) => chat.status === "open" && chat.admin_id === user?.id && isNotificationUnread(directChatNotificationId(chat), readMap)).length,
@@ -97,8 +103,19 @@ export default function ChatScreen() {
   const channels = useMemo(() => [...eventChannels, ...directChannels], [directChannels, eventChannels]);
   const activeChannel = activeChannelId ? channels.find((channel) => channel.id === activeChannelId) ?? eventChannels[0] ?? null : eventChannels[0] ?? null;
   const activeDirectChat = activeChannel?.kind === "direct" ? activeChannel.directChat : null;
-  const inputLocked = !activeChannel || (activeChannel.kind === "event" && !eventChatOpen) || activeDirectChat?.status === "closed";
-  const eventMembers = useMemo(() => buildEventMembers(activeChannel, state, members), [activeChannel, members, state]);
+  const inputLocked = !activeChannel || activeDirectChat?.status === "closed";
+  const activeEventState = activeChannel?.kind === "event" ? eventStates.find((entry) => entry.event.id === activeChannel.eventId) ?? null : null;
+  const eventMembers = useMemo(() => buildEventMembers(activeChannel, activeEventState, members), [activeChannel, activeEventState, members]);
+  // Group the open events so Saturday and Sunday appear under their own heading.
+  const channelGroups = useMemo(
+    () =>
+      openEventStates.map((entry) => ({
+        key: entry.event.id,
+        title: `${eventDayTitle(entry.event.event_day)} · ${formatEventDayDate(entry.event.week_start_date, entry.event.event_day)}`,
+        channels: eventChannels.filter((channel) => channel.eventId === entry.event.id),
+      })),
+    [eventChannels, openEventStates],
+  );
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
@@ -109,33 +126,43 @@ export default function ChatScreen() {
     async function loadInitial() {
       if (!user) return;
       const cacheKey = `mcc.chat.${user.id}`;
-      const cached = await readLocalCache<{ state: MccEventState; members: MccMember[]; directChats: DirectChatWithNames[] }>(cacheKey, 15 * 60 * 1000);
+      const cached = await readLocalCache<{ eventStates: MccEventState[]; members: MccMember[]; directChats: DirectChatWithNames[] }>(cacheKey, 15 * 60 * 1000);
       if (cached) {
-        setState(cached.state);
+        setEventStates(cached.eventStates);
         setMembers(cached.members);
         setDirectChats(cached.directChats);
         setBusy(false);
       } else {
         setBusy(true);
       }
-      const [nextState, directResult] = await Promise.all([getMccEventState(supabase, user.id), listDirectChats(supabase)]);
-      if (nextState.error || directResult.error) {
-        if (!cached) setNotice(nextState.error?.message ?? directResult.error?.message ?? "Chat konnte nicht geladen werden.");
+      const [weekResult, directResult] = await Promise.all([getMccWeekEvents(supabase), listDirectChats(supabase)]);
+      if (weekResult.error || directResult.error) {
+        if (!cached) setNotice(weekResult.error?.message ?? directResult.error?.message ?? "Chat konnte nicht geladen werden.");
         setBusy(false);
         return;
       }
 
-      const membersResult = await listMccMembers(supabase, { clubId: nextState.data.clubId });
+      const membersResult = await listMccMembers(supabase, { clubId: weekResult.data.clubId });
       if (membersResult.error) {
         if (!cached) setNotice(membersResult.error.message);
         setBusy(false);
         return;
       }
 
-      void writeLocalCache(cacheKey, { state: nextState.data, members: membersResult.data, directChats: directResult.data });
+      // Load full state for this week's Cardiotage (Saturday + Sunday). Each gets
+      // its own chat once the decision is released; cancelled events are already
+      // excluded by getMccWeekEvents.
+      const currentWeek = getWeekStartDate();
+      const weekRows = weekResult.data.events.filter((row) => row.week_start_date === currentWeek);
+      const stateResults = await Promise.all(weekRows.map((row) => getEventStateById(supabase, user.id, row.id)));
+      const loadedStates = stateResults.flatMap((result) => (result.data ? [result.data] : []));
+      // Local chats: the user's own city plus any event they joined elsewhere.
+      const myCity = membersResult.data.find((member) => member.userId === user.id)?.city ?? null;
+      const nextEventStates = loadedStates.filter((entry) => !myCity || entry.event.city === myCity || entry.myAttendance != null);
 
-      const nextEventChatOpen = isEventChatOpen(nextState.data, Date.now());
-      const nextEventChannels = nextEventChatOpen ? buildEventChannels(nextState.data) : [];
+      void writeLocalCache(cacheKey, { eventStates: nextEventStates, members: membersResult.data, directChats: directResult.data });
+
+      const nextEventChannels = buildEventChannels(nextEventStates.filter((entry) => isEventChatOpen(entry, Date.now())));
       const nextDirectChannels = buildDirectChannels(directResult.data, user.id);
       const nextChannels = [...nextEventChannels, ...nextDirectChannels];
       const requestedChannelId = directChatId ? `direct:${directChatId}` : null;
@@ -145,7 +172,7 @@ export default function ChatScreen() {
         null;
       const nextActiveChannel = nextChannels.find((channel) => channel.id === nextActive) ?? null;
 
-      setState(nextState.data);
+      setEventStates(nextEventStates);
       setMembers(membersResult.data);
       setDirectChats(directResult.data);
       setActiveChannelId(nextActive);
@@ -157,7 +184,7 @@ export default function ChatScreen() {
       if (openedDirect) map = await markNotificationRead(user.id, directChatNotificationId(openedDirect));
       setReadMap(map);
 
-      await loadMessagesForChannel(nextActiveChannel, nextState.data);
+      await loadMessagesForChannel(nextActiveChannel);
     }
 
     void loadInitial();
@@ -168,12 +195,13 @@ export default function ChatScreen() {
   }, [messages.length]);
 
   useEffect(() => {
-    if (eventChatOpen && activeChannel?.kind === "event") {
+    if (activeChannel?.kind === "event") {
       void loadMessagesForChannel(activeChannel);
     }
-  }, [activeChannel?.id, eventChatOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChannel?.id]);
 
-  async function loadMessagesForChannel(channel: ChatChannel | null, nextState: MccEventState | null = state) {
+  async function loadMessagesForChannel(channel: ChatChannel | null) {
     if (!channel) {
       setMessages([]);
       return;
@@ -181,15 +209,9 @@ export default function ChatScreen() {
 
     setMessagesBusy(true);
     if (channel.kind === "event") {
-      if (!nextState || !isEventChatOpen(nextState, Date.now())) {
-        setMessages([]);
-        setMessagesBusy(false);
-        return;
-      }
-
       const result = await listChatMessages(supabase, {
-        clubId: nextState.clubId,
-        eventId: nextState.event.id,
+        clubId: channel.clubId,
+        eventId: channel.eventId,
         sportId: channel.sportId,
       });
       setMessagesBusy(false);
@@ -243,16 +265,14 @@ export default function ChatScreen() {
 
     const result =
       activeChannel.kind === "event"
-        ? state
-          ? await sendChatMessage(supabase, {
-              clubId: state.clubId,
-              eventId: state.event.id,
-              sportId: activeChannel.sportId,
-              userId: user.id,
-              body,
-              replyToMessageId: optimisticMessage.reply_to_message_id,
-            })
-          : { data: null, error: { message: "Event konnte nicht geladen werden." } }
+        ? await sendChatMessage(supabase, {
+            clubId: activeChannel.clubId,
+            eventId: activeChannel.eventId,
+            sportId: activeChannel.sportId,
+            userId: user.id,
+            body,
+            replyToMessageId: optimisticMessage.reply_to_message_id,
+          })
         : await sendDirectChatMessage(supabase, {
             chatId: activeChannel.directChat.id,
             userId: user.id,
@@ -325,23 +345,30 @@ export default function ChatScreen() {
             </View>
           ) : null}
 
-          {eventChatOpen && eventChannels.length > 0 ? (
+          {eventChannels.length > 0 ? (
             <Reveal index={0} style={styles.channelBlock}>
-              <Text style={[styles.channelSectionTitle, { color: theme.mcc.textSecondary }]}>Event & Gruppen</Text>
-              <View style={styles.channelRow}>
-                {eventChannels.map((channel) => (
-                  <ChannelChip key={channel.id} channel={channel} active={activeChannel?.id === channel.id} onPress={() => void switchChannel(channel)} />
-                ))}
-              </View>
+              {channelGroups.map((group) => (
+                <View key={group.key} style={styles.channelGroup}>
+                  <Text style={[styles.channelSectionTitle, { color: theme.mcc.textSecondary }]}>{group.title}</Text>
+                  <View style={styles.channelRow}>
+                    {group.channels.map((channel) => (
+                      <ChannelChip key={channel.id} channel={channel} active={activeChannel?.id === channel.id} onPress={() => void switchChannel(channel)} />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </Reveal>
           ) : null}
 
-          {activeChannel?.kind === "event" && eventChatOpen ? (
+          {activeChannel?.kind === "event" ? (
             <Reveal index={1} style={[styles.membersPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
               <Pressable style={styles.membersHeader} onPress={() => setMembersOpen((open) => !open)}>
                 <View>
                   <Text style={[styles.membersTitle, { color: theme.mcc.textPrimary }]}>Mitspieler</Text>
-                  <Text style={[styles.membersMeta, { color: theme.mcc.textSecondary }]}>{eventMembers.length} im aktuellen Chat</Text>
+                  <Text style={[styles.membersMeta, { color: theme.mcc.textSecondary }]}>
+                    {eventMembers.length} · {activeChannel.dayLabel}
+                    {activeChannel.sportId ? ` · ${activeChannel.label}` : ""}
+                  </Text>
                 </View>
                 <Text style={[styles.itemArrow, { color: theme.mcc.textSecondary }]}>{membersOpen ? "×" : "+"}</Text>
               </Pressable>
@@ -359,11 +386,11 @@ export default function ChatScreen() {
             </Reveal>
           ) : null}
 
-          {state && !eventChatOpen ? (
+          {eventStates.length > 0 && eventChannels.length === 0 ? (
             <View style={[styles.lockedPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
-              <Text style={[styles.lockedTitle, { color: theme.mcc.textPrimary }]}>{chatPhase === "closed" ? "Event-Chat geschlossen" : "Noch geschlossen"}</Text>
+              <Text style={[styles.lockedTitle, { color: theme.mcc.textPrimary }]}>{hasReadyButClosed ? "Event-Chat geschlossen" : "Noch geschlossen"}</Text>
               <Text style={[styles.lockedText, { color: theme.mcc.textSecondary }]}>
-                {chatPhase === "closed"
+                {hasReadyButClosed
                   ? "Dieser Event-Chat wurde einen Tag nach dem Cardiotag geschlossen. Frühere Nachrichten findest du im Verlauf."
                   : "Der Event- und Gruppen-Chat öffnet, sobald die Entscheidung für diesen Cardiotag steht."}
               </Text>
@@ -542,43 +569,53 @@ function ContactMenuButton({ count, open, onPress }: { count: number; open: bool
   );
 }
 
-function buildEventChannels(state: MccEventState | null): EventChatChannel[] {
-  if (!state) return [];
+function buildEventChannels(states: MccEventState[]): EventChatChannel[] {
+  const channels: EventChatChannel[] = [];
 
-  const eventChannel: EventChatChannel = { id: "event", kind: "event", sportId: null, label: "Event" };
-  const activities = (state.eventActivities ?? []).length > 0
-    ? state.eventActivities
-    : state.decision.activities.map((activity) => ({
-        id: activity.profileId,
-        sport_id: activity.sportId,
-        title: activity.profileName,
-      }));
+  for (const state of states) {
+    const dayLabel = eventDayTitle(state.event.event_day);
+    const dateLabel = formatEventDayDate(state.event.week_start_date, state.event.event_day);
+    const base = { eventId: state.event.id, clubId: state.clubId, dayLabel, dateLabel } as const;
 
-  if (activities.length < 2) {
-    return [eventChannel];
+    // Main event channel, labelled by the day so Saturday and Sunday are clearly
+    // distinguishable for members who join on both days.
+    channels.push({ id: `event:${state.event.id}`, kind: "event", sportId: null, activityId: null, label: dayLabel, ...base });
+
+    const activities = (state.eventActivities ?? []).length > 0
+      ? state.eventActivities
+      : state.decision.activities.map((activity) => ({ id: activity.profileId, sport_id: activity.sportId, title: activity.profileName }));
+
+    if (activities.length < 2) continue;
+
+    for (const [index, activity] of activities.entries()) {
+      const sport = state.sports.find((entry) => entry.id === activity.sport_id);
+      // Sub-channels show only the sport, not "Sport · Standort".
+      channels.push({
+        id: `event:${state.event.id}:${activity.id}`,
+        kind: "event",
+        sportId: activity.sport_id,
+        activityId: activity.id,
+        label: sport?.name ?? `Gruppe ${index + 1}`,
+        ...base,
+      });
+    }
   }
 
-  const activityChannels = activities.map<EventChatChannel>((activity, index) => {
-    const sport = state.sports.find((entry) => entry.id === activity.sport_id);
-    return {
-      id: activity.id,
-      kind: "event",
-      sportId: activity.sport_id,
-      label: activity.title || sport?.name || `Gruppe ${index + 1}`,
-    };
-  });
-
-  return [eventChannel, ...activityChannels];
+  return channels;
 }
 
 const CHAT_CLOSE_AFTER_EVENT_MS = 2 * 24 * 60 * 60 * 1000; // through the day after the event
 
 function eventDecisionReady(state: MccEventState): boolean {
-  return (
-    state.event.status === "decided" ||
-    state.event.status === "completed" ||
-    isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day)
-  );
+  // Skipped (too few voters) events never get an event chat.
+  if (state.event.status === "cancelled") return false;
+  // A completed (already played + reviewed) event keeps its chat for the close-out window.
+  if (state.event.status === "completed") return true;
+  // An event with fewer than two distinct voters is treated as skipped (mirrors
+  // cancel_underused_events) — no chat, even before the server cancel job runs.
+  const voterCount = new Set(state.votes.map((vote) => vote.user_id)).size;
+  if (voterCount < 2) return false;
+  return state.event.status === "decided" || isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day);
 }
 
 function eventChatClosesAt(state: MccEventState): number {
@@ -604,7 +641,7 @@ function buildEventMembers(
 ): Array<MccMember & { meta?: string }> {
   if (!state || channel?.kind !== "event") return [];
 
-  const activity = state.eventActivities.find((entry) => entry.id === channel.id || (channel.sportId && entry.sport_id === channel.sportId));
+  const activity = state.eventActivities.find((entry) => entry.id === channel.activityId || (channel.sportId && entry.sport_id === channel.sportId));
   const memberIds =
     activity?.assigned_user_ids && activity.assigned_user_ids.length > 0
       ? new Set(activity.assigned_user_ids)
@@ -634,7 +671,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
   title: { color: "#ffffff", fontSize: 32, fontWeight: "900", letterSpacing: 0 },
   notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "800" },
-  channelBlock: { gap: 8 },
+  channelBlock: { gap: 12 },
+  channelGroup: { gap: 8 },
   channelSectionTitle: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   channelRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   channelChip: {

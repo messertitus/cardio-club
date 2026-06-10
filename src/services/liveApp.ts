@@ -14,7 +14,8 @@ import { listEventVotes, removeVote, voteForSport } from "./votes";
 import type { FairConstellationDecision } from "../lib/fairConstellationSelection";
 import { getWeekStartDate, isDecisionReleaseOpen } from "./date";
 
-export type EventDay = "saturday" | "sunday";
+import type { EventDay } from "./date";
+export type { EventDay };
 
 export type WeekEventRef = { eventId: string; eventDay: EventDay };
 
@@ -175,6 +176,11 @@ async function buildEventState(
   const profileSportIds = [...new Set([...sports.data.map((sport) => sport.id), ...proposals.data.map((proposal) => proposal.sport_id)])];
   const sportProfiles = await listSportProfilesForSports(supabase, profileSportIds);
   if (sportProfiles.error) return { data: null, error: sportProfiles.error };
+  // Keep the sport picker local to the event's city (profiles without a city stay
+  // visible so thin city data does not empty the list).
+  const cityScopedProfiles = event.city
+    ? sportProfiles.data.filter((profile) => !profile.location_city || profile.location_city === event.city)
+    : sportProfiles.data;
 
   const visibleVotes = excludeNonAttendingVotes(votes.data, attendance.data);
   const visibleNoGos = excludeNonAttendingEntries(noGos.data, attendance.data);
@@ -188,7 +194,7 @@ async function buildEventState(
     weekEvents,
     sports: sports.data,
     proposals: proposals.data,
-    sportProfiles: sportProfiles.data,
+    sportProfiles: cityScopedProfiles,
     votes: visibleVotes,
     noGos: visibleNoGos,
     attendance: attendance.data,

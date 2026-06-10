@@ -5,7 +5,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
-import { formatEventDayDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
+import { eventDayTitle, formatEventDayDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
 import {
   canCloseEvent,
   clearMccNoGo,
@@ -20,7 +20,7 @@ import {
 } from "../services";
 import { readLocalCache, writeLocalCache } from "../services/localCache";
 import { categoryLabel, intensityLabel } from "../lib/sportLabels";
-import { FlowStepRail, ScreenLoader, SmoothReveal, WeeklyEventHeroCard } from "./MccDesign";
+import { FlowStepRail, ScreenLoader, SmoothReveal, SpinnerRing, WeeklyEventHeroCard } from "./MccDesign";
 import { MapRouteButton } from "./MapRouteButton";
 import { MotionPressable, Reveal } from "./Motion";
 import { SearchField } from "./FormControls";
@@ -101,21 +101,23 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     void load();
   }, [load]);
 
-  // When the user has just finished this event's input, gently collapse the flow
-  // a moment later so the next open Cardiotag moves into the foreground.
+  // When the user has finished this event's input, gently collapse the flow a
+  // moment later so the next open Cardiotag moves into the foreground. We only
+  // collapse once the user has reached the overview step (pressed "Weiter" or
+  // chose "nicht dabei") — picking a sport must NOT yank the card away mid-vote.
   const userDone = state ? computeUserDone(state, event.eventDay, event.weekStartDate) : false;
   useEffect(() => {
     if (!initRef.current || !state) return;
     const decided = state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
     const past = isEventPast(event.weekStartDate, event.eventDay);
     if (canManage && (decided || past)) return; // managers keep the wrap-up view open
-    if (userDone && !doneRef.current) {
+    if (userDone && manualStep === "overview" && !doneRef.current) {
       doneRef.current = true;
       const timer = setTimeout(() => setExpanded(false), 1100);
       return () => clearTimeout(timer);
     }
     if (!userDone) doneRef.current = false;
-  }, [canManage, event.eventDay, event.weekStartDate, state, userDone]);
+  }, [canManage, event.eventDay, event.weekStartDate, manualStep, state, userDone]);
 
   if (!state) {
     return <ScreenLoader />;
@@ -143,7 +145,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const decisionLocation = isDecided ? (primaryActivity?.locationName ?? null) : null;
   const secondaryDecisionName = isDecided ? (secondaryActivity?.sportName ?? undefined) : undefined;
   const decisionTitle = isDecided && secondaryDecisionName ? `${decisionSportName} + ${secondaryDecisionName}` : decisionSportName;
-  const heroTitle = isDecided ? decisionTitle : event.eventDay === "saturday" ? "Cardio-Samstag" : "Cardio-Sonntag";
+  const heroTitle = isDecided ? decisionTitle : eventDayTitle(event.eventDay);
   const isCurrentWeek = event.weekStartDate <= getWeekStartDate();
   // The week badge distinguishes a decided event (get ready), an upcoming
   // next-week event, and the current week's running vote.
@@ -430,12 +432,26 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
               styles.collapsedIcon,
               { backgroundColor: theme.mcc.surfaceSoft, borderColor: theme.mcc.line },
               attending && { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.strongLine },
+              isDecided && {
+                borderColor: theme.mcc.accent,
+                shadowColor: theme.mcc.accent,
+                shadowOpacity: 0.5,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 0 },
+              },
             ]}
           >
             {isDecided ? (
+              // Decision is in: the chosen sport's symbol, glowing.
               <SportIconBadge sport={state.sports.find((sport) => sport.id === state.decision.selectedSportId)} size={36} />
             ) : attending ? (
-              <MaterialCommunityIcons name="heart-pulse" size={22} color={theme.mcc.accent} />
+              // Voting in progress: a vote icon inside a loading ring until the decision lands.
+              <>
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <SpinnerRing size={44} duration={1500} stroke={2} />
+                </View>
+                <MaterialCommunityIcons name="vote-outline" size={20} color={theme.mcc.accent} />
+              </>
             ) : (
               <MaterialCommunityIcons name="calendar-blank-outline" size={20} color={theme.mcc.textMuted} />
             )}
@@ -465,6 +481,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         }
         status={phaseLabel}
         dateLabel={formatEventDayDate(event.weekStartDate, event.eventDay)}
+        cityLabel={state.event.city ?? undefined}
         flowTarget={heroFlowTarget}
         weekTag={weekTag}
         chips={[

@@ -475,7 +475,7 @@ export function FlowStepRail({
   );
 }
 
-export function SundayRibbon({ date }: { date: string }) {
+export function SundayRibbon({ date, city }: { date: string; city?: string }) {
   const { theme } = useTheme();
   return (
     <View style={[styles.sundayRibbon, { backgroundColor: theme.mcc.accentFaint, borderColor: theme.mcc.strongLine }]}>
@@ -483,6 +483,12 @@ export function SundayRibbon({ date }: { date: string }) {
       <View style={styles.flexText}>
         <Text style={[styles.sundayLabel, { color: theme.mcc.accent }]}>Cardiotag</Text>
         <Text style={[styles.sundayDate, { color: theme.mcc.textPrimary }]}>{date}</Text>
+        {city ? (
+          <View style={styles.sundayCityRow}>
+            <MaterialCommunityIcons name="map-marker" size={13} color={theme.mcc.textSecondary} />
+            <Text style={[styles.sundayCity, { color: theme.mcc.textSecondary }]}>{city}</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -496,6 +502,7 @@ export function WeeklyEventHeroCard({
   ctaLabel,
   onCtaPress,
   dateLabel,
+  cityLabel,
   flowTarget,
   weekTag,
 }: {
@@ -506,6 +513,7 @@ export function WeeklyEventHeroCard({
   ctaLabel?: string;
   onCtaPress?: () => void;
   dateLabel?: string;
+  cityLabel?: string;
   flowTarget?: { label: string; icon?: IconName; tone?: Tone };
   weekTag?: { label: string; icon: IconName };
 }) {
@@ -524,7 +532,7 @@ export function WeeklyEventHeroCard({
         </View>
         <CardioRing label="Pulse" value="MCC" />
       </View>
-      {dateLabel ? <SundayRibbon date={dateLabel} /> : null}
+      {dateLabel ? <SundayRibbon date={dateLabel} city={cityLabel} /> : null}
       <View style={styles.metricGrid}>
         <HeroMetric label={status} icon="check-decagram" tone="success" />
         {chips.map((chip) => (
@@ -1026,6 +1034,8 @@ const styles = StyleSheet.create({
   sundayRibbon: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
   sundayLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase" },
   sundayDate: { fontSize: 15, fontWeight: "900", lineHeight: 20 },
+  sundayCityRow: { alignItems: "center", flexDirection: "row", gap: 3, marginTop: 2 },
+  sundayCity: { fontSize: 13, fontWeight: "800" },
   weeklyHero: { overflow: "visible", paddingTop: 18 },
   weeklyTop: { alignItems: "flex-start", flexDirection: "row", gap: 14, justifyContent: "space-between" },
   weeklyTitle: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 34, marginTop: 8 },

@@ -12,15 +12,18 @@ import { SPORT_ICON_OPTIONS, SportIconBadge } from "../src/components/SportIcon"
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
+import { WEEKDAY_LABELS, WEEKDAY_ORDER, type EventDay } from "../src/services/date";
 import {
   deactivateMccMember,
   deleteSportProfile,
   deleteMccSport,
-  getMccEventSchedule,
+  getMccEventDays,
   getMccEventState,
   isCurrentUserAdmin,
   isValidTime,
-  setMccEventSchedule,
+  listMemberCities,
+  setActiveCities,
+  setMccEventDays,
   listInvitationTree,
   listMccMembers,
   listMccSports,
@@ -35,7 +38,7 @@ import {
   upsertMccSport,
   upsertSportProfile,
   type ClubMemberRole,
-  type EventSchedule,
+  type MemberCity,
   type InvitationTreeEntry,
   type MccEventState,
   type MccMember,
@@ -65,7 +68,13 @@ const defaultSportCategoryOptions = [
   "unbekannt",
 ];
 
-type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule";
+type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule" | "cities";
+
+type DayRow = { weekday: EventDay; enabled: boolean; time: string };
+
+function defaultDayRows(): DayRow[] {
+  return WEEKDAY_ORDER.map((weekday) => ({ weekday, enabled: false, time: weekday === "sunday" ? "15:00" : "14:00" }));
+}
 type PendingConfirm = { title: string; detail: string; onConfirm: () => void } | null;
 type InvitationTreeNode = {
   id: string;
@@ -200,8 +209,11 @@ export default function AdminScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  const [schedule, setSchedule] = useState<EventSchedule | null>(null);
+  const [eventDays, setEventDays] = useState<DayRow[]>(() => defaultDayRows());
   const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [memberCities, setMemberCities] = useState<MemberCity[]>([]);
+  const [activeCitySet, setActiveCitySet] = useState<Set<string>>(new Set());
+  const [citiesBusy, setCitiesBusy] = useState(false);
 
   const profilesBySport = useMemo(() => {
     const query = profileSearch.trim().toLowerCase();
@@ -291,24 +303,63 @@ export default function AdminScreen() {
       sportIds: current.sportIds.length > 0 ? current.sportIds : sportsResult.data[0]?.id ? [sportsResult.data[0].id] : [],
     }));
 
-    const scheduleResult = await getMccEventSchedule(supabase, eventResult.data.clubId);
-    if (scheduleResult.data) setSchedule(scheduleResult.data);
+    const daysResult = await getMccEventDays(supabase, eventResult.data.clubId);
+    if (daysResult.data) {
+      const byWeekday = new Map(daysResult.data.map((entry) => [entry.weekday, entry.time]));
+      setEventDays(defaultDayRows().map((row) => (byWeekday.has(row.weekday) ? { ...row, enabled: true, time: byWeekday.get(row.weekday) ?? row.time } : row)));
+    }
+
+    const citiesResult = await listMemberCities(supabase);
+    if (citiesResult.data) {
+      setMemberCities(citiesResult.data);
+      setActiveCitySet(new Set(citiesResult.data.filter((entry) => entry.active).map((entry) => entry.city)));
+    }
   }
 
-  async function saveSchedule() {
-    if (!schedule) return;
-    if (!isValidTime(schedule.saturdayTime) || !isValidTime(schedule.sundayTime)) {
+  function toggleActiveCity(cityName: string) {
+    setActiveCitySet((current) => {
+      const next = new Set(current);
+      if (next.has(cityName)) next.delete(cityName);
+      else next.add(cityName);
+      return next;
+    });
+  }
+
+  async function saveActiveCities() {
+    setCitiesBusy(true);
+    const result = await setActiveCities(supabase, [...activeCitySet]);
+    setCitiesBusy(false);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    setMemberCities((current) => current.map((entry) => ({ ...entry, active: activeCitySet.has(entry.city) })));
+    setMessage("Aktive Städte gespeichert. Events werden ab der nächsten Bereitstellung pro aktiver Stadt erzeugt.");
+  }
+
+  function toggleEventDay(weekday: EventDay) {
+    setEventDays((current) => current.map((row) => (row.weekday === weekday ? { ...row, enabled: !row.enabled } : row)));
+  }
+
+  function setEventDayTime(weekday: EventDay, time: string) {
+    const sanitized = time.replace(/[^\d:]/g, "").slice(0, 5);
+    setEventDays((current) => current.map((row) => (row.weekday === weekday ? { ...row, time: sanitized } : row)));
+  }
+
+  async function saveEventDays() {
+    const enabled = eventDays.filter((row) => row.enabled);
+    if (enabled.some((row) => !isValidTime(row.time))) {
       setMessage("Bitte gültige Uhrzeiten im Format HH:MM eingeben.");
       return;
     }
     setScheduleBusy(true);
-    const result = await setMccEventSchedule(supabase, schedule);
+    const result = await setMccEventDays(supabase, enabled.map((row) => ({ weekday: row.weekday, time: row.time })));
     setScheduleBusy(false);
     if (result.error) {
       setMessage(result.error.message);
       return;
     }
-    setMessage("Eventzeiten gespeichert. Sie gelten ab der aktuellen Woche.");
+    setMessage("Eventtage gespeichert. Sie gelten ab der nächsten Bereitstellung.");
   }
 
   useEffect(() => {
@@ -589,7 +640,8 @@ export default function AdminScreen() {
             <View style={styles.adminGrid}>
               <AdminMenuCard title="Sportarten" body="Abstrakte Sportarten anlegen, ändern und löschen" onPress={() => setActiveSection("sports")} />
               <AdminMenuCard title="Sportprofile" body="Orte, Profilkontakte, Wetter und Gruppengrößen pflegen" onPress={() => setActiveSection("profiles")} />
-              <AdminMenuCard title="Eventzeiten" body="Uhrzeiten der Cardiotage und ob sie stattfinden" onPress={() => setActiveSection("schedule")} />
+              <AdminMenuCard title="Eventtage" body="Wochentage und Uhrzeiten der Cardiotage" onPress={() => setActiveSection("schedule")} />
+              <AdminMenuCard title="Aktive Städte" body="In welchen Städten Events laufen" onPress={() => setActiveSection("cities")} />
               <AdminMenuCard title="Mitglieder" body="Rechte und Deaktivierung" onPress={() => setActiveSection("members")} />
               <AdminMenuCard title="Einladungsbaum" body="Sehen, wer wen eingeladen hat" onPress={() => setActiveSection("inviteTree")} />
               <AdminMenuCard title="Namensanfragen" body={`${nameRequests.length} offene Freigaben`} onPress={() => setActiveSection("nameRequests")} />
@@ -1041,32 +1093,22 @@ export default function AdminScreen() {
             </View>
           ) : null}
 
-          {isAdmin && activeSection === "schedule" && schedule ? (
+          {isAdmin && activeSection === "schedule" ? (
             <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
-              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Eventzeiten</Text>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Eventtage</Text>
               <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
-                Lege fest, wann die Cardiotage starten und ob sie stattfinden. Gilt ab der aktuellen Woche – der Algorithmus nutzt die Uhrzeit automatisch (Wetter zur Eventzeit).
+                Wähle, an welchen Wochentagen Cardiotage stattfinden und wann sie starten. Gilt ab der nächsten Bereitstellung – der Algorithmus nutzt die Uhrzeit automatisch (Wetter zur Eventzeit). Die Abstimmung läuft bis 3 Tage vor dem Event.
               </Text>
 
-              {(
-                [
-                  { key: "saturday" as const, label: "Samstag", enabled: schedule.saturdayEnabled, time: schedule.saturdayTime },
-                  { key: "sunday" as const, label: "Sonntag", enabled: schedule.sundayEnabled, time: schedule.sundayTime },
-                ]
-              ).map((day) => (
-                <View key={day.key} style={[styles.scheduleRow, { borderTopColor: theme.mcc.line }]}>
+              {eventDays.map((day) => (
+                <View key={day.weekday} style={[styles.scheduleRow, { borderTopColor: theme.mcc.line }]}>
                   <View style={styles.scheduleInfo}>
-                    <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{day.label}</Text>
+                    <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{WEEKDAY_LABELS[day.weekday]}</Text>
                     <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>{day.enabled ? "findet statt" : "deaktiviert"}</Text>
                   </View>
                   <TextInput
                     value={day.time}
-                    onChangeText={(value) => {
-                      const sanitized = value.replace(/[^\d:]/g, "").slice(0, 5);
-                      setSchedule((current) =>
-                        current ? (day.key === "saturday" ? { ...current, saturdayTime: sanitized } : { ...current, sundayTime: sanitized }) : current,
-                      );
-                    }}
+                    onChangeText={(value) => setEventDayTime(day.weekday, value)}
                     placeholder="HH:MM"
                     placeholderTextColor={theme.mcc.textMuted}
                     editable={day.enabled}
@@ -1076,19 +1118,52 @@ export default function AdminScreen() {
                   />
                   <Pressable
                     style={[styles.roleButton, day.enabled ? { backgroundColor: theme.mcc.accentDeep } : { backgroundColor: theme.mcc.surface, borderWidth: 1, borderColor: theme.mcc.line }]}
-                    onPress={() =>
-                      setSchedule((current) =>
-                        current ? (day.key === "saturday" ? { ...current, saturdayEnabled: !current.saturdayEnabled } : { ...current, sundayEnabled: !current.sundayEnabled }) : current,
-                      )
-                    }
+                    onPress={() => toggleEventDay(day.weekday)}
                   >
                     <Text style={[styles.roleText, { color: day.enabled ? "#FFFFFF" : theme.mcc.textPrimary }]}>{day.enabled ? "Aktiv" : "Inaktiv"}</Text>
                   </Pressable>
                 </View>
               ))}
 
-              <Pressable style={[styles.roleButton, styles.scheduleSave, { backgroundColor: theme.mcc.accentDeep }, scheduleBusy && { opacity: 0.5 }]} disabled={scheduleBusy} onPress={() => void saveSchedule()}>
-                <Text style={[styles.roleText, { color: "#FFFFFF" }]}>{scheduleBusy ? "Speichern…" : "Zeitplan speichern"}</Text>
+              <Pressable style={[styles.roleButton, styles.scheduleSave, { backgroundColor: theme.mcc.accentDeep }, scheduleBusy && { opacity: 0.5 }]} disabled={scheduleBusy} onPress={() => void saveEventDays()}>
+                <Text style={[styles.roleText, { color: "#FFFFFF" }]}>{scheduleBusy ? "Speichern…" : "Eventtage speichern"}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {isAdmin && activeSection === "cities" ? (
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Aktive Städte</Text>
+              <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
+                Events laufen nur in aktiven Städten. In der Testphase ist das nur Konstanz. Hier siehst du alle Städte, aus denen es Mitglieder gibt – aktiviere eine Stadt, damit dort Cardiotage erzeugt werden.
+              </Text>
+
+              {memberCities.length === 0 ? (
+                <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Noch keine Städte hinterlegt.</Text>
+              ) : null}
+
+              {memberCities.map((entry) => {
+                const active = activeCitySet.has(entry.city);
+                return (
+                  <View key={entry.city} style={[styles.scheduleRow, { borderTopColor: theme.mcc.line }]}>
+                    <View style={styles.scheduleInfo}>
+                      <Text style={[styles.name, { color: theme.mcc.textPrimary }]}>{entry.city}</Text>
+                      <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>
+                        {entry.memberCount} {entry.memberCount === 1 ? "Mitglied" : "Mitglieder"}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={[styles.roleButton, active ? { backgroundColor: theme.mcc.accentDeep } : { backgroundColor: theme.mcc.surface, borderWidth: 1, borderColor: theme.mcc.line }]}
+                      onPress={() => toggleActiveCity(entry.city)}
+                    >
+                      <Text style={[styles.roleText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{active ? "Aktiv" : "Inaktiv"}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+
+              <Pressable style={[styles.roleButton, styles.scheduleSave, { backgroundColor: theme.mcc.accentDeep }, citiesBusy && { opacity: 0.5 }]} disabled={citiesBusy} onPress={() => void saveActiveCities()}>
+                <Text style={[styles.roleText, { color: "#FFFFFF" }]}>{citiesBusy ? "Speichern…" : "Aktive Städte speichern"}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -1306,7 +1381,8 @@ function sectionTitle(section: AdminSection): string {
   if (section === "members") return "Mitglieder";
   if (section === "inviteTree") return "Einladungsbaum";
   if (section === "nameRequests") return "Namensanfragen";
-  if (section === "schedule") return "Eventzeiten";
+  if (section === "schedule") return "Eventtage";
+  if (section === "cities") return "Aktive Städte";
   return "Club steuern";
 }
 
@@ -1318,7 +1394,8 @@ function isAdminSection(value: string): value is AdminSection {
     value === "members" ||
     value === "inviteTree" ||
     value === "nameRequests" ||
-    value === "schedule"
+    value === "schedule" ||
+    value === "cities"
   );
 }
 
