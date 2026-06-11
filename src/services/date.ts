@@ -65,8 +65,9 @@ export function eventDayTitle(eventDay: EventDay): string {
 
 // The real calendar date of the event, derived from the week's Monday and the
 // event day. Independent of any stored starts_at, so the weekday label is
-// always correct. Decision releases 3 days before the event (Saturday →
-// Wednesday, Sunday → Thursday — unchanged for the existing two days).
+// always correct. Decision releases 2 days before the event (Saturday →
+// Thursday, Sunday → Friday) so it sits closer to the weather forecast; voting
+// runs from the week's Monday until the day before the decision.
 export function getEventDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
   return addUtcDays(weekStartDate, DAY_OFFSET[eventDay]);
 }
@@ -80,7 +81,7 @@ export function isEventPast(weekStartDate: string, eventDay: EventDay = "sunday"
 }
 
 export function getDecisionReleaseDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
-  return addUtcDays(weekStartDate, DAY_OFFSET[eventDay] - 3);
+  return addUtcDays(weekStartDate, DAY_OFFSET[eventDay] - 2);
 }
 
 export function isDecisionReleaseOpen(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {

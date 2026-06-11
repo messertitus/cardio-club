@@ -8,28 +8,27 @@ describe("MCC event timing", () => {
     expect(getWeekStartDate(new Date("2026-06-14T10:00:00Z"))).toBe("2026-06-08");
   });
 
-  it("Sunday event: voting Monday through Wednesday, decision Thursday", () => {
-    expect(getDecisionReleaseDate("2026-06-08").toISOString().slice(0, 10)).toBe("2026-06-11");
-    expect(getDecisionReleaseDate("2026-06-08", "sunday").toISOString().slice(0, 10)).toBe("2026-06-11");
-    expect(isVotingInputOpen("2026-06-08", "sunday", new Date("2026-06-10T12:00:00Z"))).toBe(true);
-    expect(isVotingInputOpen("2026-06-08", "sunday", new Date("2026-06-11T00:00:00Z"))).toBe(false);
-    expect(isDecisionReleaseOpen("2026-06-08", "sunday", new Date("2026-06-11T00:00:00Z"))).toBe(true);
+  it("Sunday event: decision 2 days before (Friday), voting Mon–Thu", () => {
+    expect(getDecisionReleaseDate("2026-06-08").toISOString().slice(0, 10)).toBe("2026-06-12");
+    expect(getDecisionReleaseDate("2026-06-08", "sunday").toISOString().slice(0, 10)).toBe("2026-06-12");
+    // Thursday still open, Friday (decision) closed
+    expect(isVotingInputOpen("2026-06-08", "sunday", new Date("2026-06-11T12:00:00Z"))).toBe(true);
+    expect(isVotingInputOpen("2026-06-08", "sunday", new Date("2026-06-12T00:00:00Z"))).toBe(false);
+    expect(isDecisionReleaseOpen("2026-06-08", "sunday", new Date("2026-06-12T00:00:00Z"))).toBe(true);
   });
 
-  it("any weekday works: Friday event decides 3 days earlier (Tuesday)", () => {
-    expect(getDecisionReleaseDate("2026-06-08", "friday").toISOString().slice(0, 10)).toBe("2026-06-09");
-    expect(isVotingInputOpen("2026-06-08", "friday", new Date("2026-06-08T12:00:00Z"))).toBe(true);
-    expect(isVotingInputOpen("2026-06-08", "friday", new Date("2026-06-09T00:00:00Z"))).toBe(false);
-    expect(isDecisionReleaseOpen("2026-06-08", "friday", new Date("2026-06-09T00:00:00Z"))).toBe(true);
+  it("any weekday: Friday event decides 2 days before (Wednesday)", () => {
+    expect(getDecisionReleaseDate("2026-06-08", "friday").toISOString().slice(0, 10)).toBe("2026-06-10");
+    expect(isVotingInputOpen("2026-06-08", "friday", new Date("2026-06-09T12:00:00Z"))).toBe(true);
+    expect(isVotingInputOpen("2026-06-08", "friday", new Date("2026-06-10T00:00:00Z"))).toBe(false);
+    expect(isDecisionReleaseOpen("2026-06-08", "friday", new Date("2026-06-10T00:00:00Z"))).toBe(true);
   });
 
-  it("Saturday event: voting Sunday through Tuesday, decision Wednesday", () => {
-    expect(getDecisionReleaseDate("2026-06-08", "saturday").toISOString().slice(0, 10)).toBe("2026-06-10");
-    // Sunday before the week start (2026-06-07) is already open
-    expect(isVotingInputOpen("2026-06-08", "saturday", new Date("2026-06-07T12:00:00Z"))).toBe(true);
-    expect(isVotingInputOpen("2026-06-08", "saturday", new Date("2026-06-09T12:00:00Z"))).toBe(true);
-    // Wednesday: voting closed, decision open
-    expect(isVotingInputOpen("2026-06-08", "saturday", new Date("2026-06-10T00:00:00Z"))).toBe(false);
-    expect(isDecisionReleaseOpen("2026-06-08", "saturday", new Date("2026-06-10T00:00:00Z"))).toBe(true);
+  it("Saturday event: decision 2 days before (Thursday), voting Mon–Wed", () => {
+    expect(getDecisionReleaseDate("2026-06-08", "saturday").toISOString().slice(0, 10)).toBe("2026-06-11");
+    expect(isVotingInputOpen("2026-06-08", "saturday", new Date("2026-06-10T12:00:00Z"))).toBe(true);
+    // Thursday: voting closed, decision open
+    expect(isVotingInputOpen("2026-06-08", "saturday", new Date("2026-06-11T00:00:00Z"))).toBe(false);
+    expect(isDecisionReleaseOpen("2026-06-08", "saturday", new Date("2026-06-11T00:00:00Z"))).toBe(true);
   });
 });
