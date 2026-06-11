@@ -6,7 +6,7 @@ import { MapRouteButton } from "../../../src/components/MapRouteButton";
 import { InlineError, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader, SundayRibbon } from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
 import { supabase } from "../../../src/lib/supabase";
-import { formatCardioSunday, getCardioSundayDate } from "../../../src/services/date";
+import { formatBerlinDateTime, formatCardioSunday, getCardioSundayDate } from "../../../src/services/date";
 import {
   createWeeklyEvent,
   getCurrentWeeklyEvent,
@@ -88,7 +88,7 @@ export default function CurrentWeeklyEventScreen() {
             <MccCardTitle>{event.decision_type ? eventTypeLabel(event.decision_type) : event.selected_sport_id ? "Sportart entschieden" : "Noch offen"}</MccCardTitle>
             <SundayRibbon date={formatCardioSunday(event.starts_at ?? event.week_start_date)} />
             {event.location ? <MccBody>Ort: {event.location}</MccBody> : null}
-            {event.starts_at ? <MccBody muted>Zeit: {new Date(event.starts_at).toLocaleString("de-DE")}</MccBody> : null}
+            {event.starts_at ? <MccBody muted>Zeit: {formatBerlinDateTime(event.starts_at)}</MccBody> : null}
             {event.notes ? <MccBody muted>{event.notes}</MccBody> : null}
             {eventActivities.length > 0 ? (
               <>

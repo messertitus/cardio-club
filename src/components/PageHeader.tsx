@@ -32,12 +32,12 @@ export function MainHeader({ title, actions }: { title?: string; actions?: React
 
 const mainStyles = StyleSheet.create({
   header: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" },
-  brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 10, minWidth: 0 },
-  logo: { height: 44, width: 44 },
+  brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 12, minWidth: 0 },
+  logo: { height: 60, width: 60 },
   textBlock: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 12, fontWeight: "800", lineHeight: 16 },
-  title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 34 },
-  titleBrand: { fontSize: 34, fontWeight: "900", letterSpacing: 6, lineHeight: 38 },
+  title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 40 },
+  titleBrand: { fontSize: 34, fontWeight: "900", letterSpacing: 6, lineHeight: 44 },
   actions: { alignItems: "center", flexDirection: "row", gap: 8 },
 });
 
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   textBlock: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 12, fontWeight: "800", lineHeight: 16 },
   titleRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 34 },
+  title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 40 },
   titleMeta: { borderRadius: 999, fontSize: 13, fontWeight: "900", lineHeight: 18, opacity: 0.72 },
   actions: { alignItems: "center", flexDirection: "row", gap: 8 },
 });

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
-import { MapLocationPicker, SearchField } from "../src/components/FormControls";
+import { MapLocationPicker, SearchField, SegmentedControl } from "../src/components/FormControls";
 import { MapRouteButton } from "../src/components/MapRouteButton";
 import { MccBadge, MccBody, MccCardTitle, MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
@@ -50,7 +50,6 @@ import {
 
 const roles: ClubMemberRole[] = ["member", "mod", "admin"];
 const intensityOptions: SportIntensityLevel[] = ["low", "medium", "high"];
-const locationOptions: SportLocationType[] = ["indoor", "outdoor", "water", "field", "flexible"];
 const apRequirementOptions: ApRequirementLevel[] = ["none", "required", "critical"];
 const defaultSportCategoryOptions = [
   "ballsport",
@@ -629,7 +628,7 @@ export default function AdminScreen() {
     <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.shell} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <PageHeader kicker="Admin" title={sectionTitle(activeSection)} onBack={activeSection === "overview" ? undefined : () => setActiveSection("overview")} />
 
           {message ? <Text style={styles.notice}>{message}</Text> : null}
@@ -772,7 +771,18 @@ export default function AdminScreen() {
                 }
               />
 
-              <ChipGroup label="Profilart" options={locationOptions} selected={profileDraft.locationType} onSelect={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))} />
+              <SegmentedControl
+                label="Profilart"
+                value={profileDraft.locationType}
+                onChange={(locationType) => setProfileDraft((draft) => ({ ...draft, locationType }))}
+                options={[
+                  { value: "outdoor", label: "Outdoor", helper: "unter freiem Himmel" },
+                  { value: "indoor", label: "Indoor", helper: "wetterunabhängig" },
+                  { value: "water", label: "Wasser", helper: "See, Bad, Fluss" },
+                  { value: "field", label: "Feld", helper: "Platz oder Spielfeld" },
+                  { value: "flexible", label: "Flexibel", helper: "mehrere Varianten" },
+                ]}
+              />
 
               <AdminSectionHeading label="Kapazität" body="Gruppengröße, Obergrenzen und passende Event-Zuordnung." />
               <View style={styles.formGrid}>
@@ -1097,7 +1107,7 @@ export default function AdminScreen() {
             <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
               <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Eventtage</Text>
               <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
-                Wähle, an welchen Wochentagen Cardiotage stattfinden und wann sie starten. Gilt ab der nächsten Bereitstellung – der Algorithmus nutzt die Uhrzeit automatisch (Wetter zur Eventzeit). Die Abstimmung läuft bis 3 Tage vor dem Event.
+                Wähle, an welchen Wochentagen Cardiotage stattfinden und wann sie starten. Gilt ab der nächsten Bereitstellung – der Algorithmus nutzt die Uhrzeit automatisch (Wetter zur Eventzeit). Die Auswertung kommt 2 Tage vor dem Event, davor wird 4 Tage abgestimmt.
               </Text>
 
               {eventDays.map((day) => (
@@ -1663,7 +1673,7 @@ function isIntensity(value: SportIntensityLevel | SportLocationType): value is S
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   shell: { flex: 1 },
-  content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  content: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 },
   headerText: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },

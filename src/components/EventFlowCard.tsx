@@ -5,7 +5,20 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
-import { eventDayTitle, formatEventDayDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
+import {
+  eventDayTitle,
+  formatBerlinDate,
+  formatBerlinTime,
+  formatEventDayDate,
+  getVotingOpenDate,
+  getWeekStartDate,
+  isDecisionReleaseOpen,
+  isDecisionReleaseOpenAt,
+  isEventPast,
+  isVotingInputOpen,
+  isVotingOpenAt,
+  votingOpensFrom,
+} from "../services/date";
 import {
   canCloseEvent,
   clearMccNoGo,
@@ -86,7 +99,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     void writeLocalCache(cacheKey, result.data);
     initExpansion(result.data);
     const decided =
-      result.data.event.status === "decided" || result.data.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+      result.data.event.status === "decided" ||
+      result.data.event.status === "completed" ||
+      (result.data.event.starts_at ? isDecisionReleaseOpenAt(result.data.event.starts_at) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay));
     const past = isEventPast(event.weekStartDate, event.eventDay);
     const manage = await canCloseEvent(supabase, event.id, userId);
     const isManager = Boolean(manage.data);
@@ -108,7 +123,10 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const userDone = state ? computeUserDone(state, event.eventDay, event.weekStartDate) : false;
   useEffect(() => {
     if (!initRef.current || !state) return;
-    const decided = state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+    const decided =
+      state.event.status === "decided" ||
+      state.event.status === "completed" ||
+      (state.event.starts_at ? isDecisionReleaseOpenAt(state.event.starts_at) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay));
     const past = isEventPast(event.weekStartDate, event.eventDay);
     if (canManage && (decided || past)) return; // managers keep the wrap-up view open
     if (userDone && manualStep === "overview" && !doneRef.current) {
@@ -123,11 +141,22 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     return <ScreenLoader />;
   }
 
-  const isDecided =
-    state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
-  const votingInputOpen = isVotingInputOpen(event.weekStartDate, event.eventDay);
+  const startsAt = state.event.starts_at;
+  const decisionOpen = startsAt ? isDecisionReleaseOpenAt(startsAt) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+  const isDecided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
+  const votingInputOpen = startsAt ? isVotingOpenAt(startsAt) : isVotingInputOpen(event.weekStartDate, event.eventDay);
+  const votingOpensAt = startsAt ? votingOpensFrom(startsAt) : getVotingOpenDate(event.weekStartDate, event.eventDay);
+  // Show the exact open time only when it comes from a real event start (Berlin tz);
+  // the date-only fallback would otherwise show a meaningless midnight time.
+  const votingOpensLabel = startsAt ? `${formatBerlinDate(votingOpensAt)} um ${formatBerlinTime(votingOpensAt)}` : formatBerlinDate(votingOpensAt);
   const eventPast = isEventPast(event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
+  // Date label with the event's start time (Berlin), e.g. "Sonntag, 14. Juni · 15:00 Uhr".
+  const eventDateLabel = formatEventDayDate(event.weekStartDate, event.eventDay);
+  const eventDateTimeLabel = startsAt ? `${eventDateLabel} · ${formatBerlinTime(startsAt)} Uhr` : eventDateLabel;
+  // Shown in advance but voting has not opened yet → "On Hold": no input panels,
+  // no spinning rings, just a calm placeholder until voting opens.
+  const onHold = !isDecided && !eventPast && !votingInputOpen;
   const naturalStep: FlowStep = isDecided
     ? "overview"
     : !state.myAttendance
@@ -157,7 +186,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const goingCount = state.attendance.filter((entry) => entry.status === "going").length;
   const maybeCount = state.attendance.filter((entry) => entry.status === "maybe").length;
   const votersCount = new Set(state.votes.map((vote) => vote.user_id)).size;
-  const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "Bald";
+  const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "On Hold";
   const myFairness = state.decision.viewerFairness ?? null;
   const isExpanded = expanded ?? !userDone;
   const attending = state.myAttendance?.status === "going" || state.myAttendance?.status === "maybe";
@@ -480,10 +509,11 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
             : "Stimmt ab, der Club entscheidet fair."
         }
         status={phaseLabel}
-        dateLabel={formatEventDayDate(event.weekStartDate, event.eventDay)}
+        dateLabel={eventDateTimeLabel}
         cityLabel={state.event.city ?? undefined}
         flowTarget={heroFlowTarget}
         weekTag={weekTag}
+        paused={onHold}
         chips={[
           { label: `${goingCount} + ${maybeCount} Dabei`, icon: "account-group-outline", tone: "neutral" },
           { label: `${votersCount} abgestimmt`, icon: "vote-outline", tone: "accent" },
@@ -506,6 +536,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
       {!eventPast ? (
         <FlowStepRail
           completed={isDecided}
+          paused={onHold}
           activeIndex={["attendance", "sports", "overview"].indexOf(activeStep)}
           onStepPress={(stepIndex) => {
             // Decided events no longer change votes — the rail just reveals the
@@ -530,7 +561,19 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         </View>
       ) : null}
 
-      {myFairness && myFairness.active ? (
+      {onHold ? (
+        <View style={[styles.onHoldCard, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
+          <View style={[styles.onHoldBadge, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.surface }]}>
+            <MaterialCommunityIcons name="pause" size={16} color={theme.mcc.accent} />
+            <Text style={[styles.onHoldBadgeText, { color: theme.mcc.accent }]}>On Hold</Text>
+          </View>
+          <Text style={[styles.body, styles.onHoldText, { color: theme.mcc.textSecondary }]}>
+            Dieser Cardiotag ist schon sichtbar. Die Abstimmung öffnet am {votingOpensLabel} – dann kannst du Teilnahme und Sportarten wählen.
+          </Text>
+        </View>
+      ) : null}
+
+      {!onHold && myFairness && myFairness.active ? (
         <View style={[styles.fairnessNote, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
           <MaterialCommunityIcons name="scale-balance" size={20} color={theme.mcc.accent} />
           <View style={styles.fairnessText}>
@@ -556,7 +599,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         </Pressable>
       ) : null}
 
-      {(isDecided || eventPast) && !detailsOpen ? null : (
+      {onHold || ((isDecided || eventPast) && !detailsOpen) ? null : (
       <Stage stepKey={`${event.id}:${activeStep}`}>
         {activeStep === "attendance" && !eventPast ? (
           <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
@@ -800,7 +843,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function computeUserDone(state: MccEventState, eventDay: EventDay, weekStartDate: string): boolean {
-  const decided = state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(weekStartDate, eventDay);
+  const decisionOpen = state.event.starts_at ? isDecisionReleaseOpenAt(state.event.starts_at) : isDecisionReleaseOpen(weekStartDate, eventDay);
+  const decided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
   if (decided || isEventPast(weekStartDate, eventDay)) return true;
   const status = state.myAttendance?.status;
   if (status === "not_going") return true;
@@ -927,6 +971,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: { fontSize: 14, fontWeight: "900" },
   activityRouteRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
   activityRouteText: { flex: 1, minWidth: 0 },
+  onHoldCard: { alignItems: "center", borderRadius: 20, borderWidth: 1, gap: 10, paddingHorizontal: 16, paddingVertical: 18 },
+  onHoldBadge: { alignItems: "center", borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 6, paddingHorizontal: 12, paddingVertical: 7 },
+  onHoldBadgeText: { fontSize: 13, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
+  onHoldText: { textAlign: "center" },
   fairnessNote: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 11, paddingHorizontal: 14, paddingVertical: 12 },
   fairnessText: { flex: 1, minWidth: 0, gap: 3 },
   fairnessTitle: { fontSize: 14, fontWeight: "900" },

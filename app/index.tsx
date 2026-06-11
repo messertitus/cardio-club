@@ -14,7 +14,7 @@ import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
-import { eventDayTitle, formatEventDayDate } from "../src/services/date";
+import { eventDayTitle, formatEventDayDate, getWeekStartDate, isEventVisibleWindow } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
 
@@ -124,17 +124,27 @@ export default function HomeScreen() {
 
   if (!user) return <Redirect href="/auth" />;
 
+  // Events appear 7 days before they happen and disappear after the event day.
+  const windowEvents = (events ?? []).filter((event) => isEventVisibleWindow(event.week_start_date, event.event_day));
   // Events are local: show the user's own city plus any event they joined or
-  // added from another city. Unknown city → show everything.
+  // added from another city. Unknown city → show everything. City matching is
+  // tolerant of case/whitespace so "Konstanz " or "konstanz" still match.
+  const normalizedMyCity = (myCity ?? "").trim().toLowerCase();
   const isVisibleEvent = (event: Row<"weekly_events">) =>
-    !myCity || event.city === myCity || joinedEventIds.has(event.id) || addedEventIds.has(event.id);
-  const visibleEvents = (events ?? []).filter(isVisibleEvent);
-  const otherCityEvents = (events ?? []).filter((event) => !isVisibleEvent(event));
+    !normalizedMyCity ||
+    (event.city ?? "").trim().toLowerCase() === normalizedMyCity ||
+    joinedEventIds.has(event.id) ||
+    addedEventIds.has(event.id);
+  const visibleEvents = windowEvents.filter(isVisibleEvent);
+  const otherCityEvents = windowEvents.filter((event) => !isVisibleEvent(event));
 
-  const weeks = [...new Set(visibleEvents.map((event) => event.week_start_date))];
-  const thisWeekStart = weeks[0];
-  const thisWeekEvents = visibleEvents.filter((event) => event.week_start_date === thisWeekStart);
-  const nextWeekEvents = visibleEvents.filter((event) => event.week_start_date !== thisWeekStart);
+  // Group by the actual calendar week. Using the earliest week present would make
+  // next week wrongly read as "Diese Woche" once the current week's events are over.
+  const currentWeekStart = getWeekStartDate();
+  const thisWeekEvents = visibleEvents.filter((event) => event.week_start_date <= currentWeekStart);
+  const nextWeekEvents = visibleEvents.filter((event) => event.week_start_date > currentWeekStart);
+  const noEventsThisWeek = visibleEvents.length > 0 && thisWeekEvents.length === 0;
+  const upcomingExpanded = showNextWeek || noEventsThisWeek;
 
   const otherCitiesList = [...new Set(otherCityEvents.map((event) => event.city ?? "Andere Stadt"))].sort((a, b) => a.localeCompare(b));
   const cityQuery = citySearch.trim().toLowerCase();
@@ -153,6 +163,7 @@ export default function HomeScreen() {
       <MotionBackground />
       <View style={styles.appShell}>
         <Animated.ScrollView
+          style={styles.scrollFill}
           refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={theme.mcc.textPrimary} />}
           contentContainerStyle={styles.screen}
         >
@@ -184,6 +195,21 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
+          {noEventsThisWeek ? (
+            <View style={styles.weekGroup}>
+              <Text style={[styles.weekLabel, { color: theme.mcc.accent }]}>Diese Woche</Text>
+              <View style={[styles.emptyHighlight, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint, shadowColor: theme.mcc.accent }]}>
+                <View style={[styles.emptyIcon, { backgroundColor: theme.mcc.surface, borderColor: theme.mcc.strongLine }]}>
+                  <MaterialCommunityIcons name="calendar-check" size={28} color={theme.mcc.accent} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.mcc.textPrimary }]}>Diese Woche ist durch</Text>
+                <Text style={[styles.body, { color: theme.mcc.textSecondary, textAlign: "center" }]}>
+                  Keine offenen Cardiotage mehr. Die nächsten stehen unten schon bereit – die Abstimmung öffnet rechtzeitig.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           {nextWeekEvents.length > 0 ? (
             <View style={styles.weekGroup}>
               <Pressable
@@ -196,12 +222,12 @@ export default function HomeScreen() {
                 <View style={styles.nextWeekText}>
                   <Text style={[styles.nextWeekTitle, { color: theme.mcc.textPrimary }]}>Nächste Woche</Text>
                   <Text style={[styles.nextWeekMeta, { color: theme.mcc.textSecondary }]}>
-                    {nextWeekEvents.length} {nextWeekEvents.length === 1 ? "Cardiotag" : "Cardiotage"} · jetzt schon vorab abstimmen
+                    {nextWeekEvents.length} {nextWeekEvents.length === 1 ? "Cardiotag" : "Cardiotage"} · Vorschau, Abstimmung öffnet rechtzeitig
                   </Text>
                 </View>
-                <MaterialCommunityIcons name={showNextWeek ? "chevron-up" : "chevron-down"} size={26} color={theme.mcc.textSecondary} />
+                <MaterialCommunityIcons name={upcomingExpanded ? "chevron-up" : "chevron-down"} size={26} color={theme.mcc.textSecondary} />
               </Pressable>
-              {showNextWeek
+              {upcomingExpanded
                 ? nextWeekEvents.map((event, eventIndex) => <EventFlowCard key={event.id} userId={user.id} index={eventIndex} event={toWeekEvent(event)} />)
                 : null}
             </View>
@@ -284,6 +310,7 @@ function Header() {
 
   return (
     <MainHeader
+      title="Events"
       actions={
         <Pressable style={[styles.historyButton, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => router.push("/events/history")}>
           <MaterialCommunityIcons name="history" size={24} color={theme.mcc.textPrimary} />
@@ -381,7 +408,8 @@ function CityPrompt({
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   appShell: { flex: 1 },
-  screen: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  scrollFill: { flex: 1 },
+  screen: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   historyButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   weekGroup: { gap: 12 },
   weekLabel: { fontSize: 13, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase" },
@@ -398,6 +426,19 @@ const styles = StyleSheet.create({
   joinButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   panel: { gap: 10, borderRadius: 24, borderWidth: 1, padding: 16 },
+  emptyHighlight: {
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+  },
+  emptyIcon: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 56, justifyContent: "center", width: 56 },
+  emptyTitle: { fontSize: 19, fontWeight: "900" },
   panelTitle: { fontSize: 22, fontWeight: "900" },
   body: { fontSize: 15, lineHeight: 22 },
   notice: { borderRadius: 18, backgroundColor: "rgba(164,62,48,0.18)", padding: 12 },

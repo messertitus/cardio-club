@@ -134,7 +134,7 @@ export default function MenuScreen() {
     <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.shell} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <MainHeader
             title="Menü"
             actions={isAdmin ? <AdminNoticeButton count={unreadNotifications.length} open={notificationsOpen} onPress={() => setNotificationsOpen((open) => !open)} /> : null}
@@ -354,6 +354,7 @@ const styles = StyleSheet.create({
   shell: { flex: 1 },
   content: {
     width: "100%",
+    flexGrow: 1,
     gap: 16,
     paddingHorizontal: 18,
     paddingTop: 14,
