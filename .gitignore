@@ -3,6 +3,7 @@ node_modules/
 dist/
 web-build/
 .env
+supabase/.temp/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

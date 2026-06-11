@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { StyleSheet, View } from "react-native";
 import { MapRouteButton } from "../../../src/components/MapRouteButton";
 import {
@@ -22,8 +22,8 @@ import {
 import { SportIcon, SportIconBadge } from "../../../src/components/SportIcon";
 import { useAuth } from "../../../src/context/AuthContext";
 import { useTheme } from "../../../src/context/ThemeContext";
-import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
-import type { DecisionCharacter } from "../../../src/lib/fairConstellationSelection";
+import type { DecisionCharacter } from "../../../src/lib/decisionTypes";
+import type { DecisionAdminSummary } from "../../../src/lib/decisionView";
 import { supabase } from "../../../src/lib/supabase";
 import { isDecisionReleaseOpen } from "../../../src/services/date";
 import {
@@ -77,8 +77,8 @@ export default function DecisionResultScreen() {
   const [canManage, setCanManage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
-  const presentation = useMemo(() => (decision ? buildDecisionPresentation(decision, sportNames) : null), [decision, sportNames]);
+  // The decision now arrives from the server already sanitized and presentation-ready.
+  const presentation = decision;
 
   useEffect(() => {
     void load();
@@ -111,10 +111,6 @@ export default function DecisionResultScreen() {
   const secondarySport = decision?.secondarySportId ? sports.find((sport) => sport.id === decision.secondarySportId) : undefined;
   const isMulti = decision?.mode === "multi_sport" || decision?.mode === "twin";
   const visual = decision ? characterVisual(decision.decisionCharacter) : characterVisual("no_valid_decision");
-  const maxTotal = useMemo(
-    () => (presentation ? Math.max(0, ...presentation.scoreRows.map((row) => row.gesamt)) : 0),
-    [presentation],
-  );
 
   return (
     <MccScreen title="Entscheidung" kicker="Result" subtitle="Der Club entscheidet automatisch und fair — hier siehst du, warum.">
@@ -167,10 +163,10 @@ export default function DecisionResultScreen() {
             </MccCard>
           ) : null}
 
-          {presentation.activityRows.length > 0 ? (
+          {presentation.activities.length > 0 ? (
             <View style={styles.activityStack}>
               <MccCardTitle>Konkrete Aktivitäten</MccCardTitle>
-              {presentation.activityRows.map((activity) => {
+              {presentation.activities.map((activity) => {
                 const profile = sportProfiles.find((entry) => entry.id === activity.profileId);
                 const sport = sports.find((entry) => entry.id === activity.sportId);
                 const notes = [...(activity.weatherNotes ?? []).slice(0, 1), ...(activity.practicalityNotes ?? []).slice(0, 1)];
@@ -237,7 +233,7 @@ export default function DecisionResultScreen() {
             </WhyNotAccordion>
           ) : null}
 
-          {presentation.scoreRows.length > 0 ? (
+          {presentation.scoreComparison.length > 0 ? (
             <MccCard>
               <MccCardTitle>Bewertung der Optionen</MccCardTitle>
               <MccBody muted>Relativer Gesamtwert im Vergleich zur stärksten Option – optional, falls ihr die Entscheidung nachvollziehen wollt.</MccBody>
@@ -248,12 +244,12 @@ export default function DecisionResultScreen() {
                 onPress={() => setShowScoreBreakdown((visible) => !visible)}
               />
               {showScoreBreakdown
-                ? presentation.scoreRows.slice(0, 5).map((score) => (
+                ? presentation.scoreComparison.map((score) => (
                     <AnimatedScoreRow
                       key={score.id}
                       label={score.label}
-                      value={String(maxTotal > 0 ? Math.round((score.gesamt / maxTotal) * 100) : 0)}
-                      detail={`${score.eventTyp} · Gesamtwert ${score.gesamt}`}
+                      value={String(score.relativePercent)}
+                      detail={score.eventTyp}
                     />
                   ))
                 : null}
@@ -273,7 +269,7 @@ export default function DecisionResultScreen() {
                 icon={showAdminDetails ? "chevron-up" : "chevron-down"}
                 onPress={() => setShowAdminDetails((visible) => !visible)}
               />
-              {showAdminDetails ? <AdminDecisionDetails decision={decision} sportNames={sportNames} /> : null}
+              {showAdminDetails && decision.admin ? <AdminDecisionDetails admin={decision.admin} /> : null}
             </MccCard>
           ) : null}
 
@@ -297,56 +293,62 @@ export default function DecisionResultScreen() {
   );
 }
 
-function AdminDecisionDetails({ decision, sportNames }: { decision: EventDecisionPreview; sportNames: Map<string, string> }) {
+// Admin explainability is summarized on the server (counts + short notes only —
+// no weights, fairness-debt or score formulas) and arrives via DecisionView.admin.
+function AdminDecisionDetails({ admin }: { admin: DecisionAdminSummary }) {
   const { theme } = useTheme();
-  const voteRows = decision.explainability.voteSummaryBySport.slice(0, 4);
-  const fairnessCovered = decision.explainability.fairnessByUser.filter((entry) => entry.coveredByDecision).length;
-  const fairnessTotal = decision.explainability.fairnessByUser.length;
-  const unresolvedNoGos = decision.noGoBreakdown.unresolved.length;
-  const resolvedNoGos = decision.noGoBreakdown.resolvedByAlternative.length;
-  const ignoredNoGos = decision.noGoBreakdown.ignoredBecauseNotGoing.length;
-  const weatherRows = decision.explainability.weatherReasons.filter((entry) => entry.excluded || entry.reasons.length > 0).slice(0, 3);
-  const practicalRows = [
-    ...decision.explainability.capacityReasons.map((entry) => entry.reason),
-    ...decision.explainability.costReasons.map((entry) => entry.reason),
-    ...decision.explainability.practicalityReasons.flatMap((entry) => entry.reasons),
-  ]
-    .filter(Boolean)
-    .slice(0, 4);
 
   return (
     <View style={styles.adminDetails}>
-      {voteRows.length > 0 ? (
+      {admin.voteSummaries.length > 0 ? (
         <View style={styles.adminStatGrid}>
-          {voteRows.map((entry) => (
-            <StatTile
-              key={entry.sportId}
-              label={entry.sportName ?? sportNames.get(entry.sportId) ?? entry.sportId}
-              value={`${entry.uniqueVoters} Stimmen`}
-              icon="vote-outline"
-              tone="accent"
-            />
+          {admin.voteSummaries.map((entry) => (
+            <StatTile key={entry.sportName} label={entry.sportName} value={`${entry.voters} Stimmen`} icon="vote-outline" tone="accent" />
           ))}
         </View>
       ) : null}
       <MccBody muted>
-        Fairness: {fairnessCovered} von {fairnessTotal} relevanten Einträgen durch die Entscheidung abgedeckt.
+        Fairness: {admin.fairnessCovered} von {admin.fairnessTotal} relevanten Einträgen durch die Entscheidung abgedeckt.
       </MccBody>
       <MccBody muted>
-        No-Gos: {resolvedNoGos} gelöst · {unresolvedNoGos} offen · {ignoredNoGos} wegen Nicht-Teilnahme nicht hervorgehoben.
+        No-Gos: {admin.noGosResolved} gelöst · {admin.noGosUnresolved} offen · {admin.noGosIgnored} wegen Nicht-Teilnahme nicht hervorgehoben.
       </MccBody>
-      {weatherRows.map((entry) => (
-        <MccBody key={entry.profileId} muted style={{ color: theme.mcc.textSecondary }}>
-          Wetter {entry.profileName ?? entry.profileId}: {entry.excluded ? "ausgeschlossen" : "abgewogen"} · {entry.reasons.slice(0, 2).join(" ")}
+      {admin.weatherNotes.map((note) => (
+        <MccBody key={note} muted style={{ color: theme.mcc.textSecondary }}>
+          {note}
         </MccBody>
       ))}
-      {practicalRows.map((reason) => (
+      {admin.practicalNotes.map((reason) => (
         <MccBody key={reason} muted>
           {reason}
         </MccBody>
       ))}
+      {admin.scoreRows.length > 0 ? (
+        <View style={styles.adminScorecard}>
+          <MccCardTitle>Scorecard (Testphase)</MccCardTitle>
+          <MccBody muted>Vollständige Bewertung pro Option – nur für Admins sichtbar.</MccBody>
+          {admin.scoreRows.map((row) => (
+            <View key={row.id} style={styles.adminScoreRow}>
+              <MccBody style={styles.adminScoreLabel}>
+                {row.label} · {row.eventTyp} · Gesamt {round2(row.gesamt)}
+              </MccBody>
+              <MccBody muted style={styles.adminScoreDetail}>
+                Teilnahme {round2(row.teilnahme)} · Stimmen {round2(row.stimmen)} · Fairness {round2(row.fairnessAusgleich)} · Minderheit{" "}
+                {round2(row.minderheitenschutz)} · Gemeinsam {round2(row.togetherness)} · Wetter {round2(row.wetter)} · Machbarkeit{" "}
+                {round2(row.machbarkeit)} · Kapazität {round2(row.standortKapazitaet)} · Kosten {round2(row.kosten)} · Rotation{" "}
+                {round2(row.rotation)} · Verlässlichkeit {round2(row.verlaesslichkeit)} · No-Go {round2(row.noGoDruck)} · Modus{" "}
+                {round2(row.modusBonus)}
+              </MccBody>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function profileMapTarget(profile: Row<"sport_profiles">) {
@@ -371,4 +373,8 @@ const styles = StyleSheet.create({
   losingText: { flex: 1, minWidth: 0 },
   adminDetails: { gap: 10 },
   adminStatGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  adminScorecard: { gap: 8, marginTop: 4 },
+  adminScoreRow: { gap: 2 },
+  adminScoreLabel: { fontWeight: "700" },
+  adminScoreDetail: { fontSize: 12 },
 });

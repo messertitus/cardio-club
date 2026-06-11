@@ -18,7 +18,6 @@ import {
 } from "../../../src/components/MccDesign";
 import { SportIconBadge } from "../../../src/components/SportIcon";
 import { useAuth } from "../../../src/context/AuthContext";
-import { buildDecisionPresentation } from "../../../src/lib/decisionPresentation";
 import { supabase } from "../../../src/lib/supabase";
 import { excludeNonAttendingEntries, excludeNonAttendingVotes } from "../../../src/lib/votingEligibility";
 import type { VoteRank } from "../../../src/lib/votingRules";
@@ -56,8 +55,8 @@ export default function VoteOnSportsScreen() {
   const [savedFlash, setSavedFlash] = useState(0);
 
   const sportsById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport])), [sports]);
-  const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
-  const previewPresentation = useMemo(() => (preview ? buildDecisionPresentation(preview, sportNames) : null), [preview, sportNames]);
+  // The preview now arrives from the server already sanitized and presentation-ready.
+  const previewPresentation = preview;
   const myVotes = useMemo(
     () => votes.filter((vote) => vote.user_id === user?.id).sort((a, b) => a.vote_rank - b.vote_rank),
     [user?.id, votes],

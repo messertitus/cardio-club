@@ -1,4 +1,3 @@
-import { buildDecisionPresentation } from "../lib/decisionPresentation";
 import { excludeNonAttendingEntries, excludeNonAttendingVotes } from "../lib/votingEligibility";
 import type { VoteRank } from "../lib/votingRules";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
@@ -11,7 +10,7 @@ import { listEventProposals, listSports } from "./proposals";
 import { listSportProfilesForSports } from "./sportProfiles";
 import type { AppSupabaseClient } from "./supabaseClient";
 import { listEventVotes, removeVote, voteForSport } from "./votes";
-import type { FairConstellationDecision } from "../lib/fairConstellationSelection";
+import { emptyDecisionView, type DecisionView } from "../lib/decisionView";
 import { getWeekStartDate, isDecisionReleaseOpen } from "./date";
 
 import type { EventDay } from "./date";
@@ -42,8 +41,7 @@ export type MccEventState = {
   myAttendance: Row<"attendance"> | null;
   myVotes: Row<"sport_votes">[];
   myNoGos: Row<"sport_no_gos">[];
-  decision: FairConstellationDecision;
-  decisionText: ReturnType<typeof buildDecisionPresentation>;
+  decision: DecisionView;
 };
 
 export async function bootstrapMccWeek(
@@ -184,8 +182,7 @@ async function buildEventState(
 
   const visibleVotes = excludeNonAttendingVotes(votes.data, attendance.data);
   const visibleNoGos = excludeNonAttendingEntries(noGos.data, attendance.data);
-  const decision = decisionPreview.error ? emptyDecision(decisionPreview.error.message) : decisionPreview.data;
-  const names = new Map(sports.data.map((sport) => [sport.id, sport.name]));
+  const decision = decisionPreview.error ? emptyDecisionView(decisionPreview.error.message) : decisionPreview.data;
 
   return ok({
     clubId,
@@ -203,7 +200,6 @@ async function buildEventState(
     myVotes: visibleVotes.filter((row) => row.user_id === userId).sort((a, b) => a.vote_rank - b.vote_rank),
     myNoGos: visibleNoGos.filter((row) => row.user_id === userId),
     decision,
-    decisionText: buildDecisionPresentation(decision, names),
   });
 }
 
@@ -267,37 +263,4 @@ export async function finalizeMccDecisionIfReady(
   }
 
   return ok({ attempted: true });
-}
-
-function emptyDecision(reason: string): FairConstellationDecision {
-  return {
-    mode: "none",
-    activities: [],
-    scores: [],
-    decisionCharacter: "no_valid_decision",
-    explainability: {
-      voteSummaryBySport: [],
-      fairnessByUser: [],
-      noGoBreakdown: {
-        unresolved: [],
-        resolvedByAlternative: [],
-        ignoredBecauseNotGoing: [],
-        summary: "Keine No-Go-Konflikte.",
-      },
-      rotationReasons: [],
-      weatherReasons: [],
-      practicalityReasons: [],
-      capacityReasons: [],
-      costReasons: [],
-    },
-    noGoBreakdown: {
-      unresolved: [],
-      resolvedByAlternative: [],
-      ignoredBecauseNotGoing: [],
-      summary: "Keine No-Go-Konflikte.",
-    },
-    losingCandidateReasons: [],
-    excludedProfiles: [],
-    reason,
-  };
 }

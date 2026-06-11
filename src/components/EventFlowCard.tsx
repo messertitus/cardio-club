@@ -139,9 +139,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
           : "overview";
   const activeStep = manualStep ?? naturalStep;
 
-  const primaryActivity = state.decisionText.activityRows[0] ?? null;
-  const secondaryActivity = state.decisionText.activityRows[1] ?? null;
-  const decisionSportName = isDecided ? (primaryActivity?.sportName ?? state.decisionText.selectedSportName) : "Auswahl gespeichert";
+  const primaryActivity = state.decision.activities[0] ?? null;
+  const secondaryActivity = state.decision.activities[1] ?? null;
+  const decisionSportName = isDecided ? (primaryActivity?.sportName ?? state.decision.selectedSportName) : "Auswahl gespeichert";
   const decisionLocation = isDecided ? (primaryActivity?.locationName ?? null) : null;
   const secondaryDecisionName = isDecided ? (secondaryActivity?.sportName ?? undefined) : undefined;
   const decisionTitle = isDecided && secondaryDecisionName ? `${decisionSportName} + ${secondaryDecisionName}` : decisionSportName;
@@ -158,7 +158,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const maybeCount = state.attendance.filter((entry) => entry.status === "maybe").length;
   const votersCount = new Set(state.votes.map((vote) => vote.user_id)).size;
   const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "Bald";
-  const myFairness = state.decision.explainability.fairnessByUser.find((entry) => entry.userId === userId) ?? null;
+  const myFairness = state.decision.viewerFairness ?? null;
   const isExpanded = expanded ?? !userDone;
   const attending = state.myAttendance?.status === "going" || state.myAttendance?.status === "maybe";
   const myChoiceSummary =
@@ -476,7 +476,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         title={heroTitle}
         subtitle={
           isDecided
-            ? `${secondaryDecisionName ? "Multi-Sport" : state.decisionText.decisionCharacterLabel}${decisionLocation ? ` · ${decisionLocation}` : ""}`
+            ? `${secondaryDecisionName ? "Multi-Sport" : state.decision.decisionCharacterLabel}${decisionLocation ? ` · ${decisionLocation}` : ""}`
             : "Stimmt ab, der Club entscheidet fair."
         }
         status={phaseLabel}
@@ -530,13 +530,13 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         </View>
       ) : null}
 
-      {myFairness && (myFairness.ignoredWeeks > 0 || myFairness.fairnessDebt > 0) ? (
+      {myFairness && myFairness.active ? (
         <View style={[styles.fairnessNote, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
           <MaterialCommunityIcons name="scale-balance" size={20} color={theme.mcc.accent} />
           <View style={styles.fairnessText}>
             <Text style={[styles.fairnessTitle, { color: theme.mcc.textPrimary }]}>Fairness-Bonus aktiv</Text>
             <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
-              {myFairness.coveredByDecision
+              {myFairness.covered
                 ? "Deine zuletzt übergangenen Wünsche wurden hier berücksichtigt."
                 : "Deine zuletzt übergangenen Wünsche sind vermerkt – beim nächsten Mal zählt deine Stimme stärker."}
             </Text>
@@ -686,13 +686,13 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
             {isDecided ? (
               <>
                 <View style={styles.pillRow}>
-                  {state.decisionText.resultLabels.map((label) => (
+                  {state.decision.resultLabels.map((label) => (
                     <View key={label} style={[styles.pill, { backgroundColor: theme.mcc.surfaceSoft }]}>
                       <Text style={[styles.pillText, { color: theme.mcc.accent }]}>{label}</Text>
                     </View>
                   ))}
                 </View>
-                <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>{state.event.decision_reason ?? state.decisionText.simpleExplanation}</Text>
+                <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>{state.event.decision_reason ?? state.decision.simpleExplanation}</Text>
                 {homeActivityRows(state).map((activity) => (
                   <View key={activity.key} style={styles.activityRouteRow}>
                     <Text style={[styles.body, styles.activityRouteText, { color: theme.mcc.textPrimary }]}>{activity.label}</Text>
@@ -855,7 +855,7 @@ function homeActivityRows(
     });
   }
 
-  return state.decisionText.activityRows.map((activity) => {
+  return state.decision.activities.map((activity) => {
     const profile = state.sportProfiles.find((entry) => entry.id === activity.profileId);
     const place = activity.locationName ?? activity.profileName;
     return {
