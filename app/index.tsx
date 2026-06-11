@@ -14,7 +14,7 @@ import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
-import { eventDayTitle, formatEventDayDate, getWeekStartDate } from "../src/services/date";
+import { eventDayTitle, formatEventDayDate, getWeekStartDate, isEventVisibleWindow } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
 
@@ -124,12 +124,14 @@ export default function HomeScreen() {
 
   if (!user) return <Redirect href="/auth" />;
 
+  // Events appear 7 days before they happen and disappear after the event day.
+  const windowEvents = (events ?? []).filter((event) => isEventVisibleWindow(event.week_start_date, event.event_day));
   // Events are local: show the user's own city plus any event they joined or
   // added from another city. Unknown city → show everything.
   const isVisibleEvent = (event: Row<"weekly_events">) =>
     !myCity || event.city === myCity || joinedEventIds.has(event.id) || addedEventIds.has(event.id);
-  const visibleEvents = (events ?? []).filter(isVisibleEvent);
-  const otherCityEvents = (events ?? []).filter((event) => !isVisibleEvent(event));
+  const visibleEvents = windowEvents.filter(isVisibleEvent);
+  const otherCityEvents = windowEvents.filter((event) => !isVisibleEvent(event));
 
   // Group by the actual calendar week. Using the earliest week present would make
   // next week wrongly read as "Diese Woche" once the current week's events are over.

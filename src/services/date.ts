@@ -88,11 +88,20 @@ export function isDecisionReleaseOpen(weekStartDate: string, eventDay: EventDay 
   return startOfUtcDay(now).getTime() >= getDecisionReleaseDate(weekStartDate, eventDay).getTime();
 }
 
-// Voting is open from the moment an event is listed (current and next week)
-// until its decision is released — so members can already vote on upcoming
-// ("Demnächst") events, not only on the current week's Cardiotag.
+// Voting always runs for the 4 days ending the day before the decision, i.e.
+// from event − 6 days through event − 3 (decision is event − 2). Weekday
+// independent: Sunday → Mon–Thu, Saturday → Sun–Wed, and so on.
 export function isVotingInputOpen(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
-  return startOfUtcDay(now).getTime() < getDecisionReleaseDate(weekStartDate, eventDay).getTime();
+  const today = startOfUtcDay(now).getTime();
+  const decision = getDecisionReleaseDate(weekStartDate, eventDay).getTime();
+  return today >= decision - 4 * DAY_MS && today < decision;
+}
+
+// An event is shown 7 days in advance and stays visible through the event day.
+export function isEventVisibleWindow(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
+  const today = startOfUtcDay(now).getTime();
+  const eventDate = getEventDate(weekStartDate, eventDay).getTime();
+  return today >= eventDate - 7 * DAY_MS && today <= eventDate;
 }
 
 function addUtcDays(dateString: string, days: number): Date {
