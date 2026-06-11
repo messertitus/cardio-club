@@ -127,9 +127,14 @@ export default function HomeScreen() {
   // Events appear 7 days before they happen and disappear after the event day.
   const windowEvents = (events ?? []).filter((event) => isEventVisibleWindow(event.week_start_date, event.event_day));
   // Events are local: show the user's own city plus any event they joined or
-  // added from another city. Unknown city → show everything.
+  // added from another city. Unknown city → show everything. City matching is
+  // tolerant of case/whitespace so "Konstanz " or "konstanz" still match.
+  const normalizedMyCity = (myCity ?? "").trim().toLowerCase();
   const isVisibleEvent = (event: Row<"weekly_events">) =>
-    !myCity || event.city === myCity || joinedEventIds.has(event.id) || addedEventIds.has(event.id);
+    !normalizedMyCity ||
+    (event.city ?? "").trim().toLowerCase() === normalizedMyCity ||
+    joinedEventIds.has(event.id) ||
+    addedEventIds.has(event.id);
   const visibleEvents = windowEvents.filter(isVisibleEvent);
   const otherCityEvents = windowEvents.filter((event) => !isVisibleEvent(event));
 
