@@ -151,6 +151,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const votingOpensLabel = startsAt ? `${formatBerlinDate(votingOpensAt)} um ${formatBerlinTime(votingOpensAt)}` : formatBerlinDate(votingOpensAt);
   const eventPast = isEventPast(event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
+  // Date label with the event's start time (Berlin), e.g. "Sonntag, 14. Juni · 15:00 Uhr".
+  const eventDateLabel = formatEventDayDate(event.weekStartDate, event.eventDay);
+  const eventDateTimeLabel = startsAt ? `${eventDateLabel} · ${formatBerlinTime(startsAt)} Uhr` : eventDateLabel;
   // Shown in advance but voting has not opened yet → "On Hold": no input panels,
   // no spinning rings, just a calm placeholder until voting opens.
   const onHold = !isDecided && !eventPast && !votingInputOpen;
@@ -506,7 +509,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
             : "Stimmt ab, der Club entscheidet fair."
         }
         status={phaseLabel}
-        dateLabel={formatEventDayDate(event.weekStartDate, event.eventDay)}
+        dateLabel={eventDateTimeLabel}
         cityLabel={state.event.city ?? undefined}
         flowTarget={heroFlowTarget}
         weekTag={weekTag}
