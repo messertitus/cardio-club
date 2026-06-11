@@ -129,6 +129,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const votingOpensLabel = getVotingOpenDate(event.weekStartDate, event.eventDay).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
   const eventPast = isEventPast(event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
+  // Shown in advance but voting has not opened yet → "On Hold": no input panels,
+  // no spinning rings, just a calm placeholder until voting opens.
+  const onHold = !isDecided && !eventPast && !votingInputOpen;
   const naturalStep: FlowStep = isDecided
     ? "overview"
     : !state.myAttendance
@@ -158,7 +161,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const goingCount = state.attendance.filter((entry) => entry.status === "going").length;
   const maybeCount = state.attendance.filter((entry) => entry.status === "maybe").length;
   const votersCount = new Set(state.votes.map((vote) => vote.user_id)).size;
-  const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "Bald";
+  const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "On Hold";
   const myFairness = state.decision.viewerFairness ?? null;
   const isExpanded = expanded ?? !userDone;
   const attending = state.myAttendance?.status === "going" || state.myAttendance?.status === "maybe";
@@ -485,6 +488,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         cityLabel={state.event.city ?? undefined}
         flowTarget={heroFlowTarget}
         weekTag={weekTag}
+        paused={onHold}
         chips={[
           { label: `${goingCount} + ${maybeCount} Dabei`, icon: "account-group-outline", tone: "neutral" },
           { label: `${votersCount} abgestimmt`, icon: "vote-outline", tone: "accent" },
@@ -507,6 +511,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
       {!eventPast ? (
         <FlowStepRail
           completed={isDecided}
+          paused={onHold}
           activeIndex={["attendance", "sports", "overview"].indexOf(activeStep)}
           onStepPress={(stepIndex) => {
             // Decided events no longer change votes — the rail just reveals the
@@ -531,17 +536,19 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         </View>
       ) : null}
 
-      {!isDecided && !eventPast && !votingInputOpen ? (
-        <View style={[styles.fairnessNote, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
-          <MaterialCommunityIcons name="clock-outline" size={20} color={theme.mcc.accent} />
-          <View style={styles.fairnessText}>
-            <Text style={[styles.fairnessTitle, { color: theme.mcc.textPrimary }]}>Abstimmung öffnet bald</Text>
-            <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Ab {votingOpensLabel} kannst du Teilnahme und Sportarten wählen.</Text>
+      {onHold ? (
+        <View style={[styles.onHoldCard, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
+          <View style={[styles.onHoldBadge, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.surface }]}>
+            <MaterialCommunityIcons name="pause" size={16} color={theme.mcc.accent} />
+            <Text style={[styles.onHoldBadgeText, { color: theme.mcc.accent }]}>On Hold</Text>
           </View>
+          <Text style={[styles.body, styles.onHoldText, { color: theme.mcc.textSecondary }]}>
+            Dieser Cardiotag ist schon sichtbar. Die Abstimmung öffnet am {votingOpensLabel} – dann kannst du Teilnahme und Sportarten wählen.
+          </Text>
         </View>
       ) : null}
 
-      {myFairness && myFairness.active ? (
+      {!onHold && myFairness && myFairness.active ? (
         <View style={[styles.fairnessNote, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
           <MaterialCommunityIcons name="scale-balance" size={20} color={theme.mcc.accent} />
           <View style={styles.fairnessText}>
@@ -567,7 +574,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         </Pressable>
       ) : null}
 
-      {(isDecided || eventPast) && !detailsOpen ? null : (
+      {onHold || ((isDecided || eventPast) && !detailsOpen) ? null : (
       <Stage stepKey={`${event.id}:${activeStep}`}>
         {activeStep === "attendance" && !eventPast ? (
           <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
@@ -938,6 +945,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: { fontSize: 14, fontWeight: "900" },
   activityRouteRow: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
   activityRouteText: { flex: 1, minWidth: 0 },
+  onHoldCard: { alignItems: "center", borderRadius: 20, borderWidth: 1, gap: 10, paddingHorizontal: 16, paddingVertical: 18 },
+  onHoldBadge: { alignItems: "center", borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 6, paddingHorizontal: 12, paddingVertical: 7 },
+  onHoldBadgeText: { fontSize: 13, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
+  onHoldText: { textAlign: "center" },
   fairnessNote: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 11, paddingHorizontal: 14, paddingVertical: 12 },
   fairnessText: { flex: 1, minWidth: 0, gap: 3 },
   fairnessTitle: { fontSize: 14, fontWeight: "900" },

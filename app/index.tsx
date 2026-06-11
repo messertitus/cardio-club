@@ -193,9 +193,13 @@ export default function HomeScreen() {
           {noEventsThisWeek ? (
             <View style={styles.weekGroup}>
               <Text style={[styles.weekLabel, { color: theme.mcc.accent }]}>Diese Woche</Text>
-              <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
-                <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
-                  Diese Woche sind keine offenen Cardiotage mehr. Die nächsten stehen schon bereit – du kannst jetzt vorab abstimmen.
+              <View style={[styles.emptyHighlight, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint, shadowColor: theme.mcc.accent }]}>
+                <View style={[styles.emptyIcon, { backgroundColor: theme.mcc.surface, borderColor: theme.mcc.strongLine }]}>
+                  <MaterialCommunityIcons name="calendar-check" size={28} color={theme.mcc.accent} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.mcc.textPrimary }]}>Diese Woche ist durch</Text>
+                <Text style={[styles.body, { color: theme.mcc.textSecondary, textAlign: "center" }]}>
+                  Keine offenen Cardiotage mehr. Die nächsten stehen unten schon bereit – die Abstimmung öffnet rechtzeitig.
                 </Text>
               </View>
             </View>
@@ -417,6 +421,19 @@ const styles = StyleSheet.create({
   joinButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   panel: { gap: 10, borderRadius: 24, borderWidth: 1, padding: 16 },
+  emptyHighlight: {
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+  },
+  emptyIcon: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 56, justifyContent: "center", width: 56 },
+  emptyTitle: { fontSize: 19, fontWeight: "900" },
   panelTitle: { fontSize: 22, fontWeight: "900" },
   body: { fontSize: 15, lineHeight: 22 },
   notice: { borderRadius: 18, backgroundColor: "rgba(164,62,48,0.18)", padding: 12 },

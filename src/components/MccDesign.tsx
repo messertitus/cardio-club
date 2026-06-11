@@ -352,15 +352,27 @@ export function SpinnerRing({
   );
 }
 
-export function CardioRing({ label, value }: { label?: string; value?: string }) {
+export function CardioRing({ label, value, paused = false }: { label?: string; value?: string; paused?: boolean }) {
   void label;
   void value;
   const { theme } = useTheme();
   const reduced = useReducedMotion();
   const beat = useRef(new Animated.Value(0)).current;
+  const breathe = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (reduced) return;
+    if (paused) {
+      // Calm "on hold" breathing — no rotation, no heartbeat.
+      const breatheAnim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(breathe, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(breathe, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        ]),
+      );
+      breatheAnim.start();
+      return () => breatheAnim.stop();
+    }
     // double-thump heartbeat: quick-quick-rest
     const beatAnim = Animated.loop(
       Animated.sequence([
@@ -372,9 +384,21 @@ export function CardioRing({ label, value }: { label?: string; value?: string })
     );
     beatAnim.start();
     return () => beatAnim.stop();
-  }, [beat, reduced]);
+  }, [beat, breathe, paused, reduced]);
 
   const scale = beat.interpolate({ inputRange: [0, 1], outputRange: [1, 1.16] });
+  const breatheScale = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.1] });
+  const breatheOpacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+
+  if (paused) {
+    return (
+      <View style={[styles.cardioRing, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+        <Animated.View style={{ opacity: breatheOpacity, transform: [{ scale: breatheScale }] }}>
+          <MaterialCommunityIcons name="pause" size={28} color={theme.mcc.textSecondary} />
+        </Animated.View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.cardioRing, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.accentFaint }]}>
@@ -428,11 +452,13 @@ export function FlowStepRail({
   activeIndex,
   onStepPress,
   completed = false,
+  paused = false,
 }: {
   steps: Array<{ label: string; icon?: IconName }>;
   activeIndex: number;
   onStepPress?: (index: number) => void;
   completed?: boolean;
+  paused?: boolean;
 }) {
   const { theme } = useTheme();
   return (
@@ -449,12 +475,12 @@ export function FlowStepRail({
             accessibilityRole={onStepPress ? "button" : undefined}
           >
             <View style={styles.flowNodeWrap}>
-              {isCurrent && !completed ? (
+              {isCurrent && !completed && !paused ? (
                 <View style={StyleSheet.absoluteFill}>
                   <SpinnerRing size={42} duration={1300} />
                 </View>
               ) : null}
-              {isCurrent && completed ? <View style={[styles.flowReadyRing, { borderColor: theme.mcc.accent }]} /> : null}
+              {isCurrent && (completed || paused) ? <View style={[styles.flowReadyRing, { borderColor: paused ? theme.mcc.line : theme.mcc.accent }]} /> : null}
               <View
                 style={[
                   styles.flowNode,
@@ -505,6 +531,7 @@ export function WeeklyEventHeroCard({
   cityLabel,
   flowTarget,
   weekTag,
+  paused = false,
 }: {
   title: string;
   subtitle?: string;
@@ -516,6 +543,7 @@ export function WeeklyEventHeroCard({
   cityLabel?: string;
   flowTarget?: { label: string; icon?: IconName; tone?: Tone };
   weekTag?: { label: string; icon: IconName };
+  paused?: boolean;
 }) {
   const { theme } = useTheme();
   return (
@@ -530,7 +558,7 @@ export function WeeklyEventHeroCard({
           <Text style={[styles.weeklyTitle, { color: theme.mcc.textPrimary }]}>{title}</Text>
           {subtitle ? <Text style={[styles.weeklySubtitle, { color: theme.mcc.textSecondary }]}>{subtitle}</Text> : null}
         </View>
-        <CardioRing label="Pulse" value="MCC" />
+        <CardioRing label="Pulse" value="MCC" paused={paused} />
       </View>
       {dateLabel ? <SundayRibbon date={dateLabel} city={cityLabel} /> : null}
       <View style={styles.metricGrid}>
