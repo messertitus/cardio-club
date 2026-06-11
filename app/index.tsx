@@ -14,7 +14,7 @@ import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
-import { eventDayTitle, formatEventDayDate } from "../src/services/date";
+import { eventDayTitle, formatEventDayDate, getWeekStartDate } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
 
@@ -131,10 +131,13 @@ export default function HomeScreen() {
   const visibleEvents = (events ?? []).filter(isVisibleEvent);
   const otherCityEvents = (events ?? []).filter((event) => !isVisibleEvent(event));
 
-  const weeks = [...new Set(visibleEvents.map((event) => event.week_start_date))];
-  const thisWeekStart = weeks[0];
-  const thisWeekEvents = visibleEvents.filter((event) => event.week_start_date === thisWeekStart);
-  const nextWeekEvents = visibleEvents.filter((event) => event.week_start_date !== thisWeekStart);
+  // Group by the actual calendar week. Using the earliest week present would make
+  // next week wrongly read as "Diese Woche" once the current week's events are over.
+  const currentWeekStart = getWeekStartDate();
+  const thisWeekEvents = visibleEvents.filter((event) => event.week_start_date <= currentWeekStart);
+  const nextWeekEvents = visibleEvents.filter((event) => event.week_start_date > currentWeekStart);
+  const noEventsThisWeek = visibleEvents.length > 0 && thisWeekEvents.length === 0;
+  const upcomingExpanded = showNextWeek || noEventsThisWeek;
 
   const otherCitiesList = [...new Set(otherCityEvents.map((event) => event.city ?? "Andere Stadt"))].sort((a, b) => a.localeCompare(b));
   const cityQuery = citySearch.trim().toLowerCase();
@@ -153,6 +156,7 @@ export default function HomeScreen() {
       <MotionBackground />
       <View style={styles.appShell}>
         <Animated.ScrollView
+          style={styles.scrollFill}
           refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={theme.mcc.textPrimary} />}
           contentContainerStyle={styles.screen}
         >
@@ -184,6 +188,17 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
+          {noEventsThisWeek ? (
+            <View style={styles.weekGroup}>
+              <Text style={[styles.weekLabel, { color: theme.mcc.accent }]}>Diese Woche</Text>
+              <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+                <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
+                  Diese Woche sind keine offenen Cardiotage mehr. Die nächsten stehen schon bereit – du kannst jetzt vorab abstimmen.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           {nextWeekEvents.length > 0 ? (
             <View style={styles.weekGroup}>
               <Pressable
@@ -199,9 +214,9 @@ export default function HomeScreen() {
                     {nextWeekEvents.length} {nextWeekEvents.length === 1 ? "Cardiotag" : "Cardiotage"} · jetzt schon vorab abstimmen
                   </Text>
                 </View>
-                <MaterialCommunityIcons name={showNextWeek ? "chevron-up" : "chevron-down"} size={26} color={theme.mcc.textSecondary} />
+                <MaterialCommunityIcons name={upcomingExpanded ? "chevron-up" : "chevron-down"} size={26} color={theme.mcc.textSecondary} />
               </Pressable>
-              {showNextWeek
+              {upcomingExpanded
                 ? nextWeekEvents.map((event, eventIndex) => <EventFlowCard key={event.id} userId={user.id} index={eventIndex} event={toWeekEvent(event)} />)
                 : null}
             </View>
@@ -381,7 +396,8 @@ function CityPrompt({
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   appShell: { flex: 1 },
-  screen: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  scrollFill: { flex: 1 },
+  screen: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   historyButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   weekGroup: { gap: 12 },
   weekLabel: { fontSize: 13, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase" },

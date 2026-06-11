@@ -629,7 +629,7 @@ export default function AdminScreen() {
     <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.shell} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <PageHeader kicker="Admin" title={sectionTitle(activeSection)} onBack={activeSection === "overview" ? undefined : () => setActiveSection("overview")} />
 
           {message ? <Text style={styles.notice}>{message}</Text> : null}
@@ -1663,7 +1663,7 @@ function isIntensity(value: SportIntensityLevel | SportLocationType): value is S
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   shell: { flex: 1 },
-  content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  content: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
   header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 },
   headerText: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
