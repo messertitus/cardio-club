@@ -1,5 +1,23 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// The club's events live in Berlin time. Format event-related instants in this
+// zone so a 15:00 Cardiotag always reads 15:00, regardless of the device's zone.
+export const CLUB_TIME_ZONE = "Europe/Berlin";
+
+export function formatBerlinDate(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return date.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", timeZone: CLUB_TIME_ZONE });
+}
+
+export function formatBerlinTime(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
+}
+
+export function formatBerlinDateTime(value: string | Date): string {
+  return `${formatBerlinDate(value)} um ${formatBerlinTime(value)}`;
+}
+
 export function getWeekStartDate(date = new Date()): string {
   const normalized = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const day = normalized.getUTCDay();

@@ -7,6 +7,8 @@ import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
 import {
   eventDayTitle,
+  formatBerlinDate,
+  formatBerlinTime,
   formatEventDayDate,
   getVotingOpenDate,
   getWeekStartDate,
@@ -144,8 +146,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const isDecided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
   const votingInputOpen = startsAt ? isVotingOpenAt(startsAt) : isVotingInputOpen(event.weekStartDate, event.eventDay);
   const votingOpensAt = startsAt ? votingOpensFrom(startsAt) : getVotingOpenDate(event.weekStartDate, event.eventDay);
-  const votingOpensLabel = votingOpensAt.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" }) +
-    ` um ${votingOpensAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+  // Show the exact open time only when it comes from a real event start (Berlin tz);
+  // the date-only fallback would otherwise show a meaningless midnight time.
+  const votingOpensLabel = startsAt ? `${formatBerlinDate(votingOpensAt)} um ${formatBerlinTime(votingOpensAt)}` : formatBerlinDate(votingOpensAt);
   const eventPast = isEventPast(event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
   // Shown in advance but voting has not opened yet → "On Hold": no input panels,

@@ -7,7 +7,7 @@ import { DetailLine } from "../../src/components/FormControls";
 import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader } from "../../src/components/MccDesign";
 import { Reveal } from "../../src/components/Motion";
 import { SportIconBadge } from "../../src/components/SportIcon";
-import { formatCardioSunday } from "../../src/services/date";
+import { formatBerlinDateTime, formatCardioSunday } from "../../src/services/date";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
 import { getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, type Row } from "../../src/services";
@@ -112,7 +112,7 @@ export default function EventHistoryScreen() {
             {opened ? (
               <>
                 <DetailLine label="Status" value={event.status} />
-                <DetailLine label="Zeit" value={event.starts_at ? new Date(event.starts_at).toLocaleString("de-DE") : null} />
+                <DetailLine label="Zeit" value={event.starts_at ? formatBerlinDateTime(event.starts_at) : null} />
                 <DetailLine label="Ort" value={event.location} />
                 <DetailLine label="Notizen" value={event.notes} />
                 <DetailLine label="Aktivitäten" value={activities.length ? `${activities.length}` : "0"} />
