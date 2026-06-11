@@ -97,11 +97,17 @@ export function isVotingInputOpen(weekStartDate: string, eventDay: EventDay = "s
   return today >= decision - 4 * DAY_MS && today < decision;
 }
 
-// An event is shown 7 days in advance and stays visible through the event day.
+// An event is shown 14 days in advance and stays visible through the event day.
+// Voting still only opens later (see isVotingInputOpen / getVotingOpenDate).
 export function isEventVisibleWindow(weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
   const today = startOfUtcDay(now).getTime();
   const eventDate = getEventDate(weekStartDate, eventDay).getTime();
-  return today >= eventDate - 7 * DAY_MS && today <= eventDate;
+  return today >= eventDate - 14 * DAY_MS && today <= eventDate;
+}
+
+// First day voting is open: 4 days before the decision (= event − 6 days).
+export function getVotingOpenDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
+  return new Date(getDecisionReleaseDate(weekStartDate, eventDay).getTime() - 4 * DAY_MS);
 }
 
 function addUtcDays(dateString: string, days: number): Date {

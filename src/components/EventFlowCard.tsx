@@ -5,7 +5,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
-import { eventDayTitle, formatEventDayDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
+import { eventDayTitle, formatEventDayDate, getVotingOpenDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
 import {
   canCloseEvent,
   clearMccNoGo,
@@ -126,6 +126,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const isDecided =
     state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
   const votingInputOpen = isVotingInputOpen(event.weekStartDate, event.eventDay);
+  const votingOpensLabel = getVotingOpenDate(event.weekStartDate, event.eventDay).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
   const eventPast = isEventPast(event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
   const naturalStep: FlowStep = isDecided
@@ -527,6 +528,16 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
       {notice ? (
         <View style={styles.notice}>
           <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      ) : null}
+
+      {!isDecided && !eventPast && !votingInputOpen ? (
+        <View style={[styles.fairnessNote, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
+          <MaterialCommunityIcons name="clock-outline" size={20} color={theme.mcc.accent} />
+          <View style={styles.fairnessText}>
+            <Text style={[styles.fairnessTitle, { color: theme.mcc.textPrimary }]}>Abstimmung öffnet bald</Text>
+            <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Ab {votingOpensLabel} kannst du Teilnahme und Sportarten wählen.</Text>
+          </View>
         </View>
       ) : null}
 

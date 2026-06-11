@@ -213,7 +213,7 @@ export default function HomeScreen() {
                 <View style={styles.nextWeekText}>
                   <Text style={[styles.nextWeekTitle, { color: theme.mcc.textPrimary }]}>Nächste Woche</Text>
                   <Text style={[styles.nextWeekMeta, { color: theme.mcc.textSecondary }]}>
-                    {nextWeekEvents.length} {nextWeekEvents.length === 1 ? "Cardiotag" : "Cardiotage"} · jetzt schon vorab abstimmen
+                    {nextWeekEvents.length} {nextWeekEvents.length === 1 ? "Cardiotag" : "Cardiotage"} · Vorschau, Abstimmung öffnet rechtzeitig
                   </Text>
                 </View>
                 <MaterialCommunityIcons name={upcomingExpanded ? "chevron-up" : "chevron-down"} size={26} color={theme.mcc.textSecondary} />
