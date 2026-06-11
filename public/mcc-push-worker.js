@@ -1,4 +1,4 @@
-const MCC_CACHE_VERSION = "mcc-pwa-v1";
+const MCC_CACHE_VERSION = "mcc-pwa-v2";
 const MCC_APP_SHELL = ["/", "/manifest.webmanifest", "/mcc-logo.png"];
 
 self.addEventListener("install", (event) => {
