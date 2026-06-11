@@ -299,6 +299,7 @@ function Header() {
 
   return (
     <MainHeader
+      title="Events"
       actions={
         <Pressable style={[styles.historyButton, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => router.push("/events/history")}>
           <MaterialCommunityIcons name="history" size={24} color={theme.mcc.textPrimary} />
