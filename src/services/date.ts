@@ -110,6 +110,30 @@ export function getVotingOpenDate(weekStartDate: string, eventDay: EventDay = "s
   return new Date(getDecisionReleaseDate(weekStartDate, eventDay).getTime() - 4 * DAY_MS);
 }
 
+// Time-precise phase boundaries anchored to the event's actual start time, so the
+// decision/voting close happen at the event's time of day (e.g. 15:00), not at
+// midnight — and push notifications fire at that exact moment.
+const DECISION_LEAD_MS = 2 * DAY_MS; // decision is 2 days before the event
+const VOTING_WINDOW_MS = 4 * DAY_MS; // voting is the 4 days before the decision
+
+export function decisionReleaseFrom(startsAt: string | Date): Date {
+  const start = typeof startsAt === "string" ? new Date(startsAt) : startsAt;
+  return new Date(start.getTime() - DECISION_LEAD_MS);
+}
+
+export function votingOpensFrom(startsAt: string | Date): Date {
+  return new Date(decisionReleaseFrom(startsAt).getTime() - VOTING_WINDOW_MS);
+}
+
+export function isDecisionReleaseOpenAt(startsAt: string | Date, now = new Date()): boolean {
+  return now.getTime() >= decisionReleaseFrom(startsAt).getTime();
+}
+
+export function isVotingOpenAt(startsAt: string | Date, now = new Date()): boolean {
+  const t = now.getTime();
+  return t >= votingOpensFrom(startsAt).getTime() && t < decisionReleaseFrom(startsAt).getTime();
+}
+
 function addUtcDays(dateString: string, days: number): Date {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day + days));

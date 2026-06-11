@@ -5,7 +5,18 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
-import { eventDayTitle, formatEventDayDate, getVotingOpenDate, getWeekStartDate, isDecisionReleaseOpen, isEventPast, isVotingInputOpen } from "../services/date";
+import {
+  eventDayTitle,
+  formatEventDayDate,
+  getVotingOpenDate,
+  getWeekStartDate,
+  isDecisionReleaseOpen,
+  isDecisionReleaseOpenAt,
+  isEventPast,
+  isVotingInputOpen,
+  isVotingOpenAt,
+  votingOpensFrom,
+} from "../services/date";
 import {
   canCloseEvent,
   clearMccNoGo,
@@ -86,7 +97,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     void writeLocalCache(cacheKey, result.data);
     initExpansion(result.data);
     const decided =
-      result.data.event.status === "decided" || result.data.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+      result.data.event.status === "decided" ||
+      result.data.event.status === "completed" ||
+      (result.data.event.starts_at ? isDecisionReleaseOpenAt(result.data.event.starts_at) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay));
     const past = isEventPast(event.weekStartDate, event.eventDay);
     const manage = await canCloseEvent(supabase, event.id, userId);
     const isManager = Boolean(manage.data);
@@ -108,7 +121,10 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const userDone = state ? computeUserDone(state, event.eventDay, event.weekStartDate) : false;
   useEffect(() => {
     if (!initRef.current || !state) return;
-    const decided = state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+    const decided =
+      state.event.status === "decided" ||
+      state.event.status === "completed" ||
+      (state.event.starts_at ? isDecisionReleaseOpenAt(state.event.starts_at) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay));
     const past = isEventPast(event.weekStartDate, event.eventDay);
     if (canManage && (decided || past)) return; // managers keep the wrap-up view open
     if (userDone && manualStep === "overview" && !doneRef.current) {
@@ -123,10 +139,13 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     return <ScreenLoader />;
   }
 
-  const isDecided =
-    state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
-  const votingInputOpen = isVotingInputOpen(event.weekStartDate, event.eventDay);
-  const votingOpensLabel = getVotingOpenDate(event.weekStartDate, event.eventDay).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
+  const startsAt = state.event.starts_at;
+  const decisionOpen = startsAt ? isDecisionReleaseOpenAt(startsAt) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+  const isDecided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
+  const votingInputOpen = startsAt ? isVotingOpenAt(startsAt) : isVotingInputOpen(event.weekStartDate, event.eventDay);
+  const votingOpensAt = startsAt ? votingOpensFrom(startsAt) : getVotingOpenDate(event.weekStartDate, event.eventDay);
+  const votingOpensLabel = votingOpensAt.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" }) +
+    ` um ${votingOpensAt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
   const eventPast = isEventPast(event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
   // Shown in advance but voting has not opened yet → "On Hold": no input panels,
@@ -818,7 +837,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function computeUserDone(state: MccEventState, eventDay: EventDay, weekStartDate: string): boolean {
-  const decided = state.event.status === "decided" || state.event.status === "completed" || isDecisionReleaseOpen(weekStartDate, eventDay);
+  const decisionOpen = state.event.starts_at ? isDecisionReleaseOpenAt(state.event.starts_at) : isDecisionReleaseOpen(weekStartDate, eventDay);
+  const decided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
   if (decided || isEventPast(weekStartDate, eventDay)) return true;
   const status = state.myAttendance?.status;
   if (status === "not_going") return true;

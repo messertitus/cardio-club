@@ -32,8 +32,8 @@ export function MainHeader({ title, actions }: { title?: string; actions?: React
 
 const mainStyles = StyleSheet.create({
   header: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" },
-  brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 10, minWidth: 0 },
-  logo: { height: 44, width: 44 },
+  brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 12, minWidth: 0 },
+  logo: { height: 60, width: 60 },
   textBlock: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 12, fontWeight: "800", lineHeight: 16 },
   title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 40 },

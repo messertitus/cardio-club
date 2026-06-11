@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { getDecisionReleaseDate, getWeekStartDate, isDecisionReleaseOpen, isVotingInputOpen } from "../src/services/date";
+import {
+  decisionReleaseFrom,
+  getDecisionReleaseDate,
+  getWeekStartDate,
+  isDecisionReleaseOpen,
+  isDecisionReleaseOpenAt,
+  isVotingInputOpen,
+  isVotingOpenAt,
+} from "../src/services/date";
 
 describe("MCC event timing", () => {
   it("starts the voting week on Monday", () => {
@@ -25,6 +33,17 @@ describe("MCC event timing", () => {
     expect(isVotingInputOpen("2026-06-08", "saturday", new Date("2026-06-10T12:00:00Z"))).toBe(true); // Wed: last day
     expect(isVotingInputOpen("2026-06-08", "saturday", new Date("2026-06-11T00:00:00Z"))).toBe(false); // Thu: decision
     expect(isDecisionReleaseOpen("2026-06-08", "saturday", new Date("2026-06-11T00:00:00Z"))).toBe(true);
+  });
+
+  it("anchors decision and voting to the event's time of day", () => {
+    const sundayAt15 = "2026-06-14T15:00:00.000Z"; // Sunday 15:00
+    expect(decisionReleaseFrom(sundayAt15).toISOString()).toBe("2026-06-12T15:00:00.000Z"); // Friday 15:00
+    expect(isDecisionReleaseOpenAt(sundayAt15, new Date("2026-06-12T14:59:00Z"))).toBe(false);
+    expect(isDecisionReleaseOpenAt(sundayAt15, new Date("2026-06-12T15:00:00Z"))).toBe(true);
+    // Voting window: Monday 15:00 → Friday 15:00.
+    expect(isVotingOpenAt(sundayAt15, new Date("2026-06-08T14:59:00Z"))).toBe(false);
+    expect(isVotingOpenAt(sundayAt15, new Date("2026-06-08T15:00:00Z"))).toBe(true);
+    expect(isVotingOpenAt(sundayAt15, new Date("2026-06-12T15:00:00Z"))).toBe(false);
   });
 
   it("any weekday: Friday event decides Wednesday, voting Sat–Tue (4 days)", () => {
