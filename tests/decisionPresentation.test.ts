@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDecisionPresentation } from "../src/lib/decisionPresentation";
-import type { CandidateActivity, CandidateScore, FairConstellationDecision, NoGoBreakdown, ScoreBreakdown } from "../src/lib/fairConstellationSelection";
+import { buildDecisionPresentation } from "../supabase/functions/decision/_shared/decisionPresentation";
+import type { CandidateActivity, CandidateScore, FairConstellationDecision, NoGoBreakdown, ScoreBreakdown } from "../supabase/functions/decision/_shared/algorithm";
 
 const sportNames = new Map([
   ["football", "Fußball"],

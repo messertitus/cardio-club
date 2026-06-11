@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SportProfile } from "../src/lib/fairConstellationSelection";
+import type { SportProfile } from "../src/lib/decisionTypes";
 import { coordinatesForPostalCode, fetchEventWeatherSnapshot } from "../src/services/weather";
 
 describe("weather service", () => {

@@ -1,4 +1,4 @@
-import type { ApRequirementLevel, SportProfile, WeatherRules } from "../lib/fairConstellationSelection";
+import type { ApRequirementLevel, SportProfile, WeatherRules } from "../lib/decisionTypes";
 import type { Row, SportLocationType } from "./database.types";
 import { readLocalCache, removeLocalCache, writeLocalCache } from "./localCache";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";

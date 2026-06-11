@@ -1,4 +1,4 @@
-import type { CandidateScore, FairConstellationDecision } from "./fairConstellationSelection";
+import type { CandidateScore, FairConstellationDecision } from "./algorithm.ts";
 
 export type SportNameMap = Map<string, string>;
 

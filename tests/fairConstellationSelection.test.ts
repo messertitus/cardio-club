@@ -6,7 +6,7 @@ import {
   type FairConstellationInput,
   type PreferenceHistoryEntry,
   type SportProfile,
-} from "../src/lib/fairConstellationSelection";
+} from "../supabase/functions/decision/_shared/algorithm";
 
 const sports: AbstractSport[] = [
   { id: "football", name: "Football", category: "field" },

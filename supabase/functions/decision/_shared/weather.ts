@@ -1,4 +1,4 @@
-import type { SportProfile, WeatherCondition, ProfileWeatherSnapshot } from "../lib/decisionTypes";
+import type { SportProfile, WeatherCondition, ProfileWeatherSnapshot } from "./algorithm.ts";
 
 export type WeatherFetch = typeof fetch;
 
