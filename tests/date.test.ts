@@ -40,10 +40,14 @@ describe("MCC event timing", () => {
     expect(decisionReleaseFrom(sundayAt15).toISOString()).toBe("2026-06-12T15:00:00.000Z"); // Friday 15:00
     expect(isDecisionReleaseOpenAt(sundayAt15, new Date("2026-06-12T14:59:00Z"))).toBe(false);
     expect(isDecisionReleaseOpenAt(sundayAt15, new Date("2026-06-12T15:00:00Z"))).toBe(true);
-    // Voting window: Monday 15:00 → Friday 15:00.
+    // Voting opens Monday 15:00 and closes a 2h buffer before the decision (13:00).
     expect(isVotingOpenAt(sundayAt15, new Date("2026-06-08T14:59:00Z"))).toBe(false);
     expect(isVotingOpenAt(sundayAt15, new Date("2026-06-08T15:00:00Z"))).toBe(true);
-    expect(isVotingOpenAt(sundayAt15, new Date("2026-06-12T15:00:00Z"))).toBe(false);
+    expect(isVotingOpenAt(sundayAt15, new Date("2026-06-12T12:59:00Z"))).toBe(true); // just before close
+    expect(isVotingOpenAt(sundayAt15, new Date("2026-06-12T13:00:00Z"))).toBe(false); // buffered close
+    expect(isVotingOpenAt(sundayAt15, new Date("2026-06-12T15:00:00Z"))).toBe(false); // decision time
+    // Buffer window: voting closed (13:00) but decision not yet out (15:00).
+    expect(isDecisionReleaseOpenAt(sundayAt15, new Date("2026-06-12T13:30:00Z"))).toBe(false);
   });
 
   it("any weekday: Friday event decides Wednesday, voting Sat–Tue (4 days)", () => {

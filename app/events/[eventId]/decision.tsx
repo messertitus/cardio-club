@@ -119,9 +119,9 @@ export default function DecisionResultScreen() {
 
       {!loading && event && !isAdmin && !released ? (
         <MccCard accent>
-          <MccBadge icon="calendar-clock-outline">Donnerstag</MccBadge>
+          <MccBadge icon="calendar-clock-outline">Auswertung folgt</MccBadge>
           <MccCardTitle>Die Auswertung ist noch zu</MccCardTitle>
-          <MccBody muted>Montag bis Mittwoch ist Zeit für Teilnahme und Abstimmung. Am Donnerstag erscheint hier automatisch die Entscheidung.</MccBody>
+          <MccBody muted>Es wird abgestimmt, bis kurz vor dem Cardiotag. 2 Tage vorher erscheint hier automatisch die Entscheidung.</MccBody>
           <MccButton label="Zur Abstimmung" icon="vote-outline" variant="secondary" onPress={() => router.push(`/events/${eventId}/vote`)} />
         </MccCard>
       ) : null}

@@ -1,4 +1,4 @@
-const MCC_CACHE_VERSION = "mcc-pwa-v3";
+const MCC_CACHE_VERSION = "mcc-pwa-v4";
 const MCC_APP_SHELL = ["/", "/manifest.webmanifest", "/mcc-logo.png"];
 
 self.addEventListener("install", (event) => {
@@ -47,19 +47,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Network-first for static assets: always pick up the latest build/bundle
+  // when online, and fall back to the cache only when the network fails. This
+  // avoids a stale JS bundle being served forever after a redeploy.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-
-      return fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response && response.status === 200) {
           const copy = response.clone();
           caches.open(MCC_CACHE_VERSION).then((cache) => cache.put(request, copy));
         }
 
         return response;
-      });
-    }),
+      })
+      .catch(() => caches.match(request).then((cached) => cached || Response.error())),
   );
 });
 

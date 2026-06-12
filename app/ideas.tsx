@@ -9,6 +9,7 @@ import { DetailLine, LabeledInput, MapLocationPicker, SearchField, SegmentedCont
 import { MapRouteButton } from "../src/components/MapRouteButton";
 import { ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
+import { useTourTarget } from "../src/components/TourGuide";
 import { SportIconBadge } from "../src/components/SportIcon";
 import { Button } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -149,6 +150,7 @@ const emptyDraft: IdeaDraft = {
 export default function IdeasScreen() {
   const { loading, user } = useAuth();
   const { theme } = useTheme();
+  const tourTarget = useTourTarget("ideas-create", { scroll: false });
   const [draft, setDraft] = useState<IdeaDraft>(emptyDraft);
   const [activeStep, setActiveStep] = useState<IdeaFlowStep>("location");
   const [ideas, setIdeas] = useState<SportIdeaWithCreator[]>([]);
@@ -567,7 +569,12 @@ export default function IdeasScreen() {
             {message ? <Text style={styles.notice}>{message}</Text> : null}
             {success ? <Text style={styles.success}>{success}</Text> : null}
 
-            <Pressable style={[styles.createCard, { borderColor: theme.accent, backgroundColor: theme.softSurface }]} onPress={() => setProposalOpen(true)}>
+            <Pressable
+              ref={tourTarget.ref}
+              onLayout={tourTarget.onLayout}
+              style={[styles.createCard, { borderColor: theme.accent, backgroundColor: theme.softSurface }]}
+              onPress={() => setProposalOpen(true)}
+            >
               <View style={styles.ideaText}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>Neue Aktivität vorschlagen</Text>
                 <Text style={[styles.ideaNote, { color: theme.muted }]}>Standort, Sportart, Wetter und Gruppengröße Schritt für Schritt erfassen.</Text>
