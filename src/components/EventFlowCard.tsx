@@ -6,17 +6,17 @@ import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import type { VoteRank } from "../lib/votingRules";
 import {
+  decisionReleaseFrom,
+  decisionReleasedNow,
   eventDayTitle,
   formatBerlinDate,
   formatBerlinTime,
   formatEventDayDate,
+  getDecisionReleaseDate,
   getVotingOpenDate,
   getWeekStartDate,
-  isDecisionReleaseOpen,
-  isDecisionReleaseOpenAt,
   isEventPast,
-  isVotingInputOpen,
-  isVotingOpenAt,
+  votingOpenNow,
   votingOpensFrom,
 } from "../services/date";
 import {
@@ -36,6 +36,7 @@ import { categoryLabel, intensityLabel } from "../lib/sportLabels";
 import { FlowStepRail, ScreenLoader, SmoothReveal, SpinnerRing, WeeklyEventHeroCard } from "./MccDesign";
 import { MapRouteButton } from "./MapRouteButton";
 import { MotionPressable, Reveal } from "./Motion";
+import { useTour, useTourTarget } from "./TourGuide";
 import { SearchField } from "./FormControls";
 import { SportIconBadge } from "./SportIcon";
 import type { EventDay } from "../services/date";
@@ -59,6 +60,12 @@ const attendanceOptions: Array<{ status: AttendanceStatus; title: string; body: 
 
 export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; userId: string; index?: number }) {
   const { theme } = useTheme();
+  // The first card anchors the guided tour through the vote: its step rail and
+  // the attendance / sports panels are spotlight targets.
+  const { previewStep: tourPreviewStep, setEventLabel } = useTour();
+  const flowTourTarget = useTourTarget(`event-flow-${index}`);
+  const attendanceTourTarget = useTourTarget(`event-attendance-${index}`);
+  const sportsTourTarget = useTourTarget(`event-sports-${index}`);
   const [state, setState] = useState<MccEventState | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -101,7 +108,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     const decided =
       result.data.event.status === "decided" ||
       result.data.event.status === "completed" ||
-      (result.data.event.starts_at ? isDecisionReleaseOpenAt(result.data.event.starts_at) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay));
+      decisionReleasedNow(result.data.event.starts_at, event.weekStartDate, event.eventDay);
     const past = isEventPast(event.weekStartDate, event.eventDay);
     const manage = await canCloseEvent(supabase, event.id, userId);
     const isManager = Boolean(manage.data);
@@ -126,7 +133,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     const decided =
       state.event.status === "decided" ||
       state.event.status === "completed" ||
-      (state.event.starts_at ? isDecisionReleaseOpenAt(state.event.starts_at) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay));
+      decisionReleasedNow(state.event.starts_at, event.weekStartDate, event.eventDay);
     const past = isEventPast(event.weekStartDate, event.eventDay);
     if (canManage && (decided || past)) return; // managers keep the wrap-up view open
     if (userDone && manualStep === "overview" && !doneRef.current) {
@@ -137,18 +144,30 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     if (!userDone) doneRef.current = false;
   }, [canManage, event.eventDay, event.weekStartDate, manualStep, state, userDone]);
 
+  // Report the first card's date so the tour can ask "Bist du dabei am …?".
+  useEffect(() => {
+    if (index !== 0 || !state) return undefined;
+    setEventLabel(formatEventDayDate(event.weekStartDate, event.eventDay));
+    return () => setEventLabel(null);
+  }, [event.eventDay, event.weekStartDate, index, setEventLabel, state]);
+
   if (!state) {
     return <ScreenLoader />;
   }
 
   const startsAt = state.event.starts_at;
-  const decisionOpen = startsAt ? isDecisionReleaseOpenAt(startsAt) : isDecisionReleaseOpen(event.weekStartDate, event.eventDay);
+  const decisionOpen = decisionReleasedNow(startsAt, event.weekStartDate, event.eventDay);
   const isDecided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
-  const votingInputOpen = startsAt ? isVotingOpenAt(startsAt) : isVotingInputOpen(event.weekStartDate, event.eventDay);
+  const votingInputOpen = votingOpenNow(startsAt, event.weekStartDate, event.eventDay);
   const votingOpensAt = startsAt ? votingOpensFrom(startsAt) : getVotingOpenDate(event.weekStartDate, event.eventDay);
-  // Show the exact open time only when it comes from a real event start (Berlin tz);
+  const decisionAt = startsAt ? decisionReleaseFrom(startsAt) : getDecisionReleaseDate(event.weekStartDate, event.eventDay);
+  // Show the exact times only when they come from a real event start (Berlin tz);
   // the date-only fallback would otherwise show a meaningless midnight time.
   const votingOpensLabel = startsAt ? `${formatBerlinDate(votingOpensAt)} um ${formatBerlinTime(votingOpensAt)}` : formatBerlinDate(votingOpensAt);
+  const decisionLabel = startsAt ? `${formatBerlinDate(decisionAt)} um ${formatBerlinTime(decisionAt)}` : formatBerlinDate(decisionAt);
+  // Within the "On Hold" state, distinguish "voting hasn't opened yet" from
+  // "voting closed, decision pending" (the buffer window).
+  const votingNotYetOpen = Date.now() < votingOpensAt.getTime();
   const eventPast = isEventPast(event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
   // Date label with the event's start time (Berlin), e.g. "Sonntag, 14. Juni · 15:00 Uhr".
@@ -166,7 +185,11 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         : state.myVotes.length === 0
           ? "sports"
           : "overview";
-  const activeStep = manualStep ?? naturalStep;
+  // During the guided tour the first card mirrors the tour's step so the right
+  // panel (attendance / sports) is on screen to be spotlighted. This is a view
+  // override only — it never writes attendance or votes.
+  const previewStep = index === 0 && !isDecided && !eventPast ? tourPreviewStep : null;
+  const activeStep = previewStep ?? manualStep ?? naturalStep;
 
   const primaryActivity = state.decision.activities[0] ?? null;
   const secondaryActivity = state.decision.activities[1] ?? null;
@@ -188,7 +211,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const votersCount = new Set(state.votes.map((vote) => vote.user_id)).size;
   const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "On Hold";
   const myFairness = state.decision.viewerFairness ?? null;
-  const isExpanded = expanded ?? !userDone;
+  // Keep the card open while the tour mirrors a flow step, so the attendance /
+  // sports panel it wants to spotlight is actually rendered.
+  const isExpanded = previewStep ? true : expanded ?? !userDone;
   const attending = state.myAttendance?.status === "going" || state.myAttendance?.status === "maybe";
   const myChoiceSummary =
     state.myAttendance?.status === "not_going"
@@ -534,25 +559,27 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
       />
 
       {!eventPast ? (
-        <FlowStepRail
-          completed={isDecided}
-          paused={onHold}
-          activeIndex={["attendance", "sports", "overview"].indexOf(activeStep)}
-          onStepPress={(stepIndex) => {
-            // Decided events no longer change votes — the rail just reveals the
-            // collapsed details instead of reopening the voting panels.
-            if (isDecided) {
-              setDetailsOpen(true);
-              return;
-            }
-            setManualStep((["attendance", "sports", "overview"] as const)[stepIndex]);
-          }}
-          steps={[
-            { label: "Teilnahme", icon: "account-check-outline" },
-            { label: "Sportwahl", icon: "vote-outline" },
-            { label: "Überblick", icon: "trophy-outline" },
-          ]}
-        />
+        <View ref={flowTourTarget.ref} onLayout={flowTourTarget.onLayout}>
+          <FlowStepRail
+            completed={isDecided}
+            paused={onHold}
+            activeIndex={["attendance", "sports", "overview"].indexOf(activeStep)}
+            onStepPress={(stepIndex) => {
+              // Decided events no longer change votes — the rail just reveals the
+              // collapsed details instead of reopening the voting panels.
+              if (isDecided) {
+                setDetailsOpen(true);
+                return;
+              }
+              setManualStep((["attendance", "sports", "overview"] as const)[stepIndex]);
+            }}
+            steps={[
+              { label: "Teilnahme", icon: "account-check-outline" },
+              { label: "Sportwahl", icon: "vote-outline" },
+              { label: "Überblick", icon: "trophy-outline" },
+            ]}
+          />
+        </View>
       ) : null}
 
       {notice ? (
@@ -564,11 +591,13 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
       {onHold ? (
         <View style={[styles.onHoldCard, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
           <View style={[styles.onHoldBadge, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.surface }]}>
-            <MaterialCommunityIcons name="pause" size={16} color={theme.mcc.accent} />
-            <Text style={[styles.onHoldBadgeText, { color: theme.mcc.accent }]}>On Hold</Text>
+            <MaterialCommunityIcons name={votingNotYetOpen ? "pause" : "lock-outline"} size={16} color={theme.mcc.accent} />
+            <Text style={[styles.onHoldBadgeText, { color: theme.mcc.accent }]}>{votingNotYetOpen ? "On Hold" : "Abstimmung beendet"}</Text>
           </View>
           <Text style={[styles.body, styles.onHoldText, { color: theme.mcc.textSecondary }]}>
-            Dieser Cardiotag ist schon sichtbar. Die Abstimmung öffnet am {votingOpensLabel} – dann kannst du Teilnahme und Sportarten wählen.
+            {votingNotYetOpen
+              ? `Dieser Cardiotag ist schon sichtbar. Die Abstimmung öffnet am ${votingOpensLabel} – dann kannst du Teilnahme und Sportarten wählen.`
+              : `Die Abstimmung ist geschlossen. Die Auswertung erscheint am ${decisionLabel}.`}
           </Text>
         </View>
       ) : null}
@@ -602,7 +631,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
       {onHold || ((isDecided || eventPast) && !detailsOpen) ? null : (
       <Stage stepKey={`${event.id}:${activeStep}`}>
         {activeStep === "attendance" && !eventPast ? (
-          <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+          <View ref={attendanceTourTarget.ref} onLayout={attendanceTourTarget.onLayout} style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
             <Text style={[styles.panelKicker, { color: theme.mcc.accent }]}>Deine Teilnahme</Text>
             <Text style={[styles.panelTitle, { color: theme.mcc.textPrimary }]}>Bist du dabei?</Text>
             <View style={styles.optionStack}>
@@ -644,7 +673,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         ) : null}
 
         {activeStep === "sports" && !eventPast ? (
-          <View style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+          <View ref={sportsTourTarget.ref} onLayout={sportsTourTarget.onLayout} style={[styles.panel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
             <Text style={[styles.panelKicker, { color: theme.mcc.accent }]}>Deine Sportwahl</Text>
             <Text style={[styles.panelTitle, { color: theme.mcc.textPrimary }]}>Wähle deinen Mix</Text>
             <SearchField value={sportSearch} onChangeText={setSportSearch} placeholder="Sportart oder Standort suchen" />
@@ -663,6 +692,12 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
                         noGo && { borderColor: "#ff8d7a", backgroundColor: "rgba(255,126,106,0.14)" },
                       ]}
                       pressedStyle={styles.pressed}
+                      onPress={() => {
+                        // Tapping anywhere on the card selects/deselects the sport,
+                        // not just the rank dots. No-Go cards are handled via their
+                        // own button (chooseSport ignores no-go'd sports).
+                        if (votingInputOpen) void chooseSport(sport.id);
+                      }}
                     >
                       <SportIconBadge sport={sport} size={36} />
                       <View style={styles.sportTextWrap}>
@@ -843,8 +878,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function computeUserDone(state: MccEventState, eventDay: EventDay, weekStartDate: string): boolean {
-  const decisionOpen = state.event.starts_at ? isDecisionReleaseOpenAt(state.event.starts_at) : isDecisionReleaseOpen(weekStartDate, eventDay);
-  const decided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
+  const decided = state.event.status === "decided" || state.event.status === "completed" || decisionReleasedNow(state.event.starts_at, weekStartDate, eventDay);
   if (decided || isEventPast(weekStartDate, eventDay)) return true;
   const status = state.myAttendance?.status;
   if (status === "not_going") return true;

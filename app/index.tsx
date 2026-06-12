@@ -8,10 +8,12 @@ import { EventFlowCard, type WeekEvent } from "../src/components/EventFlowCard";
 import { MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { Reveal } from "../src/components/Motion";
 import { MainHeader } from "../src/components/PageHeader";
+import { useTour, useTourTarget } from "../src/components/TourGuide";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
+import { hasSeenIntro, markIntroSeen } from "../src/services/introState";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
 import { eventDayTitle, formatEventDayDate, getWeekStartDate, isEventVisibleWindow } from "../src/services/date";
@@ -35,6 +37,12 @@ export default function HomeScreen() {
   const [addedEventIds, setAddedEventIds] = useState<Set<string>>(new Set());
   const [otherCitiesOpen, setOtherCitiesOpen] = useState(false);
   const [citySearch, setCitySearch] = useState("");
+  // The guided tour starts once, only after the location step is resolved
+  // (saved or skipped). `cityStepDone` gates it; the seen-flag lives locally.
+  const { start: startTour } = useTour();
+  const homeTarget = useTourTarget("home-events", { scroll: false });
+  const [cityStepDone, setCityStepDone] = useState(false);
+  const introCheckedForUserRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -64,17 +72,40 @@ export default function HomeScreen() {
   useEffect(() => {
     async function loadProfileCity() {
       if (!user) return;
-      const result = await getMyProfile(supabase, user.id);
-      if (result.data) setMyCity(result.data.city ?? null);
-      if (result.data && !result.data.city && !citySkipped && !seenCityPromptUserIds.has(user.id)) {
-        setNeedsCity(true);
-        setPostalCode(result.data.postal_code ?? "");
-        setCity(result.data.city ?? "");
+      try {
+        const result = await getMyProfile(supabase, user.id);
+        if (result.data) setMyCity(result.data.city ?? null);
+        if (result.data && !result.data.city && !citySkipped && !seenCityPromptUserIds.has(user.id)) {
+          setNeedsCity(true);
+          setPostalCode(result.data.postal_code ?? "");
+          setCity(result.data.city ?? "");
+          return; // The city prompt is showing; it will unblock the tour on save/skip.
+        }
+      } catch {
+        // Fall through — never let a profile read error trap the location step.
       }
+      // City already known or prompt handled earlier: nothing blocks the tour.
+      setCityStepDone(true);
     }
 
     void loadProfileCity();
   }, [citySkipped, user]);
+
+  // Once the location step is settled, start the guided tour exactly once per
+  // account. The "seen" flag is persisted locally (AsyncStorage → localStorage
+  // on web/PWA), so after the first run it never appears again — on PC, mobile
+  // and the installed PWA. We mark it seen as it starts, so even closing the app
+  // mid-tour won't bring it back.
+  useEffect(() => {
+    if (!user || !cityStepDone) return;
+    if (introCheckedForUserRef.current === user.id) return;
+    introCheckedForUserRef.current = user.id;
+    void hasSeenIntro(user.id).then((seen) => {
+      if (seen) return;
+      void markIntroSeen(user.id);
+      startTour();
+    });
+  }, [cityStepDone, startTour, user]);
 
   async function updatePostalCode(value: string) {
     const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
@@ -98,6 +129,7 @@ export default function HomeScreen() {
     setMyCity(city.trim());
     setCitySkipped(true);
     setNeedsCity(false);
+    setCityStepDone(true);
     return true;
   }
 
@@ -105,6 +137,7 @@ export default function HomeScreen() {
     if (user) seenCityPromptUserIds.add(user.id);
     setCitySkipped(true);
     setNeedsCity(false);
+    setCityStepDone(true);
   }
 
   if (loading || (!events && busy)) {
@@ -169,6 +202,8 @@ export default function HomeScreen() {
         >
           <Header />
 
+          {/* The tour spotlights the event area only — not the header/title. */}
+          <View ref={homeTarget.ref} onLayout={homeTarget.onLayout} style={styles.eventsArea}>
           {notice ? (
             <View style={styles.notice}>
               <Text style={styles.noticeText}>{notice}</Text>
@@ -288,6 +323,7 @@ export default function HomeScreen() {
               ) : null}
             </View>
           ) : null}
+          </View>
         </Animated.ScrollView>
         <CityPrompt
           visible={needsCity}
@@ -410,6 +446,7 @@ const styles = StyleSheet.create({
   appShell: { flex: 1 },
   scrollFill: { flex: 1 },
   screen: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  eventsArea: { gap: 16 },
   historyButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   weekGroup: { gap: 12 },
   weekLabel: { fontSize: 13, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase" },

@@ -16,7 +16,7 @@ import {
 } from "../src/lib/adminNotifications";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
-import { eventDayTitle, formatEventDayDate, getEventDate, getWeekStartDate, isDecisionReleaseOpen, isDecisionReleaseOpenAt } from "../src/services/date";
+import { decisionReleasedNow, eventDayTitle, formatEventDayDate, getEventDate, getWeekStartDate } from "../src/services/date";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { supabase } from "../src/lib/supabase";
 import {
@@ -623,10 +623,7 @@ function eventDecisionReady(state: MccEventState): boolean {
   // cancel_underused_events) — no chat, even before the server cancel job runs.
   const voterCount = new Set(state.votes.map((vote) => vote.user_id)).size;
   if (voterCount < 2) return false;
-  const decisionOpen = state.event.starts_at
-    ? isDecisionReleaseOpenAt(state.event.starts_at)
-    : isDecisionReleaseOpen(state.event.week_start_date, state.event.event_day);
-  return state.event.status === "decided" || decisionOpen;
+  return state.event.status === "decided" || decisionReleasedNow(state.event.starts_at, state.event.week_start_date, state.event.event_day);
 }
 
 function eventChatClosesAt(state: MccEventState): number {

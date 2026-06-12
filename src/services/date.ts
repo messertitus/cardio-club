@@ -132,7 +132,11 @@ export function getVotingOpenDate(weekStartDate: string, eventDay: EventDay = "s
 // decision/voting close happen at the event's time of day (e.g. 15:00), not at
 // midnight — and push notifications fire at that exact moment.
 const DECISION_LEAD_MS = 2 * DAY_MS; // decision is 2 days before the event
-const VOTING_WINDOW_MS = 4 * DAY_MS; // voting is the 4 days before the decision
+const VOTING_WINDOW_MS = 4 * DAY_MS; // voting runs ~4 days before the decision
+// Voting closes this long BEFORE the decision, so the last vote and the decision
+// never happen at the same instant — a safety buffer that also gives a clear
+// "voting closed, decision pending" window.
+export const VOTE_CLOSE_BUFFER_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export function decisionReleaseFrom(startsAt: string | Date): Date {
   const start = typeof startsAt === "string" ? new Date(startsAt) : startsAt;
@@ -143,13 +147,29 @@ export function votingOpensFrom(startsAt: string | Date): Date {
   return new Date(decisionReleaseFrom(startsAt).getTime() - VOTING_WINDOW_MS);
 }
 
+// Voting closes a buffer before the decision is released.
+export function votingClosesFrom(startsAt: string | Date): Date {
+  return new Date(decisionReleaseFrom(startsAt).getTime() - VOTE_CLOSE_BUFFER_MS);
+}
+
 export function isDecisionReleaseOpenAt(startsAt: string | Date, now = new Date()): boolean {
   return now.getTime() >= decisionReleaseFrom(startsAt).getTime();
 }
 
 export function isVotingOpenAt(startsAt: string | Date, now = new Date()): boolean {
   const t = now.getTime();
-  return t >= votingOpensFrom(startsAt).getTime() && t < decisionReleaseFrom(startsAt).getTime();
+  return t >= votingOpensFrom(startsAt).getTime() && t < votingClosesFrom(startsAt).getTime();
+}
+
+// Unified helpers used by BOTH client and server so they never disagree on
+// whether voting is open / the decision is out. Prefer the event's exact start
+// time (Berlin); fall back to the date-only computation if it is missing.
+export function votingOpenNow(startsAt: string | null | undefined, weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
+  return startsAt ? isVotingOpenAt(startsAt, now) : isVotingInputOpen(weekStartDate, eventDay, now);
+}
+
+export function decisionReleasedNow(startsAt: string | null | undefined, weekStartDate: string, eventDay: EventDay = "sunday", now = new Date()): boolean {
+  return startsAt ? isDecisionReleaseOpenAt(startsAt, now) : isDecisionReleaseOpen(weekStartDate, eventDay, now);
 }
 
 function addUtcDays(dateString: string, days: number): Date {

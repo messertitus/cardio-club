@@ -6,6 +6,7 @@ import { BottomNav } from "../src/components/BottomNav";
 import { MotionBackground } from "../src/components/MccDesign";
 import { MotionPressable, Reveal } from "../src/components/Motion";
 import { MainHeader } from "../src/components/PageHeader";
+import { useTourTarget } from "../src/components/TourGuide";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import {
@@ -29,6 +30,7 @@ type AdminNotification = {
 export default function MenuScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const ideasTarget = useTourTarget("menu-ideas");
   const [isAdmin, setIsAdmin] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [readNotifications, setReadNotifications] = useState<Record<string, number>>({});
@@ -158,7 +160,9 @@ export default function MenuScreen() {
           </Reveal>
 
           <View style={styles.grid}>
-            <MenuItem index={1} title="Sportarten und Standorte" body="Neue Aktivität vorschlagen" onPress={() => router.push("/ideas")} />
+            <View ref={ideasTarget.ref} onLayout={ideasTarget.onLayout}>
+              <MenuItem index={1} title="Sportarten und Standorte" body="Neue Aktivität vorschlagen" onPress={() => router.push("/ideas")} />
+            </View>
             <MenuItem index={2} title="PIN" body="App-PIN ändern" onPress={() => router.push("/pin")} />
             <MenuItem index={3} title="Push" body="Benachrichtigungen verwalten" onPress={() => router.push("/push")} />
             <MenuItem index={4} title="Standort" body={city ? `${postalCode} ${city}` : "PLZ und Stadt setzen"} onPress={() => setLocationPromptOpen(true)} />

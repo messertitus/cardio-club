@@ -1,5 +1,5 @@
 import type { AttendanceStatus, Row } from "./database.types";
-import { isVotingInputOpen } from "./date";
+import { votingOpenNow } from "./date";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -20,7 +20,7 @@ export async function updateAttendance(
   }
 
   if (!isAttendanceOpen(eventResult.data)) {
-    return fail("Teilnahme ist geschlossen. Ihr habt Montag bis Mittwoch Zeit, danach erscheint am Donnerstag die Auswertung.");
+    return fail("Teilnahme ist geschlossen. Die Auswertung erscheint kurz vor dem Cardiotag.");
   }
 
   const { data, error } = await supabase
@@ -60,8 +60,8 @@ export async function listAttendance(
 async function getAttendanceEvent(
   supabase: AppSupabaseClient,
   eventId: string,
-): Promise<ServiceResult<Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day">>> {
-  const { data, error } = await supabase.from("weekly_events").select("status, week_start_date, event_day").eq("id", eventId).single();
+): Promise<ServiceResult<Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day" | "starts_at">>> {
+  const { data, error } = await supabase.from("weekly_events").select("status, week_start_date, event_day, starts_at").eq("id", eventId).single();
 
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Could not load event status.") };
@@ -70,6 +70,6 @@ async function getAttendanceEvent(
   return ok(data);
 }
 
-function isAttendanceOpen(event: Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day">): boolean {
-  return (event.status === "proposing" || event.status === "voting") && isVotingInputOpen(event.week_start_date, event.event_day);
+function isAttendanceOpen(event: Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day" | "starts_at">): boolean {
+  return (event.status === "proposing" || event.status === "voting") && votingOpenNow(event.starts_at, event.week_start_date, event.event_day);
 }

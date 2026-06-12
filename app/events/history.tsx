@@ -7,7 +7,7 @@ import { DetailLine } from "../../src/components/FormControls";
 import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader } from "../../src/components/MccDesign";
 import { Reveal } from "../../src/components/Motion";
 import { SportIconBadge } from "../../src/components/SportIcon";
-import { formatBerlinDateTime, formatCardioSunday } from "../../src/services/date";
+import { formatBerlinDateTime, formatCardioSunday, isEventPast } from "../../src/services/date";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
 import { getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, type Row } from "../../src/services";
@@ -62,6 +62,12 @@ export default function EventHistoryScreen() {
 
   const sportNames = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.name])), [sports]);
 
+  // The archive only shows events that are done: skipped, completed, or past.
+  const archived = useMemo(
+    () => events.filter(({ event }) => event.status === "cancelled" || event.status === "completed" || isEventPast(event.week_start_date, event.event_day)),
+    [events],
+  );
+
   if (loading)
     return (
       <MccScreen>
@@ -81,43 +87,70 @@ export default function EventHistoryScreen() {
       </View>
       <InlineError>{error}</InlineError>
       {busy ? <LoadingSkeleton lines={3} /> : null}
-      {!busy && events.length === 0 ? <MccBody muted>Noch keine Events.</MccBody> : null}
-      {events.map(({ event, activities, results }, index) => {
+      {!busy && archived.length === 0 ? <MccBody muted>Noch keine vergangenen Events.</MccBody> : null}
+      {archived.map(({ event, activities, results }, index) => {
         const opened = expandedEventId === event.id;
+        const skipped = event.status === "cancelled";
+        const decisionSports = [event.selected_sport_id, event.secondary_sport_id]
+          .map((id) => (id ? sportNames.get(id) : null))
+          .filter(Boolean)
+          .join(" + ");
+        const locations = [...new Set(activities.map((activity) => activity.location).filter(Boolean))].join(", ");
         return (
           <Reveal key={event.id} index={index}>
           <MccCard>
             <View style={styles.cardHead}>
-              <MccBadge icon={eventTypeIcon(event.decision_type)} tone={event.decision_type ? "accent" : "neutral"}>
-                {eventTypeLabel(event.decision_type)}
-              </MccBadge>
-              <MccBadge tone={event.status === "completed" ? "success" : "neutral"} icon={event.status === "completed" ? "check-decagram" : "calendar-blank-outline"}>
-                {event.status === "completed" ? "Abgeschlossen" : "Offen"}
+              {skipped ? (
+                <MccBadge icon="calendar-remove-outline" tone="warning">Übersprungen</MccBadge>
+              ) : (
+                <MccBadge icon={eventTypeIcon(event.decision_type)} tone={event.decision_type ? "accent" : "neutral"}>{eventTypeLabel(event.decision_type)}</MccBadge>
+              )}
+              <MccBadge
+                tone={skipped ? "neutral" : event.status === "completed" ? "success" : "neutral"}
+                icon={skipped ? "account-off-outline" : event.status === "completed" ? "check-decagram" : "calendar-blank-outline"}
+              >
+                {skipped ? "Keine Teilnahme" : event.status === "completed" ? "Abgeschlossen" : "Vorbei"}
               </MccBadge>
             </View>
             <MccCardTitle>Cardiotag am {formatCardioSunday(event.starts_at ?? event.week_start_date)}</MccCardTitle>
-            <MccBody muted>{event.decision_reason ?? "Noch keine Entscheidung gespeichert."}</MccBody>
-            {activities.slice(0, opened ? activities.length : 2).map((activity) => {
-              const sport = sports.find((entry) => entry.id === activity.sport_id);
-              return (
-                <View key={activity.id} style={styles.activityRow}>
-                  <SportIconBadge sport={sport} size={34} />
-                  <MccBody style={styles.activityText}>
-                    {activity.title || sportNames.get(activity.sport_id) || "Aktivität"}
-                    {activity.location ? ` · ${activity.location}` : ""}
-                  </MccBody>
-                </View>
-              );
-            })}
-            {opened ? (
+            {skipped ? (
+              <MccBody muted>Mangels Teilnahme übersprungen – es gab keine Abstimmung, daher kein Ort und keine Aktivität.</MccBody>
+            ) : (
               <>
-                <DetailLine label="Status" value={event.status} />
-                <DetailLine label="Zeit" value={event.starts_at ? formatBerlinDateTime(event.starts_at) : null} />
-                <DetailLine label="Ort" value={event.location} />
-                <DetailLine label="Notizen" value={event.notes} />
-                <DetailLine label="Aktivitäten" value={activities.length ? `${activities.length}` : "0"} />
-                <DetailLine label="Ergebnisse" value={results.length ? results.map((result) => result.summary).join(" | ") : "Noch keine"} />
+                <MccBody muted>{event.decision_reason ?? "Keine Entscheidung gespeichert."}</MccBody>
+                {activities.slice(0, opened ? activities.length : 2).map((activity) => {
+                  const sport = sports.find((entry) => entry.id === activity.sport_id);
+                  return (
+                    <View key={activity.id} style={styles.activityRow}>
+                      <SportIconBadge sport={sport} size={34} />
+                      <MccBody style={styles.activityText}>
+                        {activity.title || sportNames.get(activity.sport_id) || "Aktivität"}
+                        {activity.location ? ` · ${activity.location}` : ""}
+                      </MccBody>
+                    </View>
+                  );
+                })}
               </>
+            )}
+            {opened ? (
+              skipped ? (
+                <>
+                  <DetailLine label="Status" value="Übersprungen – keine Teilnahme" />
+                  <DetailLine label="Stadt" value={event.city} />
+                  <DetailLine label="Geplant für" value={event.starts_at ? formatBerlinDateTime(event.starts_at) : null} />
+                  <DetailLine label="Auswirkung" value="Kein Einfluss auf die Fairness-Bilanz – als hätte es den Cardiotag nicht gegeben." />
+                </>
+              ) : (
+                <>
+                  <DetailLine label="Entscheidung" value={decisionSports || eventTypeLabel(event.decision_type)} />
+                  <DetailLine label="Zeit" value={event.starts_at ? formatBerlinDateTime(event.starts_at) : null} />
+                  <DetailLine label="Stadt" value={event.city} />
+                  <DetailLine label="Orte" value={locations || "—"} />
+                  <DetailLine label="Ergebnisse" value={results.length ? results.map((result) => result.summary).join(" | ") : "Keine eingetragen"} />
+                  <DetailLine label="Auswirkung" value="Fließt in die Fairness-Bilanz ein: übergangene Wünsche zählen beim nächsten Mal stärker." />
+                  <DetailLine label="Notizen" value={event.notes} />
+                </>
+              )
             ) : null}
             <MccButton label={opened ? "Weniger" : "Details"} variant="secondary" icon={opened ? "chevron-up" : "chevron-down"} onPress={() => setExpandedEventId(opened ? null : event.id)} />
           </MccCard>

@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AppNotificationBridge } from "../src/components/AppNotificationBridge";
 import { SwipeNavigator } from "../src/components/SwipeNavigator";
+import { TourProvider } from "../src/components/TourGuide";
 import { AuthProvider } from "../src/context/AuthContext";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 
@@ -18,9 +19,10 @@ function RootStack() {
 
   return (
     <AuthProvider>
-      <StatusBar style={mode === "dark" ? "light" : "dark"} />
-      <AppNotificationBridge />
-      <SwipeNavigator>
+      <TourProvider>
+        <StatusBar style={mode === "dark" ? "light" : "dark"} />
+        <AppNotificationBridge />
+        <SwipeNavigator>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -54,6 +56,7 @@ function RootStack() {
           <Stack.Screen name="events/[eventId]/close" options={{ title: "Event abschließen" }} />
         </Stack>
       </SwipeNavigator>
+      </TourProvider>
     </AuthProvider>
   );
 }
