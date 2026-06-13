@@ -193,16 +193,13 @@ export function MccHero({
 export function MccCard({
   children,
   accent = false,
-  animatedLine,
   style,
 }: {
   children: ReactNode;
   accent?: boolean;
-  animatedLine?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const { theme } = useTheme();
-  const showAnimatedLine = animatedLine ?? accent;
   return (
     <View
       style={[
@@ -215,7 +212,6 @@ export function MccCard({
         style,
       ]}
     >
-      {showAnimatedLine ? <PulseLine /> : null}
       {children}
     </View>
   );
@@ -283,28 +279,6 @@ export function MccCardTitle({ children, style }: { children: ReactNode; style?:
 export function MccBody({ children, muted = false, style }: { children: ReactNode; muted?: boolean; style?: StyleProp<TextStyle> }) {
   const { theme } = useTheme();
   return <Text style={[styles.bodyText, { color: muted ? theme.mcc.textSecondary : theme.mcc.textPrimary }, style]}>{children}</Text>;
-}
-
-export function PulseLine() {
-  const { theme } = useTheme();
-  const reduced = useReducedMotion();
-  const progress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reduced) return;
-    const animation = Animated.loop(Animated.timing(progress, { toValue: 1, duration: 2600, useNativeDriver: true }));
-    animation.start();
-    return () => animation.stop();
-  }, [progress, reduced]);
-
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [-140, 180] });
-
-  return (
-    <View pointerEvents="none" style={styles.pulseClip}>
-      <View style={[styles.pulseTrack, { backgroundColor: theme.mcc.line }]} />
-      <Animated.View style={[styles.pulseSignal, { backgroundColor: theme.mcc.accent, transform: [{ translateX }] }]} />
-    </View>
-  );
 }
 
 // A continuous loading spinner — the recurring brand motif used for the cardio
@@ -555,9 +529,8 @@ export function WeeklyEventHeroCard({
 }) {
   const { theme } = useTheme();
   return (
-    <MccCard accent animatedLine={false} style={styles.weeklyHero}>
+    <MccCard accent style={styles.weeklyHero}>
       <CardEntranceTrace radius={24} />
-      <HeroFlowSignal target={flowTarget} />
       <View style={styles.weeklyTop}>
         <View style={styles.flexText}>
           <MccBadge icon={weekTag?.icon ?? "pulse"} tone="accent">
@@ -577,33 +550,6 @@ export function WeeklyEventHeroCard({
       </View>
       {ctaLabel ? <MccButton label={ctaLabel} icon="arrow-right" onPress={onCtaPress} /> : null}
     </MccCard>
-  );
-}
-
-function HeroFlowSignal({ target }: { target?: { label: string; icon?: IconName; tone?: Tone } }) {
-  const { theme } = useTheme();
-  const reduced = useReducedMotion();
-  const progress = useRef(new Animated.Value(0)).current;
-  const targetColor = theme.mcc.accent;
-
-  useEffect(() => {
-    if (reduced) return;
-    const animation = Animated.loop(Animated.timing(progress, { toValue: 1, duration: 2200, useNativeDriver: true }));
-    animation.start();
-    return () => animation.stop();
-  }, [progress, reduced]);
-
-  if (reduced) return null;
-
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [-180, 420] });
-  const opacity = progress.interpolate({ inputRange: [0, 0.12, 0.84, 1], outputRange: [0, 1, 1, 0] });
-  const targetOpacity = target ? 0.78 : 0.42;
-
-  return (
-    <View pointerEvents="none" style={styles.heroFlowLayer}>
-      <View style={[styles.heroFlowTrack, { backgroundColor: theme.mcc.line, opacity: targetOpacity }]} />
-      <Animated.View style={[styles.heroFlowSweep, { backgroundColor: targetColor, opacity, shadowColor: targetColor, transform: [{ translateX }] }]} />
-    </View>
   );
 }
 
@@ -1041,9 +987,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   badgeText: { fontSize: 11, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
-  pulseClip: { height: 4, left: 14, overflow: "hidden", position: "absolute", right: 14, top: 0 },
-  pulseTrack: { height: 1, opacity: 0.7, position: "absolute", top: 2, width: "100%" },
-  pulseSignal: { borderRadius: 999, height: 4, opacity: 0.9, width: 130 },
   cardioRing: {
     alignItems: "center",
     borderRadius: 999,
@@ -1084,9 +1027,6 @@ const styles = StyleSheet.create({
   heroMetricText: { flex: 1, minWidth: 0 },
   heroMetricValue: { fontSize: 14, fontWeight: "900", lineHeight: 17 },
   heroMetricLabel: { fontSize: 10, fontWeight: "900", lineHeight: 13, textTransform: "uppercase" },
-  heroFlowLayer: { height: 4, left: 18, overflow: "hidden", position: "absolute", right: 18, top: 0 },
-  heroFlowTrack: { height: 1, left: 0, position: "absolute", right: 0, top: 1.5 },
-  heroFlowSweep: { borderRadius: 999, height: 4, shadowOpacity: 0.55, shadowRadius: 13, width: 180 },
   statusRing: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 58, justifyContent: "center", width: 58 },
   badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   flexText: { flex: 1, minWidth: 0 },

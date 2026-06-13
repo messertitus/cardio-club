@@ -386,13 +386,13 @@ export default function ChatScreen() {
             </Reveal>
           ) : null}
 
-          {eventStates.length > 0 && eventChannels.length === 0 ? (
+          {eventChannels.length === 0 && !activeDirectChat ? (
             <View style={[styles.lockedPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]}>
-              <Text style={[styles.lockedTitle, { color: theme.mcc.textPrimary }]}>{hasReadyButClosed ? "Event-Chat geschlossen" : "Noch geschlossen"}</Text>
+              <Text style={[styles.lockedTitle, { color: theme.mcc.textPrimary }]}>{hasReadyButClosed ? "Event-Chat geschlossen" : "Noch kein Chat offen"}</Text>
               <Text style={[styles.lockedText, { color: theme.mcc.textSecondary }]}>
                 {hasReadyButClosed
                   ? "Dieser Event-Chat wurde einen Tag nach dem Cardiotag geschlossen. Frühere Nachrichten findest du im Verlauf."
-                  : "Der Event- und Gruppen-Chat öffnet, sobald die Entscheidung für diesen Cardiotag steht."}
+                  : "Der Event- und Gruppen-Chat öffnet automatisch, sobald die Entscheidung für einen Cardiotag steht. Bis dahin gibt es hier noch keinen Chat."}
               </Text>
             </View>
           ) : null}
@@ -415,7 +415,7 @@ export default function ChatScreen() {
 
           <ScrollView ref={scrollRef} contentContainerStyle={styles.messages} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {messagesBusy && messages.length === 0 ? <ScreenLoader /> : null}
-            {messages.length === 0 && !messagesBusy ? <Text style={[styles.empty, { color: theme.mcc.textSecondary }]}>Noch keine Nachrichten.</Text> : null}
+            {messages.length === 0 && !messagesBusy && activeChannel ? <Text style={[styles.empty, { color: theme.mcc.textSecondary }]}>Noch keine Nachrichten.</Text> : null}
             {messages.map((message) => {
               const mine = message.user_id === user.id;
               return (
