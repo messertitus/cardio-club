@@ -5,6 +5,7 @@ import { BottomNav } from "../src/components/BottomNav";
 import { MccBadge, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader } from "../src/components/MccDesign";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
+import { APP_VERSION } from "../src/lib/appInfo";
 import { supabase } from "../src/lib/supabase";
 import { getMyProfile, type Row } from "../src/services";
 
@@ -242,6 +243,8 @@ export default function SettingsScreen() {
               </>
             )}
           </MccCard>
+
+          <Text style={[styles.version, { color: theme.mcc.textMuted }]}>Messers Cardio Club · Version {APP_VERSION}</Text>
         </MccScreen>
       </KeyboardAvoidingView>
       <BottomNav active="menu" />
@@ -403,6 +406,7 @@ function appPinToAuthPassword(phoneValue: string, pinValue: string): string {
 
 const styles = StyleSheet.create({
   shell: { flex: 1 },
+  version: { fontSize: 12, fontWeight: "700", textAlign: "center", paddingTop: 4 },
   label: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   input: {
     minHeight: 54,

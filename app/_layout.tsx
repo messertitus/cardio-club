@@ -1,10 +1,14 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { AppNotificationBridge } from "../src/components/AppNotificationBridge";
 import { SwipeNavigator } from "../src/components/SwipeNavigator";
 import { TourProvider } from "../src/components/TourGuide";
+import { UpdateBanner } from "../src/components/UpdateBanner";
 import { AuthProvider } from "../src/context/AuthContext";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
+import { CACHE_SCHEMA_VERSION } from "../src/lib/appInfo";
+import { purgeAppCachesIfOutdated } from "../src/services/localCache";
 
 export default function RootLayout() {
   return (
@@ -17,11 +21,18 @@ export default function RootLayout() {
 function RootStack() {
   const { mode, theme } = useTheme();
 
+  // Drop stale data caches once per app start when the cache schema changed, so
+  // a new build never reads wrongly-shaped cached data.
+  useEffect(() => {
+    void purgeAppCachesIfOutdated(CACHE_SCHEMA_VERSION);
+  }, []);
+
   return (
     <AuthProvider>
       <TourProvider>
         <StatusBar style={mode === "dark" ? "light" : "dark"} />
         <AppNotificationBridge />
+        <UpdateBanner />
         <SwipeNavigator>
         <Stack
           screenOptions={{
