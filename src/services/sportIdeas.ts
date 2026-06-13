@@ -70,7 +70,7 @@ export async function listSportIdeas(supabase: AppSupabaseClient): Promise<Servi
   if (profilesResult.error || sportsResult.error || !profilesResult.data || !sportsResult.data) {
     return {
       data: null,
-      error: fromPostgrestError(profilesResult.error ?? sportsResult.error, "Sportideen konnten nicht vollstaendig geladen werden."),
+      error: fromPostgrestError(profilesResult.error ?? sportsResult.error, "Sportideen konnten nicht vollständig geladen werden."),
     };
   }
 

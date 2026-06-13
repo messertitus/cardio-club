@@ -167,13 +167,13 @@ export async function upsertSportProfile(
     return fail("Bitte gib die Mindestanzahl an.");
   }
   if (input.maximumGroupSize && input.maximumGroupSize < input.minimumGroupSize) {
-    return fail("Die Maximalanzahl muss groesser oder gleich der Mindestanzahl sein.");
+    return fail("Die Maximalanzahl muss größer oder gleich der Mindestanzahl sein.");
   }
   if (input.minimumParticipants && input.minimumParticipants < 1) {
     return fail("Die Standort-Mindestanzahl muss mindestens 1 sein.");
   }
   if (input.maximumParticipants && input.minimumParticipants && input.maximumParticipants < input.minimumParticipants) {
-    return fail("Die Standort-Maximalanzahl muss groesser oder gleich der Standort-Mindestanzahl sein.");
+    return fail("Die Standort-Maximalanzahl muss größer oder gleich der Standort-Mindestanzahl sein.");
   }
 
   const apContactId = input.apContactId ?? input.createdBy ?? null;
@@ -264,7 +264,7 @@ export async function deleteSportProfile(
   const { error } = await supabase.from("sport_profiles").delete().eq("id", profileId);
 
   if (error) {
-    return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht geloescht werden.") };
+    return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht gelöscht werden.") };
   }
 
   await clearSportProfileCaches();
@@ -283,7 +283,7 @@ export async function setSportProfileActive(
     .single();
 
   if (error || !data) {
-    return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht geaendert werden.") };
+    return { data: null, error: fromPostgrestError(error, "Sportprofil konnte nicht geändert werden.") };
   }
 
   await clearSportProfileCaches();

@@ -7,21 +7,9 @@ import { MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
+import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
-import { getMyProfile, requestProfileDisplayNameChange, updateProfileDetails, type Row } from "../src/services";
-
-type CountryDialCode = { iso: string; dialCode: string; colors: string[] };
-
-const COUNTRIES: CountryDialCode[] = [
-  { iso: "DE", dialCode: "+49", colors: ["#000000", "#dd0000", "#ffce00"] },
-  { iso: "AT", dialCode: "+43", colors: ["#ed2939", "#ffffff", "#ed2939"] },
-  { iso: "CH", dialCode: "+41", colors: ["#d52b1e", "#ffffff", "#d52b1e"] },
-  { iso: "FR", dialCode: "+33", colors: ["#0055a4", "#ffffff", "#ef4135"] },
-  { iso: "IT", dialCode: "+39", colors: ["#008c45", "#f4f5f0", "#cd212a"] },
-  { iso: "NL", dialCode: "+31", colors: ["#ae1c28", "#ffffff", "#21468b"] },
-  { iso: "GB", dialCode: "+44", colors: ["#012169", "#ffffff", "#c8102e"] },
-  { iso: "US", dialCode: "+1", colors: ["#b22234", "#ffffff", "#3c3b6e"] },
-];
+import { getMyProfile, requestProfileDisplayNameChange, updateProfileCity, updateProfileDetails, type Row } from "../src/services";
 
 export default function ProfileScreen() {
   const { loading, user } = useAuth();
@@ -30,12 +18,8 @@ export default function ProfileScreen() {
   const [requestedName, setRequestedName] = useState("");
   const [favoriteSports, setFavoriteSports] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [countryIso, setCountryIso] = useState("DE");
-  const [dialCode, setDialCode] = useState("+49");
-  const [phoneLocal, setPhoneLocal] = useState("");
-  const [phonePin, setPhonePin] = useState("");
-  const [smsCode, setSmsCode] = useState("");
-  const [pendingPhone, setPendingPhone] = useState<string | null>(null);
+  const [postalCode, setPostalCode] = useState("");
+  const [city, setCity] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -48,15 +32,12 @@ export default function ProfileScreen() {
         setMessage(result.error.message);
         return;
       }
-      const phone = normalizePhone(result.data.phone ?? user.phone ?? "+49");
-      const parsed = splitPhone(phone);
       setProfile(result.data);
       setRequestedName(result.data.display_name);
       setFavoriteSports(result.data.favorite_sports ?? "");
       setBirthDate(result.data.birth_date ?? "");
-      setCountryIso(parsed.country.iso);
-      setDialCode(parsed.country.dialCode);
-      setPhoneLocal(parsed.local);
+      setPostalCode(result.data.postal_code ?? "");
+      setCity(result.data.city ?? "");
     }
 
     void load();
@@ -96,73 +77,26 @@ export default function ProfileScreen() {
     setSuccess("Profil gespeichert.");
   }
 
-  async function startPhoneChange() {
-    if (!profile || busy) return;
-    const phone = composePhone(dialCode, phoneLocal);
-    clearMessages();
-
-    if (!isValidPhone(phone)) {
-      setMessage("Bitte gib eine gültige Telefonnummer ein.");
-      return;
-    }
-    if (!isValidPin(phonePin)) {
-      setMessage("Bitte bestätige die Änderung mit deiner aktuellen PIN.");
-      return;
-    }
-
-    setBusy(true);
-    const currentPhone = normalizePhone(profile.phone ?? "");
-    let login = await supabase.auth.signInWithPassword({ phone: currentPhone, password: appPinToAuthPassword(currentPhone, phonePin) });
-    if (login.error && login.error.message.toLowerCase().includes("invalid login credentials")) {
-      login = await supabase.auth.signInWithPassword({ phone: currentPhone, password: phonePin });
-    }
-    if (login.error) {
-      setMessage("Aktuelle PIN stimmt nicht.");
-      setBusy(false);
-      return;
-    }
-
-    const update = await supabase.auth.updateUser({ phone });
-    setBusy(false);
-    if (update.error) {
-      setMessage(update.error.message);
-      return;
-    }
-    setPendingPhone(phone);
-    setSuccess("SMS-Code wurde gesendet.");
+  async function updatePostalCode(value: string) {
+    const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
+    setPostalCode(nextPostalCode);
+    if (nextPostalCode.length !== 5) return;
+    const resolvedCity = await lookupCityByPostalCode(nextPostalCode);
+    if (resolvedCity) setCity(resolvedCity);
   }
 
-  async function confirmPhoneChange() {
-    if (!pendingPhone || !profile || !user || !isValidPin(phonePin)) return;
+  async function saveLocation() {
+    if (!user || postalCode.length < 5 || !city.trim()) return;
     setBusy(true);
     clearMessages();
-
-    const verified = await supabase.auth.verifyOtp({
-      phone: pendingPhone,
-      token: smsCode.replace(/\D/g, ""),
-      type: "phone_change",
-    });
-
-    if (verified.error) {
-      setMessage(verified.error.message);
-      setBusy(false);
-      return;
-    }
-
-    const password = await supabase.auth.updateUser({ password: appPinToAuthPassword(pendingPhone, phonePin) });
-    if (password.error) {
-      setMessage(password.error.message);
-      setBusy(false);
-      return;
-    }
-
-    const saved = await supabase.from("profiles").update({ phone: pendingPhone }).eq("id", user.id).select().single();
-    if (saved.data) setProfile(saved.data);
-    setPendingPhone(null);
-    setSmsCode("");
-    setPhonePin("");
-    setSuccess("Telefonnummer geändert.");
+    const result = await updateProfileCity(supabase, { userId: user.id, postalCode, city: city.trim() });
     setBusy(false);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    setProfile((current) => (current ? { ...current, postal_code: postalCode, city: city.trim() } : current));
+    setSuccess("Standort gespeichert.");
   }
 
   function clearMessages() {
@@ -199,17 +133,11 @@ export default function ProfileScreen() {
             </View>
 
             <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface, shadowColor: theme.mcc.shadow }]}>
-              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Telefonnummer</Text>
-              <Text style={[styles.label, { color: theme.mcc.textSecondary }]}>Aktuell: {normalizePhone(profile?.phone ?? user.phone ?? "") || "Keine Nummer"}</Text>
-              <PhoneField countryIso={countryIso} dialCode={dialCode} onCountryChange={setCountryIso} onDialCodeChange={setDialCode} phone={phoneLocal} onPhoneChange={setPhoneLocal} />
-              <ProfileInput value={phonePin} onChangeText={(value) => setPhonePin(value.replace(/\D/g, ""))} placeholder="Aktuelle PIN" keyboardType="number-pad" inputMode="numeric" secureTextEntry />
-              {!pendingPhone ? <ActionButton label="SMS-Code senden" onPress={startPhoneChange} disabled={busy || !isValidPin(phonePin)} /> : null}
-              {pendingPhone ? (
-                <>
-                  <ProfileInput value={smsCode} onChangeText={(value) => setSmsCode(value.replace(/\D/g, ""))} placeholder="SMS-Code" keyboardType="number-pad" inputMode="numeric" />
-                  <ActionButton label="Telefon bestätigen" onPress={confirmPhoneChange} disabled={busy || smsCode.length < 4} />
-                </>
-              ) : null}
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Standort</Text>
+              <Text style={[styles.label, { color: theme.mcc.textSecondary }]}>Für die Events in deiner Stadt.</Text>
+              <ProfileInput value={postalCode} onChangeText={updatePostalCode} placeholder="PLZ" keyboardType="number-pad" inputMode="numeric" maxLength={5} />
+              <ProfileInput value={city} onChangeText={setCity} placeholder="Stadt" autoCapitalize="words" />
+              <ActionButton label="Standort speichern" onPress={saveLocation} disabled={busy || postalCode.length < 5 || !city.trim()} />
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -219,141 +147,9 @@ export default function ProfileScreen() {
   );
 }
 
-function PhoneField({
-  countryIso,
-  dialCode,
-  onCountryChange,
-  onDialCodeChange,
-  phone,
-  onPhoneChange,
-}: {
-  countryIso: string;
-  dialCode: string;
-  onCountryChange: (value: string) => void;
-  onDialCodeChange: (value: string) => void;
-  phone: string;
-  onPhoneChange: (value: string) => void;
-}) {
-  const { theme } = useTheme();
-  const [expanded, setExpanded] = useState(false);
-  const selected = COUNTRIES.find((country) => country.iso === countryIso) ?? COUNTRIES[0];
-
-  function selectCountry(country: CountryDialCode) {
-    onCountryChange(country.iso);
-    onDialCodeChange(country.dialCode);
-    setExpanded(false);
-  }
-
-  return (
-    <View style={styles.phoneGroup}>
-      <View style={styles.phoneRow}>
-        <Pressable style={[styles.dialField, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => setExpanded((value) => !value)}>
-          <FlagBadge country={selected} />
-          <Text style={[styles.dialText, { color: theme.mcc.textPrimary }]}>{dialCode}</Text>
-          <Text style={[styles.chevron, { color: theme.mcc.textMuted }]}>{expanded ? "▲" : "▼"}</Text>
-        </Pressable>
-        <TextInput
-          value={phone}
-          onChangeText={(value) => onPhoneChange(value.replace(/[^\d\s()+-]/g, ""))}
-          keyboardType="phone-pad"
-          inputMode="tel"
-          autoComplete="tel"
-          placeholder="170 1234567"
-          placeholderTextColor={theme.mcc.textMuted}
-          style={[styles.input, styles.phoneInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
-        />
-      </View>
-      {expanded ? (
-        <View style={[styles.countryMenu, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceRaised }]}>
-          {COUNTRIES.map((country) => (
-            <Pressable key={country.iso} style={[styles.countryOption, { borderBottomColor: theme.mcc.line }]} onPress={() => selectCountry(country)}>
-              <FlagBadge country={country} />
-              <Text style={[styles.countryIso, { color: theme.mcc.textPrimary }]}>{country.iso}</Text>
-              <Text style={[styles.countryDialCode, { color: theme.mcc.textSecondary }]}>{country.dialCode}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function FlagBadge({ country }: { country: CountryDialCode }) {
-  return (
-    <View style={styles.flagBadge}>
-      {country.colors.map((color, index) => (
-        <View key={`${country.iso}-${color}-${index}`} style={[styles.flagStripe, { backgroundColor: color }]} />
-      ))}
-    </View>
-  );
-}
-
 function ProfileInput(props: React.ComponentProps<typeof TextInput>) {
   const { theme } = useTheme();
   return <TextInput placeholderTextColor={theme.mcc.textMuted} style={[styles.input, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]} {...props} />;
-}
-
-function CalendarInput({ value, onChangeText }: { value: string; onChangeText: (value: string) => void }) {
-  const { theme } = useTheme();
-  const normalizedValue = normalizeBirthDate(value) ?? "";
-  const selected = parseIsoDate(normalizedValue) ?? new Date(2000, 0, 1);
-  const [open, setOpen] = useState(false);
-  const [visibleYear, setVisibleYear] = useState(selected.getFullYear());
-  const [visibleMonth, setVisibleMonth] = useState(selected.getMonth());
-  const days = buildCalendarDays(visibleYear, visibleMonth);
-
-  function moveMonth(delta: number) {
-    const next = new Date(visibleYear, visibleMonth + delta, 1);
-    setVisibleYear(next.getFullYear());
-    setVisibleMonth(next.getMonth());
-  }
-
-  function selectDay(day: number) {
-    onChangeText(`${visibleYear}-${String(visibleMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
-    setOpen(false);
-  }
-
-  return (
-    <View style={styles.calendarRoot}>
-      <Pressable style={[styles.input, styles.calendarTrigger, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => setOpen((next) => !next)}>
-        <Text style={[styles.calendarTriggerText, { color: normalizedValue ? theme.mcc.textPrimary : theme.mcc.textMuted }]}>{normalizedValue ? formatGermanDate(normalizedValue) : "Geburtstag auswählen"}</Text>
-        <Text style={[styles.chevron, { color: theme.mcc.textMuted }]}>{open ? "▲" : "▼"}</Text>
-      </Pressable>
-
-      {open ? (
-        <View style={[styles.calendarPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceRaised }]}>
-          <View style={styles.calendarHeader}>
-            <Pressable style={[styles.calendarNav, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => moveMonth(-1)}>
-              <Text style={[styles.calendarNavText, { color: theme.mcc.textPrimary }]}>‹</Text>
-            </Pressable>
-            <Text style={[styles.calendarTitle, { color: theme.mcc.textPrimary }]}>{monthTitle(visibleYear, visibleMonth)}</Text>
-            <Pressable style={[styles.calendarNav, { backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => moveMonth(1)}>
-              <Text style={[styles.calendarNavText, { color: theme.mcc.textPrimary }]}>›</Text>
-            </Pressable>
-          </View>
-          <View style={styles.weekdayRow}>
-            {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((day) => (
-              <Text key={day} style={[styles.weekday, { color: theme.mcc.textMuted }]}>
-                {day}
-              </Text>
-            ))}
-          </View>
-          <View style={styles.calendarGrid}>
-            {days.map((day, index) => {
-              const active = day > 0 && normalizedValue === `${visibleYear}-${String(visibleMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-              return day > 0 ? (
-                <Pressable key={`${visibleYear}-${visibleMonth}-${day}`} style={[styles.dayCell, active && { backgroundColor: theme.mcc.accentDeep }]} onPress={() => selectDay(day)}>
-                  <Text style={[styles.dayText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{day}</Text>
-                </Pressable>
-              ) : (
-                <View key={`empty-${index}`} style={styles.dayCell} />
-              );
-            })}
-          </View>
-        </View>
-      ) : null}
-    </View>
-  );
 }
 
 function ActionButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
@@ -460,53 +256,6 @@ function BirthDatePicker({ value, onChangeText }: { value: string; onChangeText:
   );
 }
 
-function splitPhone(value: string): { country: CountryDialCode; local: string } {
-  const normalized = normalizePhone(value);
-  const country = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length).find((entry) => normalized.startsWith(entry.dialCode)) ?? COUNTRIES[0];
-  const local = normalized.startsWith(country.dialCode) ? normalized.slice(country.dialCode.length).replace(/^0+/, "") : normalized.replace(/^\+/, "");
-  return { country, local };
-}
-
-function composePhone(dialCode: string, localPhone: string): string {
-  let compactPhone = localPhone.trim().replace(/[^\d+]/g, "");
-  if (compactPhone.startsWith("+") || compactPhone.startsWith("00")) {
-    return normalizePhone(compactPhone);
-  }
-
-  const dialDigits = dialCode.replace(/\D/g, "");
-  if (compactPhone.startsWith(dialDigits)) {
-    compactPhone = compactPhone.slice(dialDigits.length);
-  }
-  if (compactPhone.startsWith("0")) {
-    compactPhone = compactPhone.slice(1);
-  }
-
-  return normalizePhone(`${normalizeDialCode(dialCode)}${compactPhone}`);
-}
-
-function normalizeDialCode(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 4);
-  return digits ? `+${digits}` : "+";
-}
-
-function normalizePhone(value: string): string {
-  const compact = value.trim().replace(/[^\d+]/g, "");
-  if (compact.startsWith("+")) return compact;
-  if (compact.startsWith("00")) return `+${compact.slice(2)}`;
-  if (compact.startsWith("49")) return `+${compact}`;
-  if (compact.startsWith("0")) return `+49${compact.slice(1)}`;
-  if (/^[1-9]\d{5,11}$/.test(compact)) return `+49${compact}`;
-  return compact ? `+${compact}` : "";
-}
-
-function isValidPhone(value: string): boolean {
-  return /^\+[1-9]\d{7,14}$/.test(value);
-}
-
-function isValidPin(pin: string): boolean {
-  return /^\d{4,16}$/.test(pin);
-}
-
 function normalizeBirthDate(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -533,10 +282,6 @@ function isRealDate(year: number, month: number, day: number): boolean {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function parseIsoDate(value: string): Date | null {
   const normalized = normalizeBirthDate(value);
   if (!normalized) return null;
@@ -550,27 +295,6 @@ function formatGermanDate(value: string): string {
   return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function monthTitle(year: number, month: number): string {
-  return new Date(year, month, 1).toLocaleDateString("de-DE", { month: "long", year: "numeric" });
-}
-
-function buildCalendarDays(year: number, month: number): number[] {
-  const firstDay = new Date(year, month, 1).getDay();
-  const leadingDays = (firstDay + 6) % 7;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const days = Array.from({ length: leadingDays }, () => 0);
-
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    days.push(day);
-  }
-
-  while (days.length % 7 !== 0) {
-    days.push(0);
-  }
-
-  return days;
-}
-
 function buildBirthYears(): number[] {
   const currentYear = new Date().getFullYear();
   return Array.from({ length: currentYear - 1919 }, (_, index) => currentYear - index);
@@ -580,19 +304,10 @@ function shortMonthName(month: number): string {
   return new Date(2000, month, 1).toLocaleDateString("de-DE", { month: "short" }).replace(".", "");
 }
 
-function appPinToAuthPassword(phoneValue: string, pinValue: string): string {
-  const phoneTail = phoneValue.replace(/\D/g, "").slice(-6).padStart(6, "0");
-  return `mcc-${phoneTail}-${pinValue}`;
-}
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   shell: { flex: 1 },
   content: { gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
-  header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  headerText: { flex: 1, minWidth: 0 },
-  kicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { fontSize: 34, fontWeight: "900" },
   notice: { color: "#ffb5a8", fontSize: 14, fontWeight: "900" },
   success: { color: "#5eead4", fontSize: 14, fontWeight: "900" },
   card: { gap: 10, borderRadius: 22, borderWidth: 1, padding: 16, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 22 },
@@ -620,43 +335,7 @@ const styles = StyleSheet.create({
   pickerCell: { alignItems: "center", borderRadius: 999, minWidth: 55, paddingHorizontal: 8, paddingVertical: 7 },
   dayPickerCell: { alignItems: "center", borderRadius: 999, width: 32, paddingVertical: 7 },
   pickerText: { fontSize: 12, fontWeight: "900" },
-  calendarPanel: { borderRadius: 22, borderWidth: 1, gap: 12, padding: 12 },
-  calendarHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 10 },
-  calendarTitle: { flex: 1, fontSize: 16, fontWeight: "900", textAlign: "center", textTransform: "capitalize" },
-  calendarNav: { alignItems: "center", borderRadius: 999, height: 38, justifyContent: "center", width: 38 },
-  calendarNavText: { fontSize: 24, fontWeight: "900", lineHeight: 26 },
-  weekdayRow: { flexDirection: "row" },
-  weekday: { flex: 1, fontSize: 11, fontWeight: "900", textAlign: "center", textTransform: "uppercase" },
-  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
-  dayCell: { alignItems: "center", aspectRatio: 1, borderRadius: 999, justifyContent: "center", width: `${100 / 7}%` },
-  dayText: { fontSize: 14, fontWeight: "900" },
-  phoneGroup: { gap: 8 },
-  phoneRow: { flexDirection: "row", gap: 10 },
-  dialField: {
-    alignItems: "center",
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 7,
-    minHeight: 54,
-    paddingHorizontal: 12,
-  },
-  phoneInput: { flex: 1 },
-  dialText: { fontSize: 16, fontWeight: "900" },
   chevron: { fontSize: 10, fontWeight: "900" },
-  flagBadge: {
-    width: 28,
-    height: 19,
-    overflow: "hidden",
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  flagStripe: { flex: 1 },
-  countryMenu: { borderRadius: 18, borderWidth: 1, overflow: "hidden" },
-  countryOption: { alignItems: "center", borderBottomWidth: 1, flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 11 },
-  countryIso: { flex: 1, fontSize: 15, fontWeight: "900" },
-  countryDialCode: { fontSize: 15, fontWeight: "800" },
   button: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
   buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
   disabled: { opacity: 0.42 },

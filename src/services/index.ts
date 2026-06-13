@@ -19,6 +19,7 @@ export * from "./noGos";
 export * from "./proposals";
 export * from "./profiles";
 export * from "./push";
+export * from "./pwaInstallHint";
 export * from "./result";
 export * from "./sportIdeas";
 export * from "./sportProfiles";

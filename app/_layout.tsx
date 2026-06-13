@@ -41,8 +41,9 @@ function RootStack() {
           <Stack.Screen name="menu" options={{ title: "Menü" }} />
           <Stack.Screen name="admin" options={{ title: "Admin" }} />
           <Stack.Screen name="invites" options={{ title: "Einladungscodes" }} />
-          <Stack.Screen name="pin" options={{ title: "PIN" }} />
+          <Stack.Screen name="settings" options={{ title: "Einstellungen" }} />
           <Stack.Screen name="push" options={{ title: "Push" }} />
+          <Stack.Screen name="install" options={{ title: "App installieren" }} />
           <Stack.Screen name="auth" options={{ title: "Anmelden" }} />
           <Stack.Screen name="clubs/index" options={{ title: "Clubs" }} />
           <Stack.Screen name="clubs/create" options={{ title: "Club erstellen" }} />

@@ -52,7 +52,7 @@ export default function ClubDashboardScreen() {
       <InlineError>{error}</InlineError>
       <WeeklyEventHeroCard
         title="Diese Woche"
-        subtitle={event ? `Cardiotag am ${formatCardioSunday(event.starts_at ?? event.week_start_date)}` : "Fuer diese Woche gibt es noch kein Event."}
+        subtitle={event ? `Cardiotag am ${formatCardioSunday(event.starts_at ?? event.week_start_date)}` : "Für diese Woche gibt es noch kein Event."}
         dateLabel={event ? formatCardioSunday(event.starts_at ?? event.week_start_date) : undefined}
         status={event ? event.status : "offen"}
         chips={[{ label: eventTypeLabel(event?.decision_type ?? null), icon: "chart-donut" }]}

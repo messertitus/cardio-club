@@ -21,7 +21,7 @@ const MAP_ZOOM = 16;
 const TILE_SIZE = 256;
 const LOCAL_LOCATION_ALIASES: Array<LocationSearchResult & { aliases: string[] }> = [
   {
-    label: "Strandbad Horn / Hoernle, Eichhornstrasse 100, Konstanz",
+    label: "Strandbad Horn / Hörnle, Eichhornstraße 100, Konstanz",
     latitude: 47.66606,
     longitude: 9.21502,
     aliases: ["strandbadhorn", "strandbadhoernle", "hoernle", "hornkonstanz"],

@@ -41,7 +41,7 @@ export default function CreateClubScreen() {
     <MccScreen title="Club erstellen" kicker="Setup" subtitle="Name, kurzer Zweck, fertig. Der gemeinsame Cardiotag bleibt sonntags.">
       <MccCard accent>
         <LabeledInput label="Clubname" value={name} onChangeText={setName} placeholder="Messers Cardio Club" />
-        <LabeledInput label="Beschreibung" value={description} onChangeText={setDescription} placeholder="Woechentlicher Sporttag" multiline />
+        <LabeledInput label="Beschreibung" value={description} onChangeText={setDescription} placeholder="Wöchentlicher Sporttag" multiline />
         <InlineError>{error}</InlineError>
         <MccButton label="Club speichern" icon="content-save-outline" onPress={submit} disabled={loading || name.trim().length === 0} />
       </MccCard>
