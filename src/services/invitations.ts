@@ -1,4 +1,6 @@
 import type { Row } from "./database.types";
+import { trackAppEvent } from "./analytics";
+import { COMMUNITY_EVENTS } from "../lib/analyticsEvents";
 import { fail, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -58,6 +60,8 @@ export async function createInvitationCode(
   if (error || !data) {
     return fail(inviteErrorMessage(error), error);
   }
+
+  void trackAppEvent(supabase, COMMUNITY_EVENTS.inviteCreated);
 
   return ok({ code: data });
 }

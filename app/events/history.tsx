@@ -10,7 +10,8 @@ import { SportIconBadge } from "../../src/components/SportIcon";
 import { formatBerlinDateTime, formatCardioSunday, isEventPast } from "../../src/services/date";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
-import { getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, type Row } from "../../src/services";
+import { getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, SCREEN_EVENTS, type Row } from "../../src/services";
+import { useScreenView } from "../../src/components/useScreenView";
 
 type EventWithActivities = {
   event: Row<"weekly_events">;
@@ -20,6 +21,7 @@ type EventWithActivities = {
 
 export default function EventHistoryScreen() {
   const { loading, user } = useAuth();
+  useScreenView(SCREEN_EVENTS.history);
   const [events, setEvents] = useState<EventWithActivities[]>([]);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);

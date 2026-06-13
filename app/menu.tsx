@@ -11,7 +11,8 @@ import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { directChatNotificationId, isNotificationVisible, loadReadNotifications, saveReadNotifications } from "../src/lib/adminNotifications";
 import { supabase } from "../src/lib/supabase";
-import { isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas } from "../src/services";
+import { isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas, SCREEN_EVENTS } from "../src/services";
+import { useScreenView } from "../src/components/useScreenView";
 
 type AdminNotification = {
   id: string;
@@ -23,6 +24,7 @@ type AdminNotification = {
 export default function MenuScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.menu);
   const ideasTarget = useTourTarget("menu-ideas");
   const [isAdmin, setIsAdmin] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);

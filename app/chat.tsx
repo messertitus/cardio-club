@@ -29,10 +29,12 @@ import {
   listMccMembers,
   sendChatMessage,
   sendDirectChatMessage,
+  SCREEN_EVENTS,
   type DirectChatWithNames,
   type MccEventState,
   type MccMember,
 } from "../src/services";
+import { useScreenView } from "../src/components/useScreenView";
 
 type ChatMessage = {
   id: string;
@@ -75,6 +77,7 @@ export default function ChatScreen() {
   const { directChatId } = useLocalSearchParams<{ directChatId?: string }>();
   const { loading, user } = useAuth();
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.chat);
   const [eventStates, setEventStates] = useState<MccEventState[]>([]);
   const [members, setMembers] = useState<MccMember[]>([]);
   const [directChats, setDirectChats] = useState<DirectChatWithNames[]>([]);

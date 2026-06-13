@@ -1013,6 +1013,125 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_activity_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          event_type: string;
+          context: Json;
+          occurred_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          event_type: string;
+          context?: Json;
+          occurred_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          context?: Json;
+        };
+        Relationships: [];
+      };
+      user_stat_counters: {
+        Row: {
+          user_id: string;
+          metric_key: string;
+          value: number;
+          last_event_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          metric_key: string;
+          value?: number;
+          last_event_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          value?: number;
+          last_event_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      user_stat_snapshots: {
+        Row: {
+          id: string;
+          user_id: string;
+          period_kind: "day" | "week" | "month" | "all";
+          period_start: string;
+          metrics: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          period_kind: "day" | "week" | "month" | "all";
+          period_start: string;
+          metrics?: Json;
+          created_at?: string;
+        };
+        Update: {
+          metrics?: Json;
+        };
+        Relationships: [];
+      };
+      user_achievement_progress: {
+        Row: {
+          user_id: string;
+          achievement_key: string;
+          progress: number;
+          target: number | null;
+          unlocked_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          achievement_key: string;
+          progress?: number;
+          target?: number | null;
+          unlocked_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          progress?: number;
+          target?: number | null;
+          unlocked_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      admin_stat_audit_log: {
+        Row: {
+          id: string;
+          admin_id: string | null;
+          target_user_id: string;
+          action: "set" | "reset" | "reset_all";
+          metric_key: string | null;
+          old_value: number | null;
+          new_value: number | null;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          admin_id?: string | null;
+          target_user_id: string;
+          action: "set" | "reset" | "reset_all";
+          metric_key?: string | null;
+          old_value?: number | null;
+          new_value?: number | null;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          note?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1210,6 +1329,49 @@ export type Database = {
           activity_contact_id: string | null;
           created_at: string;
         };
+      };
+      record_user_metric: {
+        Args: {
+          p_metric_key?: string;
+          p_increment?: number;
+          p_event_type?: string;
+          p_context?: Json;
+        };
+        Returns: undefined;
+      };
+      get_user_stats: {
+        Args: { target_user_id?: string };
+        Returns: Json;
+      };
+      get_user_stat_insights: {
+        Args: { target_user_id?: string };
+        Returns: Json;
+      };
+      admin_set_user_metric: {
+        Args: { target_user_id: string; p_metric_key: string; p_value: number; p_note?: string | null };
+        Returns: undefined;
+      };
+      admin_reset_user_metric: {
+        Args: { target_user_id: string; p_metric_key: string; p_note?: string | null };
+        Returns: undefined;
+      };
+      admin_reset_user_stats: {
+        Args: { target_user_id: string; p_note?: string | null };
+        Returns: undefined;
+      };
+      admin_list_stat_audit: {
+        Args: { target_user_id: string; max_rows?: number };
+        Returns: {
+          id: string;
+          admin_id: string | null;
+          target_user_id: string;
+          action: "set" | "reset" | "reset_all";
+          metric_key: string | null;
+          old_value: number | null;
+          new_value: number | null;
+          note: string | null;
+          created_at: string;
+        }[];
       };
     };
     Enums: Record<string, never>;

@@ -1,4 +1,6 @@
 import type { Row } from "./database.types";
+import { trackAppEvent } from "./analytics";
+import { CONTRIBUTION_EVENTS } from "../lib/analyticsEvents";
 import { readLocalCache, writeLocalCache } from "./localCache";
 import { fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
@@ -31,6 +33,8 @@ export async function proposeSport(
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Could not propose sport.") };
   }
+
+  void trackAppEvent(supabase, CONTRIBUTION_EVENTS.proposalCreated, { context: { eventId: input.eventId, sportId: input.sportId } });
 
   return ok(data);
 }

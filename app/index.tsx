@@ -24,10 +24,13 @@ import {
   recordAppUsage,
   type InstallHintVariant,
 } from "../src/services/pwaInstallHint";
-import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
+import { APP_EVENTS, getMccWeekEvents, getMyProfile, trackAppEvent, updateProfileCity, type Row } from "../src/services";
 import { eventDayTitle, formatEventDayDate, getWeekStartDate, isEventVisibleWindow } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
+// One "install hint seen" breadcrumb per session, to avoid inflating the counter
+// when the reveal effect re-runs.
+const installHintSeenTracked = new Set<string>();
 // One login counts once. We dedupe by the session access token (not the user id),
 // so signing in again — even as the same user — counts as a new login, while a
 // tab remount with the same token does not. Maps the token to the counted value
@@ -172,7 +175,13 @@ export default function HomeScreen() {
       installHintDecidedAt.set(loginKey, decidedAt);
       const remaining = Math.max(0, INSTALL_HINT_REVEAL_DELAY_MS - (Date.now() - decidedAt));
       showTimer = setTimeout(() => {
-        if (active && installHintHandledCounts.get(userId) !== usageCount) setInstallHintVariant(decision.variant);
+        if (active && installHintHandledCounts.get(userId) !== usageCount) {
+          setInstallHintVariant(decision.variant);
+          if (!installHintSeenTracked.has(userId)) {
+            installHintSeenTracked.add(userId);
+            void trackAppEvent(supabase, APP_EVENTS.installHintSeen, { context: { variant: decision.variant } });
+          }
+        }
       }, remaining);
     }
 
@@ -202,7 +211,10 @@ export default function HomeScreen() {
   // "Nicht mehr anzeigen": never show again (persisted).
   function dismissInstallHintForeverPress() {
     markHintHandledAndClose();
-    if (user) void dismissInstallHintForever(user.id);
+    if (user) {
+      void dismissInstallHintForever(user.id);
+      void trackAppEvent(supabase, APP_EVENTS.installHintDismissed);
+    }
   }
 
   function openInstallGuide() {

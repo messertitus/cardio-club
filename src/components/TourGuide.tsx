@@ -14,6 +14,9 @@ import {
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { supabase } from "../lib/supabase";
+import { APP_EVENTS } from "../lib/analyticsEvents";
+import { trackAppEvent } from "../services/analytics";
 import { markIntroSeen } from "../services/introState";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -229,7 +232,10 @@ export function TourProvider({ children }: PropsWithChildren) {
 
   const finish = useCallback(() => {
     activeRef.current = false;
-    if (user) void markIntroSeen(user.id);
+    if (user) {
+      void markIntroSeen(user.id);
+      void trackAppEvent(supabase, APP_EVENTS.onboardingCompleted);
+    }
     setActive(false);
     setIndex(0);
     indexRef.current = 0;

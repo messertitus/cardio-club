@@ -1,5 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { supabase } from "../lib/supabase";
+import { trackAppEvent } from "../services/analytics";
+import { FEATURE_EVENTS } from "../lib/analyticsEvents";
 
 export type ThemeMode = "dark" | "light";
 
@@ -101,6 +104,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     setMode((current) => {
       const next = current === "dark" ? "light" : "dark";
       void AsyncStorage.setItem(THEME_KEY, next);
+      void trackAppEvent(supabase, FEATURE_EVENTS.themeToggled, { context: { mode: next } });
       return next;
     });
   }

@@ -1,5 +1,7 @@
 import type { Row } from "./database.types";
 import { isVoteRank, MAX_VOTES_PER_EVENT, rankToVoteWeight, type VoteRank } from "../lib/votingRules";
+import { trackAppEvent } from "./analytics";
+import { VOTE_EVENTS, voteRankKey } from "../lib/analyticsEvents";
 import { votingOpenNow } from "./date";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
@@ -90,6 +92,13 @@ export async function voteForSport(
     return { data: null, error: fromPostgrestError(error, "Could not save vote.") };
   }
 
+  // Stats (fire-and-forget): submitted vs. changed + ranked-choice usage.
+  void trackAppEvent(supabase, duplicateSport ? VOTE_EVENTS.changed : VOTE_EVENTS.submitted, {
+    context: { eventId: input.eventId, sportId: input.sportId, rank: input.rank },
+    countKey: duplicateSport ? VOTE_EVENTS.changed : VOTE_EVENTS.submitted,
+  });
+  void trackAppEvent(supabase, voteRankKey(input.rank), { context: { eventId: input.eventId, sportId: input.sportId } });
+
   return ok(data);
 }
 
@@ -117,6 +126,8 @@ export async function removeVote(
   if (error) {
     return { data: null, error: fromPostgrestError(error, "Could not remove vote.") };
   }
+
+  void trackAppEvent(supabase, VOTE_EVENTS.removed, { context: { eventId: input.eventId, sportId: input.sportId } });
 
   return ok({ removed: true });
 }

@@ -10,8 +10,9 @@ import { Reveal } from "../src/components/Motion";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
+import { useScreenView } from "../src/components/useScreenView";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
-import { bootstrapMccWeek, getOrCreateDirectChat, listMccMembers, type MccMember } from "../src/services";
+import { bootstrapMccWeek, getOrCreateDirectChat, listMccMembers, SCREEN_EVENTS, type MccMember } from "../src/services";
 
 const roleLabels = {
   admin: "Admin",
@@ -22,6 +23,7 @@ const roleLabels = {
 export default function MembersScreen() {
   const { loading, user } = useAuth();
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.members);
   const [members, setMembers] = useState<MccMember[]>([]);
   const [openedUserId, setOpenedUserId] = useState<string | null>(null);
   const [locationFilterOpen, setLocationFilterOpen] = useState(false);

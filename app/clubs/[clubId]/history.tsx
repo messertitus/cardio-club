@@ -6,10 +6,12 @@ import { EmptyState, InlineError, LoadingSkeleton, MccBadge, MccBody, MccCard, M
 import { Reveal } from "../../../src/components/Motion";
 import { formatCardioSunday } from "../../../src/services/date";
 import { supabase } from "../../../src/lib/supabase";
-import { listEventHistory, type Row } from "../../../src/services";
+import { listEventHistory, SCREEN_EVENTS, type Row } from "../../../src/services";
+import { useScreenView } from "../../../src/components/useScreenView";
 
 export default function EventHistoryScreen() {
   const { clubId } = useLocalSearchParams<{ clubId: string }>();
+  useScreenView(SCREEN_EVENTS.history);
   const [events, setEvents] = useState<Row<"weekly_events">[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

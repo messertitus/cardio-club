@@ -6,11 +6,13 @@ import { Reveal } from "../src/components/Motion";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
-import { createInvitationCode, isCurrentUserAdmin, listInvitationCodes, type InvitationCodeWithUsage } from "../src/services";
+import { createInvitationCode, isCurrentUserAdmin, listInvitationCodes, SCREEN_EVENTS, type InvitationCodeWithUsage } from "../src/services";
+import { useScreenView } from "../src/components/useScreenView";
 
 export default function InvitesScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.invites);
   const [codes, setCodes] = useState<InvitationCodeWithUsage[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

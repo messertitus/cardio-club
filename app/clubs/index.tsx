@@ -4,10 +4,12 @@ import { View } from "react-native";
 import { EmptyState, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../src/components/MccDesign";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
-import { listClubsForUser, type ClubWithRole } from "../../src/services";
+import { listClubsForUser, SCREEN_EVENTS, type ClubWithRole } from "../../src/services";
+import { useScreenView } from "../../src/components/useScreenView";
 
 export default function ClubListScreen() {
   const { user } = useAuth();
+  useScreenView(SCREEN_EVENTS.clubs);
   const [clubs, setClubs] = useState<ClubWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

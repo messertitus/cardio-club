@@ -41,6 +41,10 @@ export async function updateAttendance(
     return { data: null, error: fromPostgrestError(error, "Could not update attendance.") };
   }
 
+  // Attendance stats (set / changed / going-maybe-not_going history) are
+  // recorded server-side by the trigger in migration 057, which can tell an
+  // insert (set) from an update (changed) — something this upsert cannot.
+
   return ok(data);
 }
 

@@ -32,9 +32,11 @@ import {
   isCurrentUserAdmin,
   listSportProfilesForSports,
   listSports,
+  SCREEN_EVENTS,
   type EventDecisionPreview,
   type Row,
 } from "../../../src/services";
+import { useScreenView } from "../../../src/components/useScreenView";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 type Tone = "accent" | "success" | "warning" | "danger" | "neutral";
@@ -65,6 +67,7 @@ function characterVisual(character: DecisionCharacter): { icon: IconName; tone: 
 export default function DecisionResultScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { user } = useAuth();
+  useScreenView(SCREEN_EVENTS.decision);
   const { theme } = useTheme();
   const [decision, setDecision] = useState<EventDecisionPreview | null>(null);
   const [event, setEvent] = useState<Pick<Row<"weekly_events">, "status" | "week_start_date" | "event_day"> | null>(null);

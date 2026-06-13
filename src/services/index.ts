@@ -1,4 +1,5 @@
 export * from "./activeCities";
+export * from "./analytics";
 export * from "./attendance";
 export * from "./attendanceReview";
 export * from "./adminPanel";

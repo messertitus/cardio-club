@@ -5,6 +5,8 @@ import { BottomNav } from "../src/components/BottomNav";
 import { MccBadge, MccBody, MccCard, MccCardTitle, MccScreen } from "../src/components/MccDesign";
 import { Reveal } from "../src/components/Motion";
 import { useTheme } from "../src/context/ThemeContext";
+import { useScreenView } from "../src/components/useScreenView";
+import { SCREEN_EVENTS } from "../src/services";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -30,6 +32,7 @@ const BENEFITS: { icon: IconName; title: string; body: string }[] = [
 
 export default function InstallScreen() {
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.install);
 
   return (
     <View style={{ flex: 1 }}>
