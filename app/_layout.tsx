@@ -28,6 +28,20 @@ function RootStack() {
     void purgeAppCachesIfOutdated(CACHE_SCHEMA_VERSION);
   }, []);
 
+  // Web only: pin the app to the *visible* (dynamic) viewport. The Expo web reset
+  // sizes html/body/#root to height:100%, which on mobile equals the LARGE
+  // viewport (browser toolbar hidden) and is taller than what's actually visible
+  // — so the fixed bottom navigation bar ends up below the visible screen edge.
+  // 100dvh tracks the dynamic viewport and follows the toolbar. We set it as an
+  // inline style here (in the bundled app, immune to the static export stripping
+  // head <style>/<link>/<script> overrides); an inline style beats the reset's
+  // height:100%, and browsers without dvh keep that 100% as a fallback.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.style.height = "100dvh";
+    if (document.body) document.body.style.height = "100dvh";
+  }, []);
+
   return (
     <AuthProvider>
       <TourProvider>
