@@ -15,18 +15,27 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
   const settle = useRef(new Animated.Value(0)).current;
   const mark = useRef(new Animated.Value(0)).current;
   const didFinish = useRef(false);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
+  // Run the intro exactly once on mount. On mobile, re-renders from dimension /
+  // safe-area / keyboard changes must NEVER restart the sequence mid-zoom — that
+  // is what made the logo freeze and the menu fade in too early. Ordering stays
+  // logo zoom (settle) → wordmark fade (mark) → onDone (reveal the menu).
   useEffect(() => {
-    Animated.sequence([
+    const intro = Animated.sequence([
       Animated.delay(160),
       Animated.timing(settle, { toValue: 1, duration: 920, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
       Animated.timing(mark, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-    ]).start(() => {
-      if (didFinish.current) return;
+    ]);
+    intro.start(({ finished }) => {
+      if (!finished || didFinish.current) return;
       didFinish.current = true;
-      onDone();
+      onDoneRef.current();
     });
-  }, [mark, onDone, settle]);
+    return () => intro.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const compact = width < 390;
   const stageWidth = compact ? 214 : 286;
