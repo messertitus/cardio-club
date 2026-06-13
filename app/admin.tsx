@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { MapLocationPicker, SearchField, SegmentedControl } from "../src/components/FormControls";
 import { MapRouteButton } from "../src/components/MapRouteButton";
+import { AdminNotificationRules } from "../src/components/AdminNotificationRules";
 import { MccBadge, MccBody, MccCardTitle, MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { SPORT_ICON_OPTIONS, SportIconBadge } from "../src/components/SportIcon";
@@ -67,7 +68,7 @@ const defaultSportCategoryOptions = [
   "unbekannt",
 ];
 
-type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule" | "cities";
+type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule" | "cities" | "notifications";
 
 type DayRow = { weekday: EventDay; enabled: boolean; time: string };
 
@@ -644,8 +645,11 @@ export default function AdminScreen() {
               <AdminMenuCard title="Mitglieder" body="Rechte und Deaktivierung" onPress={() => setActiveSection("members")} />
               <AdminMenuCard title="Einladungsbaum" body="Sehen, wer wen eingeladen hat" onPress={() => setActiveSection("inviteTree")} />
               <AdminMenuCard title="Namensanfragen" body={`${nameRequests.length} offene Freigaben`} onPress={() => setActiveSection("nameRequests")} />
+              <AdminMenuCard title="Benachrichtigungen" body="Notification-Regeln erstellen und senden" onPress={() => setActiveSection("notifications")} />
             </View>
           ) : null}
+
+          {isAdmin && activeSection === "notifications" ? <AdminNotificationRules /> : null}
 
           {isAdmin && activeSection === "sports" ? (
             <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
@@ -1393,6 +1397,7 @@ function sectionTitle(section: AdminSection): string {
   if (section === "nameRequests") return "Namensanfragen";
   if (section === "schedule") return "Eventtage";
   if (section === "cities") return "Aktive Städte";
+  if (section === "notifications") return "Benachrichtigungen";
   return "Club steuern";
 }
 
@@ -1405,7 +1410,8 @@ function isAdminSection(value: string): value is AdminSection {
     value === "inviteTree" ||
     value === "nameRequests" ||
     value === "schedule" ||
-    value === "cities"
+    value === "cities" ||
+    value === "notifications"
   );
 }
 

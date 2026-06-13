@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { MotionBackground } from "../src/components/MccDesign";
@@ -9,16 +9,9 @@ import { MainHeader } from "../src/components/PageHeader";
 import { useTourTarget } from "../src/components/TourGuide";
 import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
-import {
-  directChatNotificationId,
-  isNotificationVisible,
-  loadReadNotifications,
-  saveReadNotifications,
-  type ReadNotificationMap,
-} from "../src/lib/adminNotifications";
-import { lookupCityByPostalCode } from "../src/lib/postalCity";
+import { directChatNotificationId, isNotificationVisible, loadReadNotifications, saveReadNotifications } from "../src/lib/adminNotifications";
 import { supabase } from "../src/lib/supabase";
-import { getMyProfile, isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas, updateProfileCity } from "../src/services";
+import { isCurrentUserAdmin, listDirectChats, listProfileNameChangeRequests, listSportIdeas } from "../src/services";
 
 type AdminNotification = {
   id: string;
@@ -35,10 +28,6 @@ export default function MenuScreen() {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [readNotifications, setReadNotifications] = useState<Record<string, number>>({});
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [locationPromptOpen, setLocationPromptOpen] = useState(false);
-  const [postalCode, setPostalCode] = useState("");
-  const [city, setCity] = useState("");
-  const [locationBusy, setLocationBusy] = useState(false);
   const visibleNotifications = notifications.filter((notification) => isNotificationVisible(notification.id, readNotifications));
   const unreadNotifications = visibleNotifications.filter((notification) => !readNotifications[notification.id]);
 
@@ -48,11 +37,6 @@ export default function MenuScreen() {
       if (!user) return;
       const readMap = await loadReadNotifications(user.id);
       setReadNotifications(readMap);
-      const profileResult = await getMyProfile(supabase, user.id);
-      if (profileResult.data) {
-        setPostalCode(profileResult.data.postal_code ?? "");
-        setCity(profileResult.data.city ?? "");
-      }
       const adminResult = await isCurrentUserAdmin(supabase, user.id);
       const nextIsAdmin = adminResult.data ?? false;
       setIsAdmin(nextIsAdmin);
@@ -116,22 +100,6 @@ export default function MenuScreen() {
     router.replace("/auth");
   }
 
-  async function updatePostalCode(value: string) {
-    const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
-    setPostalCode(nextPostalCode);
-    if (nextPostalCode.length !== 5) return;
-    const resolvedCity = await lookupCityByPostalCode(nextPostalCode);
-    if (resolvedCity) setCity(resolvedCity);
-  }
-
-  async function saveLocation() {
-    if (!user || postalCode.length < 5 || !city.trim()) return;
-    setLocationBusy(true);
-    const result = await updateProfileCity(supabase, { userId: user.id, postalCode, city: city.trim() });
-    setLocationBusy(false);
-    if (!result.error) setLocationPromptOpen(false);
-  }
-
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
@@ -163,10 +131,10 @@ export default function MenuScreen() {
             <View ref={ideasTarget.ref} onLayout={ideasTarget.onLayout}>
               <MenuItem index={1} title="Sportarten und Standorte" body="Neue Aktivität vorschlagen" onPress={() => router.push("/ideas")} />
             </View>
-            <MenuItem index={2} title="PIN" body="App-PIN ändern" onPress={() => router.push("/pin")} />
-            <MenuItem index={3} title="Push" body="Benachrichtigungen verwalten" onPress={() => router.push("/push")} />
-            <MenuItem index={4} title="Standort" body={city ? `${postalCode} ${city}` : "PLZ und Stadt setzen"} onPress={() => setLocationPromptOpen(true)} />
-            <MenuItem index={5} title="Profil" body="Name und Telefonnummer" onPress={() => router.push("/profile")} />
+            <MenuItem index={2} title="Profil" body="Name, Standort und Geburtstag" onPress={() => router.push("/profile")} />
+            <MenuItem index={3} title="Einstellungen" body="PIN und Telefonnummer" onPress={() => router.push("/settings")} />
+            <MenuItem index={4} title="App installieren" body="Zum Homescreen hinzufügen" onPress={() => router.push("/install")} />
+            <MenuItem index={5} title="Push" body="Benachrichtigungen verwalten" onPress={() => router.push("/push")} />
             {isAdmin ? <MenuItem index={6} title="Admin" body="Mitglieder und Rechte verwalten" onPress={() => router.push("/admin")} /> : null}
           </View>
 
@@ -177,16 +145,6 @@ export default function MenuScreen() {
         {isAdmin && notificationsOpen ? (
           <NotificationPreviewPanel notifications={visibleNotifications} readNotifications={readNotifications} onSelect={openNotification} onMarkUnread={markNotificationUnread} />
         ) : null}
-        <LocationPrompt
-          visible={locationPromptOpen}
-          postalCode={postalCode}
-          city={city}
-          busy={locationBusy}
-          onPostalCodeChange={updatePostalCode}
-          onCityChange={setCity}
-          onSave={saveLocation}
-          onClose={() => setLocationPromptOpen(false)}
-        />
         <BottomNav active="menu" />
       </View>
     </SafeAreaView>
@@ -207,88 +165,6 @@ function AdminNoticeButton({ count, open, onPress }: { count: number; open: bool
         </View>
       ) : null}
     </Pressable>
-  );
-}
-
-function LocationPrompt({
-  visible,
-  postalCode,
-  city,
-  busy,
-  onPostalCodeChange,
-  onCityChange,
-  onSave,
-  onClose,
-}: {
-  visible: boolean;
-  postalCode: string;
-  city: string;
-  busy: boolean;
-  onPostalCodeChange: (value: string) => void;
-  onCityChange: (value: string) => void;
-  onSave: () => void;
-  onClose: () => void;
-}) {
-  const { theme } = useTheme();
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={undefined} style={styles.locationOverlay}>
-        <View style={[styles.locationCard, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
-          <Text style={[styles.locationKicker, { color: theme.mcc.accent }]}>Standort</Text>
-          <Text style={[styles.locationTitle, { color: theme.mcc.textPrimary }]}>Aus welcher Stadt kommst du?</Text>
-          <TextInput
-            value={postalCode}
-            onChangeText={onPostalCodeChange}
-            placeholder="PLZ"
-            placeholderTextColor={theme.mcc.textSecondary}
-            keyboardType="number-pad"
-            inputMode="numeric"
-            maxLength={5}
-            style={[styles.locationInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
-          />
-          <TextInput
-            value={city}
-            onChangeText={onCityChange}
-            placeholder="Stadt"
-            placeholderTextColor={theme.mcc.textSecondary}
-            autoCapitalize="words"
-            style={[styles.locationInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
-          />
-          <Pressable
-            style={[styles.locationButton, { backgroundColor: theme.mcc.accentDeep }, (postalCode.length < 5 || !city.trim() || busy) && styles.disabled]}
-            onPress={onSave}
-            disabled={postalCode.length < 5 || !city.trim() || busy}
-          >
-            <Text style={[styles.locationButtonText, { color: "#FFFFFF" }]}>{busy ? "Speichern..." : "Speichern"}</Text>
-          </Pressable>
-          <Pressable style={styles.locationClose} onPress={onClose}>
-            <Text style={[styles.locationCloseText, { color: theme.mcc.textSecondary }]}>Schließen</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-function NotificationPreview({ notifications, onSelect }: { notifications: AdminNotification[]; onSelect: (notification: AdminNotification) => void }) {
-  const { theme } = useTheme();
-  return (
-    <View style={[styles.notificationPanel, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
-      <Text style={[styles.notificationTitle, { color: theme.mcc.textPrimary }]}>Anfragen</Text>
-      {notifications.length === 0 ? <Text style={[styles.notificationEmpty, { color: theme.mcc.textSecondary }]}>Keine neuen Meldungen.</Text> : null}
-      {notifications.map((notification) => (
-        <Pressable key={notification.id} style={[styles.notificationRow, { borderTopColor: theme.mcc.line }]} onPress={() => onSelect(notification)}>
-          <View style={styles.notificationDot} />
-          <View style={styles.notificationText}>
-            <Text style={[styles.notificationKicker, { color: theme.mcc.accent }]}>{notification.title}</Text>
-            <Text style={[styles.notificationBody, { color: theme.mcc.textPrimary }]} numberOfLines={1}>
-              {notification.body}
-            </Text>
-          </View>
-          <Text style={[styles.itemArrow, { color: theme.mcc.textSecondary }]}>›</Text>
-        </Pressable>
-      ))}
-    </View>
   );
 }
 
@@ -359,28 +235,11 @@ const styles = StyleSheet.create({
   content: {
     width: "100%",
     flexGrow: 1,
-    gap: 16,
+    gap: 14,
     paddingHorizontal: 18,
     paddingTop: 14,
     paddingBottom: 30,
   },
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 2,
-  },
-  headerBrand: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  logo: { width: 42, height: 42 },
-  headerText: { flex: 1, minWidth: 0 },
-  headerActions: { alignItems: "center", flexDirection: "row", gap: 8 },
   noticeButton: {
     alignItems: "center",
     borderRadius: 999,
@@ -418,41 +277,6 @@ const styles = StyleSheet.create({
   },
   notificationTitle: { fontSize: 16, fontWeight: "900" },
   notificationEmpty: { fontSize: 14, fontWeight: "800", lineHeight: 20 },
-  locationOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    paddingHorizontal: 14,
-    paddingBottom: 92,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  locationCard: {
-    alignSelf: "center",
-    width: "100%",
-    maxWidth: 430,
-    gap: 12,
-    borderRadius: 28,
-    borderWidth: 1,
-    padding: 16,
-    shadowColor: "#000000",
-    shadowOpacity: 0.22,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-  },
-  locationKicker: { fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  locationTitle: { fontSize: 25, fontWeight: "900", lineHeight: 29 },
-  locationInput: {
-    minHeight: 54,
-    borderRadius: 18,
-    borderWidth: 1,
-    fontSize: 17,
-    paddingHorizontal: 14,
-    outlineStyle: "none",
-  } as object,
-  locationButton: { alignItems: "center", borderRadius: 18, paddingVertical: 15 },
-  locationButtonText: { fontSize: 15, fontWeight: "900" },
-  locationClose: { alignItems: "center", paddingVertical: 5 },
-  locationCloseText: { fontSize: 14, fontWeight: "900" },
-  disabled: { opacity: 0.42 },
   notificationRow: { alignItems: "center", borderTopWidth: 1, flexDirection: "row", gap: 10, paddingTop: 10 },
   notificationDot: { backgroundColor: "#4da3ff", borderRadius: 999, height: 8, width: 8 },
   notificationDotRead: { opacity: 0.28 },
@@ -461,8 +285,6 @@ const styles = StyleSheet.create({
   notificationBody: { fontSize: 14, fontWeight: "900", lineHeight: 19 },
   markUnreadButton: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 6 },
   markUnreadText: { fontSize: 11, fontWeight: "900" },
-  kicker: { fontSize: 12, fontWeight: "800", lineHeight: 16 },
-  title: { fontSize: 32, fontWeight: "900", letterSpacing: 0, lineHeight: 36 },
   inviteCard: {
     minHeight: 132,
     borderRadius: 28,
@@ -506,6 +328,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     paddingVertical: 14,
+    marginTop: 4,
   },
   signOutText: { fontSize: 15, fontWeight: "900" },
 });

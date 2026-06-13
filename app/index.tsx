@@ -5,6 +5,7 @@ import { Animated, KeyboardAvoidingView, Modal, Pressable, RefreshControl, Style
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { EventFlowCard, type WeekEvent } from "../src/components/EventFlowCard";
+import { InstallHintCard } from "../src/components/InstallHintCard";
 import { MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { Reveal } from "../src/components/Motion";
 import { MainHeader } from "../src/components/PageHeader";
@@ -15,13 +16,34 @@ import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
 import { hasSeenIntro, markIntroSeen } from "../src/services/introState";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
+import {
+  decideInstallHint,
+  dismissInstallHintForever,
+  readInstallHintEnvironment,
+  readInstallHintState,
+  recordAppUsage,
+  type InstallHintVariant,
+} from "../src/services/pwaInstallHint";
 import { getMccWeekEvents, getMyProfile, updateProfileCity, type Row } from "../src/services";
 import { eventDayTitle, formatEventDayDate, getWeekStartDate, isEventVisibleWindow } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
+// One login counts once. We dedupe by the session access token (not the user id),
+// so signing in again — even as the same user — counts as a new login, while a
+// tab remount with the same token does not. Maps the token to the counted value
+// so re-evaluating the hint never inflates the usage count.
+const loginUsageCounts = new Map<string, number>();
+// Immediate in-memory guard keyed by userId → the usage count the user just acted
+// on. Covers the brief window before the persisted state is written, so the hint
+// can't flash back. The durable backstop is the persisted handledAtCount/dismissed.
+const installHintHandledCounts = new Map<string, number>();
+// The 2s reveal delay is anchored to the first time we decided to show it for a
+// login, so a remount continues the countdown instead of restarting it.
+const installHintDecidedAt = new Map<string, number>();
+const INSTALL_HINT_REVEAL_DELAY_MS = 2000;
 
 export default function HomeScreen() {
-  const { loading, user } = useAuth();
+  const { loading, user, session } = useAuth();
   const { theme } = useTheme();
   const [events, setEvents] = useState<Row<"weekly_events">[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,6 +65,8 @@ export default function HomeScreen() {
   const homeTarget = useTourTarget("home-events", { scroll: false });
   const [cityStepDone, setCityStepDone] = useState(false);
   const introCheckedForUserRef = useRef<string | null>(null);
+  const [installHintVariant, setInstallHintVariant] = useState<InstallHintVariant | null>(null);
+  const installHintCountRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -106,6 +130,88 @@ export default function HomeScreen() {
       startTour();
     });
   }, [cityStepDone, startTour, user]);
+
+  // Returning-user nudge: offer installing the PWA / enabling push. Counts one
+  // app start per session, then lets the persisted state + runtime decide. Never
+  // fires on the first login and never requests a permission on its own.
+  // One login = one increment. The token changes on every sign-in, so a fresh
+  // login counts even for the same user; a tab remount reuses the same token.
+  const loginKey = session?.access_token ?? user?.id ?? "";
+
+  // Depend only on loginKey: a stable login keeps the same token, so the effect
+  // runs once per login instead of re-running on every auth-context object change.
+  useEffect(() => {
+    const activeUser = user;
+    if (!activeUser) return;
+    let active = true;
+    let showTimer: ReturnType<typeof setTimeout> | null = null;
+    const userId = activeUser.id;
+
+    async function evaluateInstallHint() {
+      let usageCount = loginUsageCounts.get(loginKey);
+      if (usageCount === undefined) {
+        usageCount = await recordAppUsage(userId);
+        loginUsageCounts.set(loginKey, usageCount);
+      }
+      installHintCountRef.current = usageCount;
+      // Immediate guard: the user just acted on exactly this count.
+      if (installHintHandledCounts.get(userId) === usageCount) {
+        if (active) setInstallHintVariant(null);
+        return;
+      }
+      const state = await readInstallHintState(userId);
+      const decision = decideInstallHint({ usageCount, state, env: readInstallHintEnvironment() });
+      if (!active) return;
+      if (!decision.show) {
+        setInstallHintVariant(null);
+        return;
+      }
+      // Surface after a short beat, anchored to the first decision so a remount
+      // continues the countdown rather than restarting it.
+      const decidedAt = installHintDecidedAt.get(loginKey) ?? Date.now();
+      installHintDecidedAt.set(loginKey, decidedAt);
+      const remaining = Math.max(0, INSTALL_HINT_REVEAL_DELAY_MS - (Date.now() - decidedAt));
+      showTimer = setTimeout(() => {
+        if (active && installHintHandledCounts.get(userId) !== usageCount) setInstallHintVariant(decision.variant);
+      }, remaining);
+    }
+
+    void evaluateInstallHint();
+    return () => {
+      active = false;
+      if (showTimer) clearTimeout(showTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginKey]);
+
+  // Close the modal and remember (in memory, keyed by stable userId) that this
+  // login count was handled, so a re-run of the effect can't flash it back. The
+  // login counter naturally moves past the trigger on the next app open, so no
+  // durable flag is needed for "Später"/"Mehr erfahren".
+  function markHintHandledAndClose() {
+    const count = installHintCountRef.current;
+    if (user && count !== null) installHintHandledCounts.set(user.id, count);
+    setInstallHintVariant(null);
+  }
+
+  // "Später": hide for this login; it returns on the next trigger login.
+  function dismissInstallHintLater() {
+    markHintHandledAndClose();
+  }
+
+  // "Nicht mehr anzeigen": never show again (persisted).
+  function dismissInstallHintForeverPress() {
+    markHintHandledAndClose();
+    if (user) void dismissInstallHintForever(user.id);
+  }
+
+  function openInstallGuide() {
+    // The push-only reminder leads to the Push screen (enable push there); the
+    // install hint leads to the install guide.
+    const target = installHintVariant === "push-only" ? "/push" : "/install";
+    markHintHandledAndClose();
+    router.push(target);
+  }
 
   async function updatePostalCode(value: string) {
     const nextPostalCode = value.replace(/\D/g, "").slice(0, 5);
@@ -336,6 +442,18 @@ export default function HomeScreen() {
           busy={cityBusy}
         />
         <BottomNav active="event" />
+        {/* Shown like the start-up location prompt, but only for returning users
+            (2nd / 5th login) and never while the city prompt is still open. A
+            plain overlay (last child, above the nav) — conditionally rendered, so
+            closing or navigating removes it instantly. */}
+        {installHintVariant && !needsCity ? (
+          <InstallHintCard
+            variant={installHintVariant}
+            onLearnMore={openInstallGuide}
+            onLater={dismissInstallHintLater}
+            onNeverShow={dismissInstallHintForeverPress}
+          />
+        ) : null}
       </View>
     </SafeAreaView>
   );

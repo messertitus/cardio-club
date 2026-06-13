@@ -73,12 +73,20 @@ export function MccScreen({
   const back = showBack ?? Boolean(title);
   const content = (
     <View style={[styles.screenContent, { paddingBottom: bottomInset }]}>
-      {back ? (
+      {title ? (
+        // Back button shares the heading row so it sits level with the title,
+        // not on a separate line above it.
+        <View style={styles.screenHeaderRow}>
+          <View style={styles.screenHeaderText}>
+            <MccHero kicker={kicker} title={title} subtitle={subtitle} compact />
+          </View>
+          {back ? <BackButton /> : null}
+        </View>
+      ) : back ? (
         <View style={styles.screenBackRow}>
           <BackButton />
         </View>
       ) : null}
-      {title ? <MccHero kicker={kicker} title={title} subtitle={subtitle} compact /> : null}
       {children}
     </View>
   );
@@ -978,6 +986,8 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1 },
   screenContent: { gap: 16, paddingHorizontal: 16, paddingTop: 16 },
   screenBackRow: { alignItems: "center", flexDirection: "row", justifyContent: "flex-end" },
+  screenHeaderRow: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
+  screenHeaderText: { flex: 1, minWidth: 0 },
   backgroundClip: { overflow: "hidden" },
   backgroundBase: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   glowBlob: { borderRadius: 999, height: 300, position: "absolute", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 90, width: 300 },

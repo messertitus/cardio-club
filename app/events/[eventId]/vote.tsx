@@ -230,7 +230,7 @@ export default function VoteOnSportsScreen() {
       <MccCard accent>
         <MccBadge icon="account-check-outline">Teilnahme</MccBadge>
         <MccCardTitle>Teilnahme zuerst</MccCardTitle>
-        <MccBody muted>Nur Dabei und Vielleicht fliessen in die Entscheidung ein. Nicht dabei wird ignoriert.</MccBody>
+        <MccBody muted>Nur Dabei und Vielleicht fließen in die Entscheidung ein. Nicht dabei wird ignoriert.</MccBody>
         <MccBadge tone="neutral">Dein Status: {attendanceLabel(myAttendance?.status)}</MccBadge>
         <MccButton label="Ich bin dabei" variant={myAttendance?.status === "going" ? "primary" : "secondary"} onPress={() => chooseAttendance("going")} />
         <MccButton label="Vielleicht" variant={myAttendance?.status === "maybe" ? "primary" : "secondary"} onPress={() => chooseAttendance("maybe")} />

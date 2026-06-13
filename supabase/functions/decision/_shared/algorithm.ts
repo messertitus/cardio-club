@@ -492,7 +492,7 @@ export function selectFairConstellation(input: FairConstellationInput): FairCons
       normalized,
       context,
       excludedProfiles,
-      "Keine Entscheidung: Fuer die vorgeschlagenen Sportarten gibt es kein machbares Sportprofil.",
+      "Keine Entscheidung: Für die vorgeschlagenen Sportarten gibt es kein machbares Sportprofil.",
     );
   }
 
@@ -1207,7 +1207,7 @@ function scoreLocationCapacity(
       reason = "Standort-Minimum wird unterschritten.";
     } else if (typeof maximum === "number" && assignedCount > maximum) {
       groupScore = -Math.max(1, assignedCount - maximum);
-      reason = "Standort-Maximum wird ueberschritten.";
+      reason = "Standort-Maximum wird überschritten.";
     }
 
     score += groupScore;
@@ -1286,7 +1286,7 @@ function buildRotationReasons(sportIds: string[], context: DecisionContext): Dec
         (activity) => (activity.category ?? context.input.sportsById.get(activity.sportId)?.category) === sport.category && activity.role === "secondary",
       );
       penalty -= wasSecondaryCategory ? context.input.options.recentSecondaryCategoryPenalty : context.input.options.recentCategoryPenalty;
-      reason = "Kategorie kam kuerzlich vor und bekommt einen Rotationsmalus.";
+      reason = "Kategorie kam kürzlich vor und bekommt einen Rotationsmalus.";
     }
 
     if (penalty !== 0 || isHardBlockedAsPrimary) {
@@ -1475,7 +1475,7 @@ function buildLosingReasons(winner: CandidateScore, candidate: CandidateScore): 
   if (candidate.finalScore < winner.finalScore) reasons.push("Der Gesamtscore lag unter dem Gewinner.");
   if (candidate.primaryVoteScore < winner.primaryVoteScore) reasons.push("Die Hauptaktivität hatte weniger aktuelle Unterstützung.");
   if (candidate.noGoBreakdown.unresolved.length > winner.noGoBreakdown.unresolved.length) {
-    reasons.push("Es blieben mehr No-Go-Konflikte ungeloest.");
+    reasons.push("Es blieben mehr No-Go-Konflikte ungelöst.");
   }
   if (candidate.scoreBreakdown.weather < winner.scoreBreakdown.weather) reasons.push("Wetter oder Standort passten schlechter.");
   if (candidate.scoreBreakdown.practicality < winner.scoreBreakdown.practicality) reasons.push("Die Machbarkeit war schwaecher bewertet.");
@@ -1508,7 +1508,7 @@ function buildDecisionReason(candidate: CandidateScore, character: DecisionChara
   if (!main) return "Keine Entscheidung möglich.";
 
   if (character === "majority_protected") {
-    return `${main.sportName} bleibt vorne, weil die aktuelle Mehrheit klar war und keine starken Gegenfaktoren ueberwogen.`;
+    return `${main.sportName} bleibt vorne, weil die aktuelle Mehrheit klar war und keine starken Gegenfaktoren überwogen.`;
   }
 
   if (character === "fairness_adjusted") {
@@ -1924,8 +1924,8 @@ function modeLabel(mode: ConstellationMode): string {
 function summarizeNoGos(unresolved: number, resolved: number, ignored: number): string {
   if (unresolved === 0 && resolved === 0 && ignored === 0) return "Keine No-Go-Konflikte.";
   const parts: string[] = [];
-  if (resolved > 0) parts.push(`${resolved} No-Go durch Alternative geloest`);
-  if (unresolved > 0) parts.push(`${unresolved} No-Go nicht vollstaendig geloest`);
+  if (resolved > 0) parts.push(`${resolved} No-Go durch Alternative gelöst`);
+  if (unresolved > 0) parts.push(`${unresolved} No-Go nicht vollständig gelöst`);
   if (ignored > 0) parts.push(`${ignored} No-Go wegen Nicht-Teilnahme ignoriert`);
   return `${parts.join(", ")}.`;
 }
