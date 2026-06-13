@@ -1,6 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Linking, Pressable, StyleSheet, Text } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+import { supabase } from "../lib/supabase";
+import { trackAppEvent } from "../services/analytics";
+import { FEATURE_EVENTS } from "../lib/analyticsEvents";
 
 export type MapTarget = {
   latitude?: number | null;
@@ -23,6 +26,7 @@ export function MapRouteButton({ target, compact = false }: { target?: MapTarget
         pressed && styles.pressed,
       ]}
       onPress={() => {
+        void trackAppEvent(supabase, FEATURE_EVENTS.mapRouteOpened);
         void Linking.openURL(url);
       }}
     >

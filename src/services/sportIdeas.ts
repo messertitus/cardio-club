@@ -1,4 +1,6 @@
 import type { Json, Row, SportLocationType } from "./database.types";
+import { trackAppEvent } from "./analytics";
+import { CONTRIBUTION_EVENTS } from "../lib/analyticsEvents";
 import { readLocalCache, removeLocalCache, writeLocalCache } from "./localCache";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
@@ -141,6 +143,9 @@ export async function submitSportIdea(
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Sportidee konnte nicht eingereicht werden.") };
   }
+
+  // Stats (fire-and-forget): count only new suggestions, not edits.
+  if (!input.ideaId) void trackAppEvent(supabase, CONTRIBUTION_EVENTS.ideaSuggested);
 
   await removeLocalCache([SPORT_IDEAS_CACHE_KEY]);
   return ok(data);

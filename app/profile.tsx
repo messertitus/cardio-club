@@ -9,11 +9,13 @@ import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
-import { getMyProfile, requestProfileDisplayNameChange, updateProfileCity, updateProfileDetails, type Row } from "../src/services";
+import { useScreenView } from "../src/components/useScreenView";
+import { getMyProfile, requestProfileDisplayNameChange, SCREEN_EVENTS, updateProfileCity, updateProfileDetails, type Row } from "../src/services";
 
 export default function ProfileScreen() {
   const { loading, user } = useAuth();
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.profile);
   const [profile, setProfile] = useState<Row<"profiles"> | null>(null);
   const [requestedName, setRequestedName] = useState("");
   const [favoriteSports, setFavoriteSports] = useState("");

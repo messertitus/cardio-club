@@ -7,15 +7,20 @@ import { Reveal } from "../src/components/Motion";
 import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
 import {
+  APP_EVENTS,
   isStandaloneDisplay,
   requestWebPushSubscription,
   saveWebPushSubscription,
+  SCREEN_EVENTS,
+  trackAppEvent,
   webPushPermission,
   type PushPermission,
 } from "../src/services";
+import { useScreenView } from "../src/components/useScreenView";
 
 export default function PushScreen() {
   const { user } = useAuth();
+  useScreenView(SCREEN_EVENTS.push);
   const [message, setMessage] = useState<string | null>(null);
   const [permission, setPermission] = useState<PushPermission>("default");
   const [standalone, setStandalone] = useState(false);
@@ -41,6 +46,7 @@ export default function PushScreen() {
     });
 
     setMessage(result.error ? result.error.message : "Push ist gespeichert.");
+    if (!result.error) void trackAppEvent(supabase, APP_EVENTS.pushEnabled);
   }
 
   const success = message?.includes("gespeichert") ?? false;

@@ -7,7 +7,8 @@ import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { APP_VERSION } from "../src/lib/appInfo";
 import { supabase } from "../src/lib/supabase";
-import { getMyProfile, type Row } from "../src/services";
+import { getMyProfile, SCREEN_EVENTS, type Row } from "../src/services";
+import { useScreenView } from "../src/components/useScreenView";
 
 type CountryDialCode = { iso: string; dialCode: string; colors: string[] };
 
@@ -25,6 +26,7 @@ const COUNTRIES: CountryDialCode[] = [
 export default function SettingsScreen() {
   const { loading, user } = useAuth();
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.settings);
   const [profile, setProfile] = useState<Row<"profiles"> | null>(null);
 
   // PIN change

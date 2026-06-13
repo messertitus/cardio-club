@@ -34,14 +34,17 @@ import {
   setSportNoGo,
   updateAttendance,
   voteForSport,
+  SCREEN_EVENTS,
   type AttendanceStatus,
   type EventDecisionPreview,
   type Row,
 } from "../../../src/services";
+import { useScreenView } from "../../../src/components/useScreenView";
 
 export default function VoteOnSportsScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { user } = useAuth();
+  useScreenView(SCREEN_EVENTS.vote);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
   const [proposals, setProposals] = useState<Row<"sport_proposals">[]>([]);
   const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);

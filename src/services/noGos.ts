@@ -1,4 +1,6 @@
 import type { Row } from "./database.types";
+import { trackAppEvent } from "./analytics";
+import { NOGO_EVENTS } from "../lib/analyticsEvents";
 import { votingOpenNow } from "./date";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
@@ -52,6 +54,9 @@ export async function setSportNoGo(
     return { data: null, error: fromPostgrestError(error, "No-Go konnte nicht gespeichert werden.") };
   }
 
+  // Stats (fire-and-forget): count of set No-Gos. No reason text is tracked.
+  void trackAppEvent(supabase, NOGO_EVENTS.added, { context: { eventId: input.eventId, sportId: input.sportId } });
+
   return ok(data);
 }
 
@@ -69,6 +74,8 @@ export async function removeSportNoGo(
   if (error) {
     return { data: null, error: fromPostgrestError(error, "No-Go konnte nicht entfernt werden.") };
   }
+
+  void trackAppEvent(supabase, NOGO_EVENTS.removed, { context: { eventId: input.eventId, sportId: input.sportId } });
 
   return ok({ removed: true });
 }

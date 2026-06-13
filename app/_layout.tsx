@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { AppActivityTracker } from "../src/components/AppActivityTracker";
 import { AppNotificationBridge } from "../src/components/AppNotificationBridge";
 import { SwipeNavigator } from "../src/components/SwipeNavigator";
 import { TourProvider } from "../src/components/TourGuide";
@@ -32,6 +33,7 @@ function RootStack() {
       <TourProvider>
         <StatusBar style={mode === "dark" ? "light" : "dark"} />
         <AppNotificationBridge />
+        <AppActivityTracker />
         <UpdateBanner />
         <SwipeNavigator>
         <Stack

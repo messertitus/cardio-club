@@ -1,4 +1,6 @@
 import type { Row } from "./database.types";
+import { trackAppEvent } from "./analytics";
+import { COMMUNITY_EVENTS, FEATURE_EVENTS } from "../lib/analyticsEvents";
 import { fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -68,6 +70,13 @@ export async function sendChatMessage(
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Nachricht konnte nicht gesendet werden.") };
   }
+
+  // Stats (fire-and-forget): METADATA ONLY — that a message was sent, where,
+  // and whether it was a reply. The message body is never tracked.
+  void trackAppEvent(supabase, COMMUNITY_EVENTS.chatMessageSent, {
+    context: { eventId: input.eventId, sportId: input.sportId ?? null, reply: Boolean(input.replyToMessageId) },
+  });
+  if (input.replyToMessageId) void trackAppEvent(supabase, FEATURE_EVENTS.chatReplySent, { context: { eventId: input.eventId } });
 
   return ok(data);
 }

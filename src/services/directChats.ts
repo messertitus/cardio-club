@@ -1,4 +1,6 @@
 import type { Row } from "./database.types";
+import { trackAppEvent } from "./analytics";
+import { FEATURE_EVENTS } from "../lib/analyticsEvents";
 import { fail, fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -54,6 +56,9 @@ export async function getOrCreateDirectChat(
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Direktchat konnte nicht erstellt werden.") };
   }
+
+  // Stats (fire-and-forget): only counts newly opened direct chats.
+  void trackAppEvent(supabase, FEATURE_EVENTS.directChatStarted);
 
   return ok(data);
 }

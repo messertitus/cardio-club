@@ -1,4 +1,6 @@
 import type { Row } from "./database.types";
+import { trackAppEvent } from "./analytics";
+import { CONTRIBUTION_EVENTS } from "../lib/analyticsEvents";
 import { fromPostgrestError, ok, type ServiceResult } from "./result";
 import type { AppSupabaseClient } from "./supabaseClient";
 
@@ -116,6 +118,8 @@ export async function updateProfileCity(
     return { data: null, error: fromPostgrestError(error, "Stadt konnte nicht gespeichert werden.") };
   }
 
+  void trackAppEvent(supabase, CONTRIBUTION_EVENTS.profileUpdated, { context: { field: "city" } });
+
   return ok(data);
 }
 
@@ -136,6 +140,8 @@ export async function updateProfileDetails(
   if (error || !data) {
     return { data: null, error: fromPostgrestError(error, "Profil konnte nicht gespeichert werden.") };
   }
+
+  void trackAppEvent(supabase, CONTRIBUTION_EVENTS.profileUpdated);
 
   return ok(data);
 }

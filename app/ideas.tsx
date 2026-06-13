@@ -10,6 +10,7 @@ import { MapRouteButton } from "../src/components/MapRouteButton";
 import { ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { useTourTarget } from "../src/components/TourGuide";
+import { useScreenView } from "../src/components/useScreenView";
 import { SportIconBadge } from "../src/components/SportIcon";
 import { Button } from "../src/components/ui";
 import { useAuth } from "../src/context/AuthContext";
@@ -24,6 +25,7 @@ import {
   listSports,
   reviewSportIdea,
   saveSportIdeaDraft,
+  SCREEN_EVENTS,
   submitSportIdea,
   upsertMccSport,
   upsertSportProfile,
@@ -150,6 +152,7 @@ const emptyDraft: IdeaDraft = {
 export default function IdeasScreen() {
   const { loading, user } = useAuth();
   const { theme } = useTheme();
+  useScreenView(SCREEN_EVENTS.ideas);
   const tourTarget = useTourTarget("ideas-create", { scroll: false });
   const [draft, setDraft] = useState<IdeaDraft>(emptyDraft);
   const [activeStep, setActiveStep] = useState<IdeaFlowStep>("location");

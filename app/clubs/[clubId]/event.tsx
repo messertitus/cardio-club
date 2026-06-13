@@ -13,11 +13,14 @@ import {
   listEventActivities,
   listSportProfilesForSports,
   listSports,
+  SCREEN_EVENTS,
   type Row,
 } from "../../../src/services";
+import { useScreenView } from "../../../src/components/useScreenView";
 
 export default function CurrentWeeklyEventScreen() {
   const { clubId } = useLocalSearchParams<{ clubId: string }>();
+  useScreenView(SCREEN_EVENTS.event);
   const [event, setEvent] = useState<Row<"weekly_events"> | null>(null);
   const [eventActivities, setEventActivities] = useState<Row<"event_activities">[]>([]);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
