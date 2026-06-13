@@ -12,7 +12,7 @@ export type EventActivityRole = "primary" | "secondary";
 export type ApRequirementLevel = "none" | "required" | "critical";
 export type DirectChatStatus = "open" | "closed";
 export type AppRole = "admin" | "member";
-export type NotificationRuleKind = "vote_open" | "vote_closing" | "decision_available" | "event_reminder" | "idea_proposed" | "chat_hint" | "manual";
+export type NotificationRuleKind = "vote_open" | "vote_closing" | "decision_available" | "event_reminder" | "idea_proposed" | "chat_hint" | "manual" | "invite_reminder";
 export type NotificationRuleStatus = "draft" | "active" | "inactive";
 
 export type Database = {
@@ -952,6 +952,7 @@ export type Database = {
           conditions: Json;
           schedule: Json;
           status: NotificationRuleStatus;
+          system_key: string | null;
           last_sent_at: string | null;
           created_by: string | null;
           created_at: string;

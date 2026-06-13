@@ -67,8 +67,9 @@ export default function InvitesScreen() {
     <View style={{ flex: 1 }}>
       <MccScreen title="Einladungscodes" kicker="Exklusiver Zugang" subtitle={isAdmin ? "Admin-Kontingent: unbegrenzt." : `Noch ${remaining} von 3 Codes verfügbar.`} bottomInset={96}>
         <MccCard accent>
-          <MccBadge icon="ticket-confirmation-outline">Slots</MccBadge>
-          <MccCardTitle>Zugang kontrolliert, aber schnell geteilt</MccCardTitle>
+          <MccBadge icon="account-multiple-plus-outline">Einladen</MccBadge>
+          <MccCardTitle>Bring deine Leute mit</MccCardTitle>
+          <MccBody muted>Jeder Code öffnet genau einer Person die Tür zum Club. Erstelle einen und teile ihn in Sekunden.</MccBody>
           <View style={styles.slotRow}>
             {slotLabels.map((slot, index) => {
               const filled = isAdmin || index < usedSlots;
@@ -102,7 +103,7 @@ export default function InvitesScreen() {
         {codes.map((code, index) => (
           <Reveal key={code.code} index={index}>
             <MccCard style={code.used_at ? styles.usedCard : undefined}>
-              <MccBadge tone={code.used_at ? "neutral" : "success"} icon={code.used_at ? "check-outline" : "share-variant-outline"}>
+              <MccBadge tone={code.used_at ? "neutral" : "success"} icon={code.used_at ? "check-outline" : "account-plus-outline"}>
                 {code.used_at ? "Verwendet" : "Bereit zum Teilen"}
               </MccBadge>
               <Text style={[styles.code, { color: theme.mcc.textPrimary }]}>{code.code}</Text>

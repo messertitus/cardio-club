@@ -11,6 +11,7 @@ export const NOTIFICATION_RULE_KIND_LABELS: Record<NotificationRuleKind, string>
   idea_proposed: "Neue Sportart/Standort",
   chat_hint: "Chat-/Club-Hinweis",
   manual: "Manuelle Mitteilung",
+  invite_reminder: "Einladungserinnerung",
 };
 
 export const NOTIFICATION_RULE_STATUS_LABELS: Record<NotificationRuleStatus, string> = {

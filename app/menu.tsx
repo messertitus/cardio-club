@@ -119,7 +119,7 @@ export default function MenuScreen() {
               <View style={styles.inviteText}>
                 <Text style={[styles.inviteKicker, { color: theme.mcc.accent }]}>Exklusiver Zugang</Text>
                 <Text style={[styles.inviteTitle, { color: theme.mcc.textPrimary }]}>Einladungscodes</Text>
-                <Text style={[styles.inviteBody, { color: theme.mcc.textSecondary }]}>Codes erstellen, teilen und sehen, wer sie verwendet hat.</Text>
+                <Text style={[styles.inviteBody, { color: theme.mcc.textSecondary }]}>Bring deine Leute mit – Code erstellen und in Sekunden teilen.</Text>
               </View>
               <View style={[styles.inviteArrow, { backgroundColor: theme.mcc.accentDeep }]}>
                 <Text style={[styles.arrow, { color: "#FFFFFF" }]}>›</Text>

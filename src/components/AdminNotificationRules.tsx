@@ -35,12 +35,16 @@ import {
 } from "../services/notificationRules";
 import type { NotificationRuleKind, NotificationRuleStatus } from "../services/database.types";
 
-const KIND_OPTIONS = (Object.keys(NOTIFICATION_RULE_KIND_LABELS) as NotificationRuleKind[]).map((value) => ({ value, label: NOTIFICATION_RULE_KIND_LABELS[value] }));
+// invite_reminder is a system-only kind, not offered when creating custom rules.
+const KIND_OPTIONS = (Object.keys(NOTIFICATION_RULE_KIND_LABELS) as NotificationRuleKind[])
+  .filter((value) => value !== "invite_reminder")
+  .map((value) => ({ value, label: NOTIFICATION_RULE_KIND_LABELS[value] }));
 
 type Tab = "rules" | "history";
 
 type FormState = {
   id: string | null;
+  systemKey: string | null;
   kind: NotificationRuleKind;
   title: string;
   body: string;
@@ -54,13 +58,14 @@ type FormState = {
 };
 
 function emptyForm(): FormState {
-  return { id: null, kind: "manual", title: "", body: "", href: "/", status: "draft", conditions: {}, scheduleMode: "once", date: "", weekday: "", time: "" };
+  return { id: null, systemKey: null, kind: "manual", title: "", body: "", href: "/", status: "draft", conditions: {}, scheduleMode: "once", date: "", weekday: "", time: "" };
 }
 
 function formFromRule(rule: NotificationRule): FormState {
   const schedule = parseSchedule(rule.schedule);
   return {
     id: rule.id,
+    systemKey: rule.system_key,
     kind: rule.kind,
     title: rule.title,
     body: rule.body,
@@ -231,6 +236,12 @@ export function AdminNotificationRules() {
                 <RuleInput value={form.href} onChangeText={(value) => updateForm({ href: value })} placeholder="/" />
               </Field>
 
+              {form.systemKey ? (
+                <Text style={[styles.hint, { color: theme.mcc.textMuted }]}>
+                  Systembenachrichtigung – Auslöser und Zielgruppe sind fest. Du kannst Titel, Text und Status anpassen.
+                </Text>
+              ) : (
+                <>
               <Heading label="Zielgruppe" />
               <SegmentedControl label="Typ" options={KIND_OPTIONS} value={form.kind} onChange={(value) => updateForm({ kind: value })} />
 
@@ -302,6 +313,8 @@ export function AdminNotificationRules() {
               <Text style={[styles.hint, { color: theme.mcc.textMuted }]}>
                 Aktive Regeln mit Zeit werden automatisch zur eingestellten Zeit gesendet (einmalig danach inaktiv). Ohne Zeit nur per „Senden".
               </Text>
+                </>
+              )}
 
               <Heading label="Aktivierung" />
               <SegmentedControl
@@ -360,12 +373,18 @@ export function AdminNotificationRules() {
                   <MccBadge tone="accent" icon="bell-outline">
                     {NOTIFICATION_RULE_KIND_LABELS[rule.kind]}
                   </MccBadge>
-                  <MccBadge tone="neutral" icon="account-group-outline">
-                    {summarizeConditions(rule.conditions)}
-                  </MccBadge>
-                  <MccBadge tone="neutral" icon="clock-outline">
-                    {describeSchedule(rule.schedule)}
-                  </MccBadge>
+                  {rule.system_key ? (
+                    <MccBadge tone="neutral" icon="cog-outline">System · automatisch</MccBadge>
+                  ) : (
+                    <>
+                      <MccBadge tone="neutral" icon="account-group-outline">
+                        {summarizeConditions(rule.conditions)}
+                      </MccBadge>
+                      <MccBadge tone="neutral" icon="clock-outline">
+                        {describeSchedule(rule.schedule)}
+                      </MccBadge>
+                    </>
+                  )}
                 </View>
 
                 <View style={styles.ruleActions}>
@@ -376,8 +395,8 @@ export function AdminNotificationRules() {
                     onPress={() => toggleStatus(rule)}
                   />
                   <ActionChip icon="send-check-outline" label="Test an mich" onPress={() => send(rule, true)} />
-                  {rule.status === "active" ? <ActionChip icon="send-outline" label="Senden" onPress={() => send(rule, false)} /> : null}
-                  <ActionChip icon="trash-can-outline" label="Löschen" tone="danger" onPress={() => setConfirmDeleteId(rule.id)} />
+                  {!rule.system_key && rule.status === "active" ? <ActionChip icon="send-outline" label="Senden" onPress={() => send(rule, false)} /> : null}
+                  {!rule.system_key ? <ActionChip icon="trash-can-outline" label="Löschen" tone="danger" onPress={() => setConfirmDeleteId(rule.id)} /> : null}
                 </View>
 
                 {confirmDeleteId === rule.id ? (
