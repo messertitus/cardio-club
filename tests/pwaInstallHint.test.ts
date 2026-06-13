@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   decideInstallHint,
   INSTALL_HINT_TRIGGER_USAGES,
+  PUSH_HINT_TRIGGER_USAGES,
   type InstallHintEnvironment,
   type InstallHintState,
 } from "../src/services/installHintDecision";
@@ -29,15 +30,35 @@ function decide(overrides: {
 }
 
 describe("decideInstallHint", () => {
-  it("fires only on the configured logins (2nd and 5th), never otherwise", () => {
+  it("shows the full install hint on the 2nd and 5th login; 4th stays empty", () => {
     expect(INSTALL_HINT_TRIGGER_USAGES).toEqual([2, 5]);
+    expect(PUSH_HINT_TRIGGER_USAGES).toEqual([3, 6]);
     expect(decide({ usageCount: 1 })).toEqual({ show: false });
     expect(decide({ usageCount: 2 })).toEqual({ show: true, variant: "install-and-push" });
+    // 3 and 6 only fire for installed users (webEnv is not standalone here)
     expect(decide({ usageCount: 3 })).toEqual({ show: false });
     expect(decide({ usageCount: 4 })).toEqual({ show: false });
     expect(decide({ usageCount: 5 })).toEqual({ show: true, variant: "install-and-push" });
     expect(decide({ usageCount: 6 })).toEqual({ show: false });
     expect(decide({ usageCount: 12 })).toEqual({ show: false });
+  });
+
+  it("reminds about push on the 3rd/6th login only when installed and push still off", () => {
+    const installed = { standalone: true } as const;
+    // installed + push not yet enabled → remind
+    expect(decide({ usageCount: 3, env: installed })).toEqual({ show: true, variant: "push-only" });
+    expect(decide({ usageCount: 6, env: installed })).toEqual({ show: true, variant: "push-only" });
+    // 4th stays empty even when installed
+    expect(decide({ usageCount: 4, env: installed })).toEqual({ show: false });
+    // installed but push already granted → nothing
+    expect(decide({ usageCount: 3, env: { standalone: true, pushPermission: "granted" } })).toEqual({ show: false });
+    // installed but push denied / unsupported → no false promise
+    expect(decide({ usageCount: 6, env: { standalone: true, pushPermission: "denied" } })).toEqual({ show: false });
+    // not installed → no push reminder here (install hint covers 2nd/5th instead)
+    expect(decide({ usageCount: 3 })).toEqual({ show: false });
+    expect(decide({ usageCount: 6 })).toEqual({ show: false });
+    // opted out for good → nothing
+    expect(decide({ usageCount: 3, env: installed, state: { dismissed: true } })).toEqual({ show: false });
   });
 
   it("never shows once permanently dismissed", () => {

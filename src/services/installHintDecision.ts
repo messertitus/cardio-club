@@ -7,6 +7,11 @@
 // so a long-standing user first sees it on their 2nd login after the update.
 export const INSTALL_HINT_TRIGGER_USAGES = [2, 5];
 
+// On these logins we show a short push-only reminder — but only for users who
+// have installed the PWA (standalone) and not yet enabled push. The reminder
+// lands on the 3rd and 6th login; the 4th stays empty.
+export const PUSH_HINT_TRIGGER_USAGES = [3, 6];
+
 // Only the permanent opt-out is persisted. "Später"/"Mehr erfahren" are handled
 // in-memory for the session — the login counter naturally moves past the trigger
 // on the next app open, so they never need a durable flag.
@@ -41,14 +46,22 @@ export function decideInstallHint(params: {
   const { usageCount, state, env } = params;
 
   if (state.dismissed) return { show: false };
-  if (!INSTALL_HINT_TRIGGER_USAGES.includes(usageCount)) return { show: false };
-  // Already installed as an app → no hint at all, and explicitly no push prompt.
-  if (env.standalone) return { show: false };
 
-  const canOfferInstall = env.installSupported;
   // Only offer push when it can actually be granted — a "denied" or unsupported
   // state must not promise notifications we cannot deliver.
   const canOfferPush = env.pushSupported && env.pushPermission === "default";
+
+  // 3rd/6th login: a short push-only reminder, but only for users who already
+  // installed the PWA and haven't enabled push yet ("falls noch nicht geschehen").
+  if (PUSH_HINT_TRIGGER_USAGES.includes(usageCount)) {
+    return env.standalone && canOfferPush ? { show: true, variant: "push-only" } : { show: false };
+  }
+
+  if (!INSTALL_HINT_TRIGGER_USAGES.includes(usageCount)) return { show: false };
+  // Already installed as an app → no install hint.
+  if (env.standalone) return { show: false };
+
+  const canOfferInstall = env.installSupported;
 
   if (canOfferInstall && canOfferPush) return { show: true, variant: "install-and-push" };
   if (canOfferInstall) return { show: true, variant: "install-only" };

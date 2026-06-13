@@ -16,6 +16,7 @@ export * from "./invitations";
 export * from "./liveApp";
 export * from "./members";
 export * from "./noGos";
+export * from "./notificationRules";
 export * from "./proposals";
 export * from "./profiles";
 export * from "./push";

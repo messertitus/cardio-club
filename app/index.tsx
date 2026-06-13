@@ -206,8 +206,11 @@ export default function HomeScreen() {
   }
 
   function openInstallGuide() {
+    // The push-only reminder leads to the Push screen (enable push there); the
+    // install hint leads to the install guide.
+    const target = installHintVariant === "push-only" ? "/push" : "/install";
     markHintHandledAndClose();
-    router.push("/install");
+    router.push(target);
   }
 
   async function updatePostalCode(value: string) {

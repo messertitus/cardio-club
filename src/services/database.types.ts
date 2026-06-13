@@ -12,6 +12,8 @@ export type EventActivityRole = "primary" | "secondary";
 export type ApRequirementLevel = "none" | "required" | "critical";
 export type DirectChatStatus = "open" | "closed";
 export type AppRole = "admin" | "member";
+export type NotificationRuleKind = "vote_open" | "vote_closing" | "decision_available" | "event_reminder" | "idea_proposed" | "chat_hint" | "manual";
+export type NotificationRuleStatus = "draft" | "active" | "inactive";
 
 export type Database = {
   public: {
@@ -939,6 +941,50 @@ export type Database = {
         };
         Relationships: [];
       };
+      notification_rules: {
+        Row: {
+          id: string;
+          club_id: string | null;
+          kind: NotificationRuleKind;
+          title: string;
+          body: string;
+          href: string;
+          conditions: Json;
+          schedule: Json;
+          status: NotificationRuleStatus;
+          last_sent_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          club_id?: string | null;
+          kind?: NotificationRuleKind;
+          title: string;
+          body: string;
+          href?: string;
+          conditions?: Json;
+          schedule?: Json;
+          status?: NotificationRuleStatus;
+          last_sent_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          club_id?: string | null;
+          kind?: NotificationRuleKind;
+          title?: string;
+          body?: string;
+          href?: string;
+          conditions?: Json;
+          schedule?: Json;
+          status?: NotificationRuleStatus;
+          last_sent_at?: string | null;
+        };
+        Relationships: [];
+      };
       profile_change_requests: {
         Row: {
           id: string;
@@ -1008,6 +1054,10 @@ export type Database = {
       is_current_mcc_admin: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
+      };
+      admin_send_notification_rule: {
+        Args: { rule_id: string; test_only?: boolean };
+        Returns: number;
       };
       deactivate_club_member: {
         Args: { target_user_id: string; reason?: string };
