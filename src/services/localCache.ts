@@ -1,9 +1,28 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { isManagedDataCacheKey } from "../lib/appInfo";
 
 type CachePayload<T> = {
   savedAt: number;
   data: T;
 };
+
+const CACHE_SCHEMA_KEY = "mcc.cacheSchemaVersion";
+
+// Drops all managed data caches when the cache schema version changes, so a new
+// app build never feeds stale, wrongly-shaped data to new code. User preferences
+// and auth tokens are preserved. Best-effort: never blocks startup.
+export async function purgeAppCachesIfOutdated(schemaVersion: string): Promise<void> {
+  try {
+    const stored = await AsyncStorage.getItem(CACHE_SCHEMA_KEY);
+    if (stored === schemaVersion) return;
+    const keys = await AsyncStorage.getAllKeys();
+    const stale = keys.filter(isManagedDataCacheKey);
+    if (stale.length > 0) await Promise.all(stale.map((key) => AsyncStorage.removeItem(key)));
+    await AsyncStorage.setItem(CACHE_SCHEMA_KEY, schemaVersion);
+  } catch {
+    // Cache maintenance must never block app start.
+  }
+}
 
 export async function readLocalCache<T>(key: string, maxAgeMs: number): Promise<T | null> {
   try {
