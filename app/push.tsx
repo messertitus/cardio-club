@@ -8,6 +8,7 @@ import { useAuth } from "../src/context/AuthContext";
 import { supabase } from "../src/lib/supabase";
 import {
   APP_EVENTS,
+  isRealPushEndpoint,
   isStandaloneDisplay,
   requestWebPushSubscription,
   saveWebPushSubscription,
@@ -39,13 +40,21 @@ export default function PushScreen() {
       return;
     }
 
+    // No VAPID key configured → permission was granted but there is no real Web
+    // Push subscription. Foreground notifications work, but background delivery
+    // needs the server's VAPID setup. Don't store the sentinel as a subscription.
+    if (!isRealPushEndpoint(subscription.endpoint)) {
+      setMessage("Benachrichtigungen sind erlaubt. Hintergrund-Push ist noch nicht serverseitig konfiguriert (VAPID-Schlüssel fehlt).");
+      return;
+    }
+
     const result = await saveWebPushSubscription(supabase, {
       userId: user.id,
       endpoint: subscription.endpoint,
       subscription: subscription.subscription,
     });
 
-    setMessage(result.error ? result.error.message : "Push ist gespeichert.");
+    setMessage(result.error ? result.error.message : "Push ist gespeichert. Du bekommst Benachrichtigungen jetzt auch bei geschlossener App.");
     if (!result.error) void trackAppEvent(supabase, APP_EVENTS.pushEnabled);
   }
 
