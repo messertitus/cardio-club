@@ -787,6 +787,7 @@ export default function IdeasScreen() {
                       onMapUrlChange={(mapUrl) => setDraft((current) => ({ ...current, mapUrl }))}
                       onCoordinatesChange={({ latitude, longitude }) => setDraft((current) => ({ ...current, latitude, longitude }))}
                       showNameInput={false}
+                      searchCity={draft.locationCity?.trim() || userCity}
                       onConfirmed={() => goToStepWithFeedback("locationName")}
                     />
                   ) : (
