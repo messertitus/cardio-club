@@ -27,6 +27,7 @@ import {
   setActiveCities,
   setMccEventDays,
   listInvitationTree,
+  linkSportToProfiles,
   listMccMembers,
   listMccSports,
   listSportProfileSportLinks,
@@ -202,6 +203,8 @@ export default function AdminScreen() {
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [profileCostOpen, setProfileCostOpen] = useState(false);
   const [profileSearch, setProfileSearch] = useState("");
+  const [bulkAssignSportId, setBulkAssignSportId] = useState<string>("");
+  const [bulkAssignProfileIds, setBulkAssignProfileIds] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [editingMemberNameId, setEditingMemberNameId] = useState<string | null>(null);
   const [memberNameDraft, setMemberNameDraft] = useState("");
@@ -561,6 +564,26 @@ export default function AdminScreen() {
     await load();
   }
 
+  async function assignSportToSelectedProfiles() {
+    if (!bulkAssignSportId) {
+      setMessage("Bitte wähle eine Sportart aus.");
+      return;
+    }
+    if (bulkAssignProfileIds.length === 0) {
+      setMessage("Bitte wähle mindestens einen Standort aus.");
+      return;
+    }
+    const result = await linkSportToProfiles(supabase, { sportId: bulkAssignSportId, profileIds: bulkAssignProfileIds });
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    const sportName = sports.find((sport) => sport.id === bulkAssignSportId)?.name ?? "Sportart";
+    setMessage(`${sportName} wurde ${result.data.linked} Standort(en) zugeordnet.`);
+    setBulkAssignProfileIds([]);
+    await load();
+  }
+
   async function toggleProfileActive(profile: Row<"sport_profiles">) {
     const result = await setSportProfileActive(supabase, { profileId: profile.id, isActive: !profile.is_active });
     if (result.error) {
@@ -744,6 +767,49 @@ export default function AdminScreen() {
           ) : null}
 
           {isAdmin && activeSection === "profiles" ? (
+            <>
+            <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
+              <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Sportart mehreren Standorten zuordnen</Text>
+              <AdminSectionHeading label="Schnellzuordnung" body="Eine Sportart auswählen und gleich mehreren bestehenden Standorten hinzufügen. Bereits vorhandene Sportarten der Standorte bleiben erhalten." />
+              <View style={styles.chipGroup}>
+                <Text style={[styles.muted, { color: theme.mcc.textSecondary }]}>Sportart</Text>
+                <View style={styles.roleRow}>
+                  {sports.map((sport) => {
+                    const active = bulkAssignSportId === sport.id;
+                    return (
+                      <Pressable
+                        key={sport.id}
+                        style={[styles.roleButton, { backgroundColor: active ? theme.mcc.accentDeep : theme.mcc.surface, opacity: !sport.is_active && !active ? 0.55 : 1 }]}
+                        onPress={() => setBulkAssignSportId(active ? "" : sport.id)}
+                      >
+                        <Text style={[styles.roleText, { color: active ? "#FFFFFF" : theme.mcc.textPrimary }]}>{sport.name}{sport.is_active ? "" : " (inaktiv)"}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <MultiPickerGroup
+                label="Standorte"
+                items={sportProfiles.map((profile) => {
+                  const already = Boolean(bulkAssignSportId) && sportProfileLinks.some((link) => link.profile_id === profile.id && link.sport_id === bulkAssignSportId);
+                  const cityPart = profile.location_city ? ` (${profile.location_city})` : "";
+                  return { id: profile.id, label: `${profile.location_name ?? profile.name}${cityPart}${already ? " · bereits" : ""}`, inactive: already };
+                })}
+                selectedIds={bulkAssignProfileIds}
+                onToggle={(profileId) =>
+                  setBulkAssignProfileIds((current) => (current.includes(profileId) ? current.filter((id) => id !== profileId) : [...current, profileId]))
+                }
+              />
+              <View style={styles.roleRow}>
+                <Pressable
+                  style={[styles.primaryButton, { backgroundColor: theme.mcc.accentDeep, opacity: !bulkAssignSportId || bulkAssignProfileIds.length === 0 ? 0.5 : 1 }]}
+                  onPress={() => void assignSportToSelectedProfiles()}
+                  disabled={!bulkAssignSportId || bulkAssignProfileIds.length === 0}
+                >
+                  <Text style={[styles.primaryText, { color: "#FFFFFF" }]}>Zuordnen{bulkAssignProfileIds.length > 0 ? ` (${bulkAssignProfileIds.length})` : ""}</Text>
+                </Pressable>
+              </View>
+            </View>
             <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
               <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Sportprofile verwalten</Text>
               <ProfileDraftPreview draft={profileDraft} members={members} editing={Boolean(editingProfileId)} />
@@ -1007,6 +1073,7 @@ export default function AdminScreen() {
                 );
               })}
             </View>
+            </>
           ) : null}
 
           {isAdmin && activeSection === "members" ? (

@@ -237,6 +237,27 @@ export async function upsertSportProfile(
   return ok(data);
 }
 
+// Assign one sport to several existing location profiles at once, without
+// touching the sports those profiles already offer. Idempotent: re-linking an
+// existing pairing is a no-op (primary key on profile_id, sport_id).
+export async function linkSportToProfiles(
+  supabase: AppSupabaseClient,
+  input: { sportId: string; profileIds: string[] },
+): Promise<ServiceResult<{ linked: number }>> {
+  const profileIds = [...new Set(input.profileIds.map((id) => id.trim()).filter(Boolean))];
+  if (!input.sportId.trim()) return fail("Bitte wähle eine Sportart aus.");
+  if (profileIds.length === 0) return fail("Bitte wähle mindestens einen Standort aus.");
+
+  const rows = profileIds.map((profileId) => ({ profile_id: profileId, sport_id: input.sportId }));
+  const { error } = await supabase.from("sport_profile_sports").upsert(rows, { onConflict: "profile_id,sport_id", ignoreDuplicates: true });
+  if (error) {
+    return { data: null, error: fromPostgrestError(error, "Sportart konnte den Standorten nicht zugeordnet werden.") };
+  }
+
+  await clearSportProfileCaches();
+  return ok({ linked: profileIds.length });
+}
+
 async function replaceSportProfileLinks(
   supabase: AppSupabaseClient,
   profileId: string,
