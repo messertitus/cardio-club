@@ -268,6 +268,17 @@ export default function IdeasScreen() {
   // Locations in the member's own city come first.
   const recentLocations = useMemo(() => recentLocationsFromProfiles(sportProfiles, userCity), [sportProfiles, userCity]);
 
+  // Distinct locations for the "assign a sport to existing locations" picker.
+  // The catalog has several profile rows per venue (historically one per sport),
+  // so we collapse them by name (case-insensitive) — each venue appears once,
+  // with all its profile rows grouped — and float the member's own city to top.
+  const uniqueLocations = useMemo(() => uniqueLocationsFromProfiles(sportProfiles, userCity), [sportProfiles, userCity]);
+  // Profile rows already offering the sport picked in the multi-location modal.
+  const multiLocationLinkedProfileIds = useMemo(
+    () => new Set(multiLocationSportId ? sportProfileLinks.filter((link) => link.sport_id === multiLocationSportId).map((link) => link.profile_id) : []),
+    [multiLocationSportId, sportProfileLinks],
+  );
+
   // Active sports list: optionally only sports that already have a location,
   // sorted so sports with profiles come first, then alphabetically. Easy to scan
   // even when many locations exist.
@@ -739,18 +750,22 @@ export default function IdeasScreen() {
 
                       <Text style={[styles.subflowKicker, { color: theme.muted }]}>Standorte</Text>
                       <View style={styles.choiceGrid}>
-                        {sportProfiles.map((profile) => {
-                          const active = multiLocationProfileIds.includes(profile.id);
-                          const already = Boolean(multiLocationSportId) && profileIsLinkedToSport(profile, multiLocationSportId, sportProfileLinks);
-                          const cityPart = profile.location_city ? ` · ${profile.location_city}` : "";
+                        {uniqueLocations.map((location) => {
+                          const active = multiLocationProfileIds.includes(location.id);
+                          const already = location.profileIds.some((id) => multiLocationLinkedProfileIds.has(id));
+                          const cityPart = location.city ? ` · ${location.city}` : "";
                           return (
                             <Pressable
-                              key={profile.id}
-                              style={[styles.choiceChip, { backgroundColor: active ? theme.button : theme.surface, opacity: already && !active ? 0.55 : 1 }]}
-                              onPress={() => setMultiLocationProfileIds((current) => (current.includes(profile.id) ? current.filter((id) => id !== profile.id) : [...current, profile.id]))}
+                              key={location.id}
+                              disabled={already}
+                              style={[
+                                styles.choiceChip,
+                                { backgroundColor: active ? theme.button : theme.surface, borderColor: location.inUserCity && !active ? theme.accent : theme.border, borderWidth: 1, opacity: already ? 0.45 : 1 },
+                              ]}
+                              onPress={() => setMultiLocationProfileIds((current) => (current.includes(location.id) ? current.filter((id) => id !== location.id) : [...current, location.id]))}
                             >
                               <Text style={[styles.choiceText, { color: active ? theme.inverse : theme.text }]} numberOfLines={1}>
-                                {(profile.location_name ?? profile.name)}{cityPart}{already ? " · bereits" : ""}
+                                {location.name}{cityPart}{already ? " · bereits" : ""}
                               </Text>
                             </Pressable>
                           );
@@ -1480,6 +1495,47 @@ function ideaInputFromProfile(
     apRequired: profile.ap_required,
     weatherRules: profile.weather_rules,
   };
+}
+
+type UniqueLocation = {
+  id: string;
+  name: string;
+  city: string | null;
+  profileIds: string[];
+  inUserCity: boolean;
+};
+
+// Collapse profile rows to one entry per venue name. The representative id is the
+// first profile (member's-city profiles preferred), and profileIds keeps every
+// row so callers can tell whether a sport is already offered at this venue.
+function uniqueLocationsFromProfiles(profiles: Row<"sport_profiles">[], userCity: string | null): UniqueLocation[] {
+  const city = normalizeCity(userCity);
+  const isInCity = (value: string | null) => Boolean(city && normalizeCity(value) === city);
+  const sorted = [...profiles].sort((a, b) => {
+    const aInCity = isInCity(a.location_city) ? 1 : 0;
+    const bInCity = isInCity(b.location_city) ? 1 : 0;
+    if (aInCity !== bInCity) return bInCity - aInCity;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+  const byName = new Map<string, UniqueLocation>();
+  for (const profile of sorted) {
+    const name = profile.location_name?.trim() || profile.name?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const existing = byName.get(key);
+    if (existing) {
+      existing.profileIds.push(profile.id);
+      continue;
+    }
+    byName.set(key, {
+      id: profile.id,
+      name,
+      city: profile.location_city,
+      profileIds: [profile.id],
+      inUserCity: isInCity(profile.location_city),
+    });
+  }
+  return [...byName.values()];
 }
 
 function recentLocationsFromProfiles(profiles: Row<"sport_profiles">[], userCity: string | null): RecentLocation[] {
