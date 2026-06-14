@@ -259,7 +259,8 @@ export default function AuthScreen() {
     });
 
     if (result.error) {
-      setMessage(result.error.message);
+      setMessage(mapAuthError(result.error.message));
+      setSmsCode("");
       setLoading(false);
       return;
     }
@@ -1185,6 +1186,10 @@ function mapAuthError(message: string): string {
     return "Telefonnummer oder App-PIN stimmt nicht.";
   }
 
+  if (isOtpExpiredOrInvalidError(message)) {
+    return "Der SMS-Code ist abgelaufen oder ungültig. Fordere über „SMS erneut senden“ einen neuen Code an und gib ihn zügig ein.";
+  }
+
   const retryAfter = retryAfterSeconds(message);
   if (retryAfter !== null) {
     return `Zu viele SMS-Anfragen. Bitte warte ${retryAfter} Sekunden und versuche es erneut.`;
@@ -1207,6 +1212,13 @@ function retryAfterSeconds(message: string): number | null {
 function isSmsRateLimitError(message: string): boolean {
   const normalized = message.toLowerCase();
   return normalized.includes("rate limit") || normalized.includes("too many requests");
+}
+
+// Supabase returns "Token has expired or is invalid" (otp_expired) when the SMS
+// code is wrong or — more often — was entered after its validity window lapsed.
+function isOtpExpiredOrInvalidError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("otp_expired") || normalized.includes("expired") || normalized.includes("token is invalid") || normalized.includes("invalid token") || normalized.includes("expired or is invalid");
 }
 
 function isInvalidLoginError(message: string): boolean {
