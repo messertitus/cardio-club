@@ -111,8 +111,12 @@ export async function getMccEventState(
   }
 
   const ordered = orderEvents(eventRows);
-  // Default to this week's first Cardiotag (earliest week, Saturday first).
-  const event = (eventId ? ordered.find((row) => row.id === eventId) : undefined) ?? ordered[0];
+  // Default to the member's own city (earliest week, Saturday first within it),
+  // falling back to the first Cardiotag if their city has no event this week.
+  const cityResult = await supabase.from("profiles").select("city").eq("id", userId).maybeSingle();
+  const myCity = cityResult.data?.city?.trim().toLowerCase() ?? null;
+  const cityMatch = myCity ? ordered.find((row) => (row.city ?? "").trim().toLowerCase() === myCity) : undefined;
+  const event = (eventId ? ordered.find((row) => row.id === eventId) : undefined) ?? cityMatch ?? ordered[0];
   const weekEvents: WeekEventSummary[] = ordered.map((row) => ({
     id: row.id,
     eventDay: row.event_day,
