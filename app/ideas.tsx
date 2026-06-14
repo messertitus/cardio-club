@@ -447,11 +447,20 @@ export default function IdeasScreen() {
   async function createProfileFromIdea(idea: SportIdeaWithCreator): Promise<string | null> {
     const sportIds = ideaSportIds(idea);
     if (sportIds.length === 0) return "Bitte wähle vor der Freigabe mindestens eine abstrakte Sportart aus.";
+    // Flexible ideas skip the "short location name" step, so idea.location is
+    // empty. Fall back to the city/postal the member did provide (e.g.
+    // "78462 Konstanz") so the profile still has a usable location label.
+    const locationName =
+      idea.location?.trim() ||
+      [idea.postal_code?.trim(), idea.location_city?.trim()].filter(Boolean).join(" ") ||
+      idea.location_city?.trim() ||
+      idea.postal_code?.trim() ||
+      null;
     const result = await upsertSportProfile(supabase, {
       sportId: sportIds[0],
       sportIds,
       name: idea.profile_name ?? idea.name ?? "",
-      locationName: idea.location,
+      locationName,
       mapUrl: idea.map_url,
       postalCode: idea.postal_code,
       locationCity: idea.location_city,
