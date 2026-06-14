@@ -133,11 +133,12 @@ export default function MenuScreen() {
             <View ref={ideasTarget.ref} onLayout={ideasTarget.onLayout}>
               <MenuItem index={1} title="Sportarten und Standorte" body="Neue Aktivität vorschlagen" onPress={() => router.push("/ideas")} />
             </View>
-            <MenuItem index={2} title="Profil" body="Name, Standort und Geburtstag" onPress={() => router.push("/profile")} />
-            <MenuItem index={3} title="Einstellungen" body="PIN und Telefonnummer" onPress={() => router.push("/settings")} />
-            <MenuItem index={4} title="App installieren" body="Zum Homescreen hinzufügen" onPress={() => router.push("/install")} />
-            <MenuItem index={5} title="Push" body="Benachrichtigungen verwalten" onPress={() => router.push("/push")} />
-            {isAdmin ? <MenuItem index={6} title="Admin" body="Mitglieder und Rechte verwalten" onPress={() => router.push("/admin")} /> : null}
+            <MenuItem index={2} title="So entscheidet der Club" body="Fair erklärt: wie aus Stimmen ein Cardiotag wird" onPress={() => router.push("/how-it-works")} />
+            <MenuItem index={3} title="Profil" body="Name, Standort und Geburtstag" onPress={() => router.push("/profile")} />
+            <MenuItem index={4} title="Einstellungen" body="PIN und Telefonnummer" onPress={() => router.push("/settings")} />
+            <MenuItem index={5} title="App installieren" body="Zum Homescreen hinzufügen" onPress={() => router.push("/install")} />
+            <MenuItem index={6} title="Push" body="Benachrichtigungen verwalten" onPress={() => router.push("/push")} />
+            {isAdmin ? <MenuItem index={7} title="Admin" body="Mitglieder und Rechte verwalten" onPress={() => router.push("/admin")} /> : null}
           </View>
 
           <Pressable style={({ pressed }) => [styles.signOut, { borderColor: theme.mcc.line }, pressed && styles.itemPressed]} onPress={signOut}>

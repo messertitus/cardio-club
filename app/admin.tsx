@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNav } from "../src/components/BottomNav";
 import { MapLocationPicker, SearchField, SegmentedControl } from "../src/components/FormControls";
@@ -27,6 +27,8 @@ import {
   setActiveCities,
   setMccEventDays,
   listInvitationTree,
+  exportSportProfiles,
+  importSportProfiles,
   linkSportToProfiles,
   listMccMembers,
   listMccSports,
@@ -584,6 +586,68 @@ export default function AdminScreen() {
     await load();
   }
 
+  async function exportProfiles() {
+    const result = await exportSportProfiles(supabase);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      setMessage("Export ist nur im Web verfügbar.");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `mcc-standorte-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setMessage(`${result.data.profiles.length} Standorte exportiert.`);
+  }
+
+  async function importProfilesFromFile() {
+    if (!user) return;
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      setMessage("Import ist nur im Web verfügbar.");
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          setMessage("Datei ist kein gültiges JSON.");
+          return;
+        }
+        void runProfileImport(parsed);
+      };
+      reader.onerror = () => setMessage("Datei konnte nicht gelesen werden.");
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  async function runProfileImport(parsed: unknown) {
+    if (!user) return;
+    const result = await importSportProfiles(supabase, parsed, user.id);
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+    const summary = `Import: ${result.data.imported} übernommen, ${result.data.failed} fehlgeschlagen.`;
+    setMessage(result.data.messages.length ? `${summary} ${result.data.messages.slice(0, 3).join(" | ")}` : summary);
+    await load();
+  }
+
   async function toggleProfileActive(profile: Row<"sport_profiles">) {
     const result = await setSportProfileActive(supabase, { profileId: profile.id, isActive: !profile.is_active });
     if (result.error) {
@@ -812,6 +876,18 @@ export default function AdminScreen() {
             </View>
             <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
               <Text style={[styles.cardTitle, { color: theme.mcc.textPrimary }]}>Sportprofile verwalten</Text>
+              <AdminSectionHeading label="Export / Import" body="Alle Standorte als JSON sichern oder aus einer Datei einspielen. Import legt fehlende Standorte an und aktualisiert vorhandene (gleiche ID). Sportarten werden über den Namen zugeordnet — fehlende Sportarten vorher anlegen." />
+              <View style={styles.roleRow}>
+                <Pressable style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]} onPress={() => void exportProfiles()}>
+                  <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Standorte exportieren</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.roleButton, { backgroundColor: theme.mcc.surface }]}
+                  onPress={() => confirmAdminAction("Standorte importieren?", "Standorte mit gleicher ID werden überschrieben, neue werden angelegt.", () => void importProfilesFromFile())}
+                >
+                  <Text style={[styles.roleText, { color: theme.mcc.textPrimary }]}>Standorte importieren</Text>
+                </Pressable>
+              </View>
               <ProfileDraftPreview draft={profileDraft} members={members} editing={Boolean(editingProfileId)} />
 
               <AdminSectionHeading label="Standort" body="Ort, PLZ und Karte entscheiden später über Wege, Wetter und Kapazität." />

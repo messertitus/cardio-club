@@ -48,6 +48,171 @@ export type SportProfileAdminInput = {
   createdBy?: string | null;
 };
 
+export type SportProfileExportEntry = Row<"sport_profiles"> & { sportIds: string[]; sportNames: string[] };
+export type SportProfileExport = {
+  kind: "mcc.sportProfiles";
+  version: 1;
+  exportedAt: string;
+  sports: { id: string; name: string }[];
+  profiles: SportProfileExportEntry[];
+};
+export type SportProfileImportResult = { imported: number; failed: number; messages: string[] };
+
+// Export every location profile together with the sports it offers (by id AND
+// name), so a re-import can resolve sports even if the target database assigns
+// different sport ids. Profile ids are preserved so re-importing updates in place.
+export async function exportSportProfiles(supabase: AppSupabaseClient): Promise<ServiceResult<SportProfileExport>> {
+  const [profilesResult, linksResult, sportsResult] = await Promise.all([
+    supabase.from("sport_profiles").select().order("name", { ascending: true }),
+    supabase.from("sport_profile_sports").select(),
+    supabase.from("sports").select("id, name"),
+  ]);
+
+  if (profilesResult.error || !profilesResult.data) {
+    return { data: null, error: fromPostgrestError(profilesResult.error, "Standorte konnten nicht exportiert werden.") };
+  }
+  if (sportsResult.error || !sportsResult.data) {
+    return { data: null, error: fromPostgrestError(sportsResult.error, "Sportarten konnten nicht geladen werden.") };
+  }
+
+  const sportNameById = new Map(sportsResult.data.map((sport) => [sport.id, sport.name]));
+  const links = linksResult.error ? [] : linksResult.data ?? [];
+  const linkedByProfile = new Map<string, string[]>();
+  for (const link of links) {
+    linkedByProfile.set(link.profile_id, [...(linkedByProfile.get(link.profile_id) ?? []), link.sport_id]);
+  }
+
+  const profiles = profilesResult.data.map((profile) => {
+    const sportIds = normalizeSportIds([...(linkedByProfile.get(profile.id) ?? []), profile.sport_id]);
+    return {
+      ...profile,
+      sportIds,
+      sportNames: sportIds.map((id) => sportNameById.get(id)).filter((name): name is string => Boolean(name)),
+    };
+  });
+
+  return ok({
+    kind: "mcc.sportProfiles",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sports: sportsResult.data.map((sport) => ({ id: sport.id, name: sport.name })),
+    profiles,
+  });
+}
+
+// Import a bundle produced by exportSportProfiles. Each profile is upserted by id
+// (insert-with-id on a fresh database, update on the same one). Sports are matched
+// by name first (robust across databases), then by id if the id still exists.
+export async function importSportProfiles(
+  supabase: AppSupabaseClient,
+  bundle: unknown,
+  createdBy: string | null,
+): Promise<ServiceResult<SportProfileImportResult>> {
+  if (!isSportProfileExport(bundle)) {
+    return fail("Diese Datei ist kein gültiger Standort-Export.");
+  }
+
+  const sportsResult = await supabase.from("sports").select("id, name");
+  if (sportsResult.error || !sportsResult.data) {
+    return { data: null, error: fromPostgrestError(sportsResult.error, "Sportarten konnten nicht geladen werden.") };
+  }
+  const idByName = new Map(sportsResult.data.map((sport) => [sport.name.trim().toLowerCase(), sport.id]));
+  const existingSportIds = new Set(sportsResult.data.map((sport) => sport.id));
+
+  const result: SportProfileImportResult = { imported: 0, failed: 0, messages: [] };
+  for (const profile of bundle.profiles) {
+    const label = profile.location_name?.trim() || profile.name?.trim() || profile.id;
+    const sportIds = resolveImportSportIds(profile, idByName, existingSportIds);
+    if (sportIds.length === 0) {
+      result.failed += 1;
+      result.messages.push(`${label}: keine passende Sportart gefunden (bitte Sportarten zuerst anlegen).`);
+      continue;
+    }
+
+    const locationName =
+      profile.location_name?.trim() ||
+      [profile.postal_code?.trim(), profile.location_city?.trim()].filter(Boolean).join(" ") ||
+      profile.location_city?.trim() ||
+      profile.postal_code?.trim() ||
+      null;
+
+    const upsert = await upsertSportProfile(supabase, {
+      profileId: profile.id,
+      sportIds,
+      name: profile.name,
+      locationName,
+      mapUrl: profile.map_url,
+      postalCode: profile.postal_code,
+      locationCity: profile.location_city,
+      latitude: profile.latitude,
+      longitude: profile.longitude,
+      venueGroupKey: profile.venue_group_key,
+      locationType: profile.location_type,
+      isIndoor: profile.is_indoor ?? profile.location_type === "indoor",
+      minimumGroupSize: profile.minimum_group_size ?? 2,
+      maximumGroupSize: profile.maximum_group_size,
+      minimumParticipants: profile.minimum_participants ?? profile.minimum_group_size ?? 2,
+      maximumParticipants: profile.maximum_participants ?? profile.maximum_group_size,
+      requiredEquipment: profile.required_equipment ?? [],
+      availableEquipment: profile.available_equipment ?? [],
+      costNote: profile.cost_note,
+      costRequired: profile.cost_required ?? Boolean(profile.cost_note?.trim()),
+      costPerPerson: profile.cost_per_person,
+      costCurrency: profile.cost_currency,
+      openingNotes: profile.opening_notes,
+      lightingAvailable: profile.lighting_available,
+      transitNotes: profile.transit_notes,
+      amenityNotes: profile.amenity_notes,
+      reservationRequired: profile.reservation_required,
+      safetyNotes: profile.safety_notes,
+      locationRules: profile.location_rules,
+      apRequired: profile.ap_required,
+      apRequirementLevel: profile.ap_requirement_level,
+      apContactId: profile.ap_contact_id,
+      weatherRules: (profile.weather_rules ?? {}) as WeatherRules,
+      isActive: profile.is_active,
+      createdBy: profile.created_by ?? createdBy,
+    });
+
+    if (upsert.error) {
+      result.failed += 1;
+      result.messages.push(`${label}: ${upsert.error.message}`);
+    } else {
+      result.imported += 1;
+    }
+  }
+
+  await clearSportProfileCaches();
+  return ok(result);
+}
+
+function resolveImportSportIds(
+  profile: SportProfileExportEntry,
+  idByName: Map<string, string>,
+  existingSportIds: Set<string>,
+): string[] {
+  const resolved: string[] = [];
+  profile.sportIds.forEach((sportId, index) => {
+    const byName = profile.sportNames[index] ? idByName.get(profile.sportNames[index].trim().toLowerCase()) : undefined;
+    const id = byName ?? (existingSportIds.has(sportId) ? sportId : undefined);
+    if (id) resolved.push(id);
+  });
+  // Fall back to any name match when ids/order drifted.
+  if (resolved.length === 0) {
+    for (const name of profile.sportNames) {
+      const id = idByName.get(name.trim().toLowerCase());
+      if (id) resolved.push(id);
+    }
+  }
+  return normalizeSportIds(resolved);
+}
+
+function isSportProfileExport(value: unknown): value is SportProfileExport {
+  if (!value || typeof value !== "object") return false;
+  const bundle = value as Partial<SportProfileExport>;
+  return bundle.kind === "mcc.sportProfiles" && Array.isArray(bundle.profiles);
+}
+
 export async function listSportProfileSportLinks(
   supabase: AppSupabaseClient,
 ): Promise<ServiceResult<Row<"sport_profile_sports">[]>> {
