@@ -88,22 +88,38 @@ export async function requestWebPushSubscription(): Promise<{ endpoint: string; 
     return permission === "granted" ? { endpoint: "browser-notification-permission", subscription: { permission } } : null;
   }
 
-  const registration = await navigator.serviceWorker.register("/mcc-push-worker.js");
+  // Ensure the service worker that handles the `push` event is registered AND
+  // active before we subscribe — subscribing against a not-yet-active worker is
+  // a common reason background push silently never arrives.
+  await navigator.serviceWorker.register("/mcc-push-worker.js").catch(() => {});
+  const registration = await navigator.serviceWorker.ready;
+
   const permission = await Notification.requestPermission();
 
   if (permission !== "granted") {
     return null;
   }
 
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
-  });
+  // Reuse an existing push subscription when present; only create one if missing.
+  // This keeps a single stable endpoint per device instead of churning rows.
+  const existing = await registration.pushManager.getSubscription();
+  const subscription =
+    existing ??
+    (await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+    }));
 
   return {
     endpoint: subscription.endpoint,
     subscription: subscription.toJSON() as Json,
   };
+}
+
+// True only for a real Web Push endpoint (an https URL). The no-VAPID fallback
+// returns a sentinel endpoint that must NOT be stored as a push subscription.
+export function isRealPushEndpoint(endpoint: string): boolean {
+  return /^https?:\/\//i.test(endpoint);
 }
 
 export async function showBrowserNotification(notification: Pick<Row<"app_notifications">, "title" | "body" | "href" | "kind">): Promise<boolean> {
