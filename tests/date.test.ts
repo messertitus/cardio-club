@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   decisionReleaseFrom,
+  eventInputOpen,
   getDecisionReleaseDate,
   getWeekStartDate,
   isDecisionReleaseOpen,
   isDecisionReleaseOpenAt,
+  isEventOver,
+  isEventRunningNow,
   isVotingInputOpen,
   isVotingOpenAt,
 } from "../src/services/date";
@@ -48,6 +51,31 @@ describe("MCC event timing", () => {
     expect(isVotingOpenAt(sundayAt15, new Date("2026-06-12T15:00:00Z"))).toBe(false); // decision time
     // Buffer window: voting closed (13:00) but decision not yet out (15:00).
     expect(isDecisionReleaseOpenAt(sundayAt15, new Date("2026-06-12T13:30:00Z"))).toBe(false);
+  });
+
+  it("event lifecycle: running from start time until Berlin midnight, then over", () => {
+    const ws = "2026-06-08";
+    const startsAt = "2026-06-14T13:00:00.000Z"; // Sunday 15:00 Berlin (CEST = UTC+2)
+
+    // Before the start time → not running yet.
+    expect(isEventRunningNow(startsAt, ws, "sunday", new Date("2026-06-14T12:59:00Z"))).toBe(false);
+    // From the exact start time through the rest of the Berlin day → running.
+    expect(isEventRunningNow(startsAt, ws, "sunday", new Date("2026-06-14T13:00:00Z"))).toBe(true);
+    expect(isEventRunningNow(startsAt, ws, "sunday", new Date("2026-06-14T21:00:00Z"))).toBe(true); // 23:00 Berlin, still Sunday
+    // After Berlin midnight → no longer running, now "over".
+    expect(isEventRunningNow(startsAt, ws, "sunday", new Date("2026-06-14T22:30:00Z"))).toBe(false); // 00:30 Berlin, Monday
+    expect(isEventOver(startsAt, ws, "sunday", new Date("2026-06-14T21:00:00Z"))).toBe(false); // still Sunday
+    expect(isEventOver(startsAt, ws, "sunday", new Date("2026-06-14T22:30:00Z"))).toBe(true); // Monday in Berlin
+
+    // No precise start time → never reads as "running".
+    expect(isEventRunningNow(null, ws, "sunday", new Date("2026-06-14T13:00:00Z"))).toBe(false);
+  });
+
+  it("attendance/results entry opens exactly at the event start time", () => {
+    const ws = "2026-06-08";
+    const startsAt = "2026-06-14T13:00:00.000Z"; // Sunday 15:00 Berlin
+    expect(eventInputOpen(startsAt, ws, "sunday", new Date("2026-06-14T12:59:00Z"))).toBe(false);
+    expect(eventInputOpen(startsAt, ws, "sunday", new Date("2026-06-14T13:00:00Z"))).toBe(true);
   });
 
   it("any weekday: Friday event decides Wednesday, voting Sat–Tue (4 days)", () => {

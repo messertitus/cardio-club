@@ -98,6 +98,57 @@ export function isEventPast(weekStartDate: string, eventDay: EventDay = "sunday"
   return startOfUtcDay(now).getTime() > getEventDate(weekStartDate, eventDay).getTime();
 }
 
+// "YYYY-MM-DD" of an instant in the club's (Berlin) timezone — locale-agnostic
+// (formatToParts), so it is stable regardless of the device locale.
+function berlinDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: CLUB_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+// "YYYY-MM-DD" of the event's calendar date.
+export function eventDateKey(weekStartDate: string, eventDay: EventDay = "sunday"): string {
+  return getEventDate(weekStartDate, eventDay).toISOString().slice(0, 10);
+}
+
+// "Running": from the event's exact start time until the end of its calendar day
+// (Berlin midnight). Needs a real start time; without one we can't tell, so it
+// stays false and the event simply reads "decided" until the day rolls over.
+export function isEventRunningNow(
+  startsAt: string | null | undefined,
+  weekStartDate: string,
+  eventDay: EventDay = "sunday",
+  now = new Date(),
+): boolean {
+  if (!startsAt) return false;
+  if (now.getTime() < new Date(startsAt).getTime()) return false;
+  return berlinDateKey(now) === eventDateKey(weekStartDate, eventDay);
+}
+
+// "Over": the event's calendar day (Berlin) has passed → it is archived as
+// "vorbei". Day-boundary at local 00:00, independent of the device timezone.
+export function isEventOver(
+  startsAt: string | null | undefined,
+  weekStartDate: string,
+  eventDay: EventDay = "sunday",
+  now = new Date(),
+): boolean {
+  return berlinDateKey(now) > eventDateKey(weekStartDate, eventDay);
+}
+
+// Attendance and results may only be entered from the event's exact start time
+// on (you cannot record who showed up before it starts). Falls back to the event
+// date (midnight) when no precise start time is stored.
+export function eventInputOpen(
+  startsAt: string | null | undefined,
+  weekStartDate: string,
+  eventDay: EventDay = "sunday",
+  now = new Date(),
+): boolean {
+  if (startsAt) return now.getTime() >= new Date(startsAt).getTime();
+  return startOfUtcDay(now).getTime() >= getEventDate(weekStartDate, eventDay).getTime();
+}
+
 export function getDecisionReleaseDate(weekStartDate: string, eventDay: EventDay = "sunday"): Date {
   return addUtcDays(weekStartDate, DAY_OFFSET[eventDay] - 2);
 }

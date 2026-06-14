@@ -10,7 +10,7 @@ import { SportIconBadge } from "../../src/components/SportIcon";
 import { formatBerlinDateTime, formatCardioSunday, isEventPast } from "../../src/services/date";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
-import { getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, SCREEN_EVENTS, type Row } from "../../src/services";
+import { canCloseEvent, getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, SCREEN_EVENTS, type Row } from "../../src/services";
 import { useScreenView } from "../../src/components/useScreenView";
 
 type EventWithActivities = {
@@ -24,6 +24,8 @@ export default function EventHistoryScreen() {
   useScreenView(SCREEN_EVENTS.history);
   const [events, setEvents] = useState<EventWithActivities[]>([]);
   const [sports, setSports] = useState<Row<"sports">[]>([]);
+  // Past, not-yet-completed events the current user (admin / mod / AP) may close.
+  const [manageableEventIds, setManageableEventIds] = useState<Set<string>>(new Set());
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,17 @@ export default function EventHistoryScreen() {
       );
       setSports(sportsResult.data);
       setBusy(false);
+
+      // For past, not-yet-completed events, find which ones this user may still
+      // close (admin / event contact / activity AP) so the archive can offer the
+      // attendance/results/close actions where a wrap-up is still pending.
+      const pending = historyResult.data.filter(
+        (event) => event.status !== "completed" && event.status !== "cancelled" && isEventPast(event.week_start_date, event.event_day),
+      );
+      if (pending.length > 0) {
+        const closable = await Promise.all(pending.map((event) => canCloseEvent(supabase, event.id, user.id)));
+        setManageableEventIds(new Set(pending.filter((_, index) => closable[index]?.data).map((event) => event.id)));
+      }
     }
 
     void load();
@@ -154,6 +167,15 @@ export default function EventHistoryScreen() {
                 </>
               )
             ) : null}
+            {!skipped && event.status !== "completed" && manageableEventIds.has(event.id) ? (
+              <View style={styles.manage}>
+                <MccBadge tone="warning" icon="progress-clock">Abschluss ausstehend</MccBadge>
+                <MccBody muted>Trage Anwesenheit und Ergebnisse ein, um diesen Cardiotag abzuschließen.</MccBody>
+                <MccButton label="Anwesenheit eintragen" variant="secondary" icon="account-check-outline" onPress={() => router.push({ pathname: "/events/[eventId]/attendance", params: { eventId: event.id } })} />
+                <MccButton label="Ergebnisse eintragen" variant="secondary" icon="trophy-outline" onPress={() => router.push({ pathname: "/events/[eventId]/results", params: { eventId: event.id } })} />
+                <MccButton label="Event abschließen" icon="check-decagram" onPress={() => router.push({ pathname: "/events/[eventId]/close", params: { eventId: event.id } })} />
+              </View>
+            ) : null}
             <MccButton label={opened ? "Weniger" : "Details"} variant="secondary" icon={opened ? "chevron-up" : "chevron-down"} onPress={() => setExpandedEventId(opened ? null : event.id)} />
           </MccCard>
           </Reveal>
@@ -169,6 +191,7 @@ const styles = StyleSheet.create({
   cardHead: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   activityRow: { alignItems: "center", flexDirection: "row", gap: 10 },
   activityText: { flex: 1, minWidth: 0 },
+  manage: { gap: 8 },
 });
 
 function eventTypeIcon(type: Row<"weekly_events">["decision_type"]): ComponentProps<typeof MaterialCommunityIcons>["name"] {

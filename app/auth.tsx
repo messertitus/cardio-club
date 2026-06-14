@@ -9,7 +9,7 @@ import { ThemeToggle } from "../src/components/ThemeToggle";
 import { Button } from "../src/components/ui";
 import { useTheme } from "../src/context/ThemeContext";
 import { isSupabaseConfigured, supabase } from "../src/lib/supabase";
-import { consumeInvitationCode, ensureProfile, validateInvitationCode } from "../src/services";
+import { consumeInvitationCode, ensureProfile, getPublicMemberCount, validateInvitationCode } from "../src/services";
 
 const PENDING_INVITE_KEY = "mcc.pendingInviteCode";
 const PENDING_DISPLAY_NAME_KEY = "mcc.pendingDisplayName";
@@ -40,6 +40,18 @@ export default function AuthScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [introDone, setIntroDone] = useState(false);
+  const [memberCount, setMemberCount] = useState<number | null>(null);
+
+  // Aggregate member count for the (logged-out) intro lockup. Best-effort.
+  useEffect(() => {
+    let active = true;
+    void getPublicMemberCount(supabase).then((count) => {
+      if (active) setMemberCount(count);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const normalizedPhone = composePhone(dialCode, phone);
   const compactPhoneField = width < 390;
@@ -426,7 +438,7 @@ export default function AuthScreen() {
                     <ThemeToggle />
                   </View>
                 ) : null}
-                <AuthIntro onDone={finishIntro} />
+                <AuthIntro onDone={finishIntro} memberCount={memberCount} />
               </View>
             }
           >
@@ -1208,7 +1220,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
   },
   panelContent: { gap: 18 },
-  panelTop: { alignItems: "center", minHeight: 220, justifyContent: "center" },
+  panelTop: { alignItems: "center", minHeight: 176, justifyContent: "center" },
   themeSlot: { position: "absolute", top: 0, right: 0, zIndex: 2 },
   title: { color: "#ffffff", fontSize: 29, fontWeight: "900", letterSpacing: 0, lineHeight: 34 },
   subtitle: { color: "#9aa7b8", fontSize: 16, lineHeight: 24 },

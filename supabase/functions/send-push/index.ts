@@ -26,21 +26,46 @@ type SubscriptionRow = {
 };
 
 Deno.serve(async () => {
+ try {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const vapidPublic = Deno.env.get("VAPID_PUBLIC_KEY");
-  const vapidPrivate = Deno.env.get("VAPID_PRIVATE_KEY");
-  const vapidSubject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@messers-cardio-club.de";
-
-  if (!supabaseUrl || !serviceKey || !vapidPublic || !vapidPrivate) {
-    return Response.json({ error: "Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / VAPID keys" }, { status: 500 });
+  const vapidPublic = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").trim();
+  const vapidPrivate = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").trim();
+  // The VAPID "subject" is a contact identifier for the push service (NOT the
+  // recipient) and must be a mailto: or https: URL. Auto-prefix a bare email so
+  // a value like "you@example.com" works instead of throwing.
+  let vapidSubject = (Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@messers-cardio-club.de").trim();
+  if (vapidSubject && !/^https?:\/\//i.test(vapidSubject) && !vapidSubject.startsWith("mailto:")) {
+    vapidSubject = `mailto:${vapidSubject}`;
   }
 
-  webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
+  if (!supabaseUrl || !serviceKey || !vapidPublic || !vapidPrivate) {
+    return Response.json(
+      {
+        error: "Missing env",
+        hasUrl: Boolean(supabaseUrl),
+        hasServiceKey: Boolean(serviceKey),
+        hasVapidPublic: Boolean(vapidPublic),
+        hasVapidPrivate: Boolean(vapidPrivate),
+      },
+      { status: 500 },
+    );
+  }
+
+  // Malformed VAPID keys make setVapidDetails throw — surface that clearly
+  // instead of a bare 500, so the cause is visible in net._http_response.
+  try {
+    webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
+  } catch (vapidError) {
+    return Response.json({ error: `Invalid VAPID config: ${(vapidError as Error)?.message ?? vapidError}` }, { status: 500 });
+  }
+
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // 1) Enqueue the time-based notifications (vote reminder / decision / weekly invite).
-  await supabase.rpc("run_mcc_notification_jobs");
+  // Best-effort: a job error must not abort delivery of already-queued notifications.
+  const jobs = await supabase.rpc("run_mcc_notification_jobs");
+  if (jobs.error) console.error("run_mcc_notification_jobs failed:", jobs.error.message);
 
   // 2) Load undelivered notifications.
   const { data: notifications, error } = await supabase
@@ -60,8 +85,16 @@ Deno.serve(async () => {
     .eq("platform", "web")
     .in("user_id", userIds);
 
+  // Only real Web Push endpoints (https URLs). The no-VAPID client fallback used
+  // to store a sentinel endpoint "browser-notification-permission" — those can
+  // never receive a push, so skip (and count) them instead of trying.
   const subsByUser = new Map<string, SubscriptionRow[]>();
+  let skippedInvalid = 0;
   for (const sub of (subscriptions ?? []) as SubscriptionRow[]) {
+    if (!/^https?:\/\//i.test(sub.endpoint)) {
+      skippedInvalid += 1;
+      continue;
+    }
     const list = subsByUser.get(sub.user_id) ?? [];
     list.push(sub);
     subsByUser.set(sub.user_id, list);
@@ -99,5 +132,11 @@ Deno.serve(async () => {
     await supabase.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
   }
 
-  return Response.json({ sent, processed: notifications.length });
+  return Response.json({ sent, processed: notifications.length, skippedInvalid });
+ } catch (handlerError) {
+  // Surface the real cause in the response body (and logs) instead of a bare
+  // platform "Internal Server Error".
+  console.error("send-push failed:", handlerError);
+  return Response.json({ error: String((handlerError as Error)?.message ?? handlerError) }, { status: 500 });
+ }
 });

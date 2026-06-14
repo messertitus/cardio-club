@@ -27,6 +27,17 @@ export type MccMemberStats = {
   reliabilityPercent: number | null;
 };
 
+// Aggregate-only count for the logged-out auth screen. Anon-callable RPC that
+// returns just a number (no PII). Returns null on any error so the UI can simply
+// hide the line instead of breaking.
+export async function getPublicMemberCount(supabase: AppSupabaseClient): Promise<number | null> {
+  const { data, error } = await supabase.rpc("public_member_count");
+  if (error) return null;
+  // PostgREST may serialize a scalar bigint/int as a number or a string; coerce.
+  const count = typeof data === "number" ? data : Number(data);
+  return Number.isFinite(count) ? count : null;
+}
+
 export async function listMccMembers(
   supabase: AppSupabaseClient,
   input: { clubId: string; bypassCache?: boolean },

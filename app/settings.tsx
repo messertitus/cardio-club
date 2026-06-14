@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { BottomNav } from "../src/components/BottomNav";
 import { MccBadge, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader } from "../src/components/MccDesign";
 import { useAuth } from "../src/context/AuthContext";
@@ -299,6 +299,8 @@ function PhoneField({
   onPhoneChange: (value: string) => void;
 }) {
   const { theme } = useTheme();
+  const { width } = useWindowDimensions();
+  const compact = width < 390;
   const [expanded, setExpanded] = useState(false);
   const selected = COUNTRIES.find((country) => country.iso === countryIso) ?? COUNTRIES[0];
 
@@ -310,8 +312,8 @@ function PhoneField({
 
   return (
     <View style={styles.phoneGroup}>
-      <View style={styles.phoneRow}>
-        <Pressable style={[styles.dialField, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => setExpanded((value) => !value)}>
+      <View style={[styles.phoneRow, compact && styles.phoneRowCompact]}>
+        <Pressable style={[styles.dialField, compact && styles.dialFieldCompact, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft }]} onPress={() => setExpanded((value) => !value)}>
           <FlagBadge country={selected} />
           <Text style={[styles.dialText, { color: theme.mcc.textPrimary }]}>{dialCode}</Text>
           <Text style={[styles.chevron, { color: theme.mcc.textMuted }]}>{expanded ? "▲" : "▼"}</Text>
@@ -324,7 +326,7 @@ function PhoneField({
           autoComplete="tel"
           placeholder="170 1234567"
           placeholderTextColor={theme.mcc.textMuted}
-          style={[styles.input, styles.phoneInput, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
+          style={[styles.input, styles.phoneInput, compact && styles.phoneInputCompact, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surfaceSoft, color: theme.mcc.textPrimary }]}
         />
       </View>
       {expanded ? (
@@ -422,8 +424,13 @@ const styles = StyleSheet.create({
   } as object,
   phoneGroup: { gap: 8 },
   phoneRow: { flexDirection: "row", gap: 10 },
+  phoneRowCompact: { flexDirection: "column" },
   dialField: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 7, minHeight: 54, paddingHorizontal: 12 },
-  phoneInput: { flex: 1 },
+  dialFieldCompact: { width: "100%", justifyContent: "center" },
+  // minWidth:0 lets the flex input shrink instead of overflowing the row on
+  // narrow screens (RNW needs this explicitly).
+  phoneInput: { flex: 1, minWidth: 0 },
+  phoneInputCompact: { width: "100%", flex: 0 },
   dialText: { fontSize: 16, fontWeight: "900" },
   chevron: { fontSize: 10, fontWeight: "900" },
   flagBadge: { width: 28, height: 19, overflow: "hidden", borderRadius: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },

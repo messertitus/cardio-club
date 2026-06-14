@@ -1343,6 +1343,10 @@ export type Database = {
         Args: { target_user_id?: string };
         Returns: Json;
       };
+      public_member_count: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
       get_user_stat_insights: {
         Args: { target_user_id?: string };
         Returns: Json;
