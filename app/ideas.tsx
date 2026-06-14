@@ -36,6 +36,7 @@ import {
   type Row,
   type ServiceResult,
   type SportIdeaDraftStep,
+  type SportIdeaInput,
   type SportIdeaLocationMode,
   type SportIdeaWithCreator,
   type SportLocationType,
@@ -188,6 +189,9 @@ export default function IdeasScreen() {
   const [approvedOpen, setApprovedOpen] = useState(false);
   const [rejectedOpen, setRejectedOpen] = useState(false);
   const [proposalOpen, setProposalOpen] = useState(false);
+  const [multiLocationOpen, setMultiLocationOpen] = useState(false);
+  const [multiLocationSportId, setMultiLocationSportId] = useState<string>("");
+  const [multiLocationProfileIds, setMultiLocationProfileIds] = useState<string[]>([]);
   const [requestSportOpen, setRequestSportOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [costOpenBySport, setCostOpenBySport] = useState<Record<string, boolean>>({});
@@ -556,6 +560,39 @@ export default function IdeasScreen() {
     goToStepWithFeedback("locationName");
   }
 
+  async function submitMultiLocationIdea() {
+    if (!user) return;
+    if (!multiLocationSportId) {
+      setMessage("Bitte wähle eine Sportart aus.");
+      return;
+    }
+    const profiles = sportProfiles.filter((profile) => multiLocationProfileIds.includes(profile.id));
+    if (profiles.length === 0) {
+      setMessage("Bitte wähle mindestens einen Standort aus.");
+      return;
+    }
+    const sportName = selectedSportName(multiLocationSportId, sports) ?? "Sportart";
+    setBusy(true);
+    setMessage(null);
+    setSuccess(null);
+    let created = 0;
+    for (const profile of profiles) {
+      const result = await submitSportIdea(supabase, ideaInputFromProfile(profile, multiLocationSportId, sportName, user.id));
+      if (result.error) {
+        setBusy(false);
+        setMessage(`${result.error.message} (${profile.location_name ?? profile.name})`);
+        return;
+      }
+      created += 1;
+    }
+    setBusy(false);
+    setMultiLocationOpen(false);
+    setMultiLocationProfileIds([]);
+    setMultiLocationSportId("");
+    setSuccess(`${sportName} wurde für ${created} Standort(e) vorgeschlagen.`);
+    await load();
+  }
+
   function clearMessages() {
     setMessage(null);
     setSuccess(null);
@@ -653,6 +690,84 @@ export default function IdeasScreen() {
                 <MaterialCommunityIcons name="plus" size={24} color={theme.inverse} />
               </View>
             </Pressable>
+
+            {sportProfiles.length > 0 ? (
+              <Pressable
+                style={[styles.createCard, { borderColor: theme.border, backgroundColor: theme.softSurface }]}
+                onPress={() => {
+                  setMultiLocationProfileIds([]);
+                  setMultiLocationSportId("");
+                  setMultiLocationOpen(true);
+                }}
+              >
+                <View style={styles.ideaText}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>Sportart an bestehenden Standorten</Text>
+                  <Text style={[styles.ideaNote, { color: theme.muted }]}>Eine Sportart auswählen und gleich mehreren bekannten Standorten vorschlagen.</Text>
+                </View>
+                <View style={[styles.createPlus, { backgroundColor: theme.surface }]}>
+                  <MaterialCommunityIcons name="map-marker-multiple-outline" size={22} color={theme.accent} />
+                </View>
+              </Pressable>
+            ) : null}
+
+            {multiLocationOpen ? (
+            <Modal visible transparent animationType="fade" onRequestClose={() => setMultiLocationOpen(false)}>
+              <KeyboardAvoidingView behavior={undefined} style={styles.modalRoot}>
+                <View style={[styles.modalSheet, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                  <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                    <View style={[styles.card, styles.formSheet, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                      <View style={styles.sheetHeader}>
+                        <Text style={[styles.cardTitle, { color: theme.text }]}>Sportart an bestehenden Standorten</Text>
+                        <Pressable style={[styles.closeSheetButton, { backgroundColor: theme.surface }]} onPress={() => setMultiLocationOpen(false)}>
+                          <MaterialCommunityIcons name="close" size={20} color={theme.text} />
+                        </Pressable>
+                      </View>
+                      <Text style={[styles.stepIntroText, { color: theme.muted }]}>Details (Wetter, Gruppengröße, Ausstattung) werden vom jeweiligen Standort übernommen. Pro Standort entsteht ein Vorschlag in der Warteschlange.</Text>
+
+                      <Text style={[styles.subflowKicker, { color: theme.muted }]}>Sportart</Text>
+                      <View style={styles.choiceGrid}>
+                        {sports.map((sport) => {
+                          const active = multiLocationSportId === sport.id;
+                          return (
+                            <Pressable key={sport.id} style={[styles.choiceChip, styles.sportChoiceChip, { backgroundColor: active ? theme.button : theme.surface }]} onPress={() => setMultiLocationSportId(active ? "" : sport.id)}>
+                              <SportIconBadge sport={sport} size={22} />
+                              <Text style={[styles.choiceText, { color: active ? theme.inverse : theme.text }]}>{sport.name}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      <Text style={[styles.subflowKicker, { color: theme.muted }]}>Standorte</Text>
+                      <View style={styles.choiceGrid}>
+                        {sportProfiles.map((profile) => {
+                          const active = multiLocationProfileIds.includes(profile.id);
+                          const already = Boolean(multiLocationSportId) && profileIsLinkedToSport(profile, multiLocationSportId, sportProfileLinks);
+                          const cityPart = profile.location_city ? ` · ${profile.location_city}` : "";
+                          return (
+                            <Pressable
+                              key={profile.id}
+                              style={[styles.choiceChip, { backgroundColor: active ? theme.button : theme.surface, opacity: already && !active ? 0.55 : 1 }]}
+                              onPress={() => setMultiLocationProfileIds((current) => (current.includes(profile.id) ? current.filter((id) => id !== profile.id) : [...current, profile.id]))}
+                            >
+                              <Text style={[styles.choiceText, { color: active ? theme.inverse : theme.text }]} numberOfLines={1}>
+                                {(profile.location_name ?? profile.name)}{cityPart}{already ? " · bereits" : ""}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      <Button
+                        label={busy ? "Sende..." : `Vorschlagen${multiLocationProfileIds.length > 0 ? ` (${multiLocationProfileIds.length})` : ""}`}
+                        onPress={submitMultiLocationIdea}
+                        disabled={busy || !multiLocationSportId || multiLocationProfileIds.length === 0}
+                      />
+                    </View>
+                  </ScrollView>
+                </View>
+              </KeyboardAvoidingView>
+            </Modal>
+            ) : null}
 
             {proposalOpen ? (
             <Modal visible transparent animationType="fade" onRequestClose={() => setProposalOpen(false)}>
@@ -1325,6 +1440,46 @@ function sortIdeasForUser(ideas: SportIdeaWithCreator[], userId: string | null):
     if (aOwnDraft !== bOwnDraft) return aOwnDraft ? -1 : 1;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
+}
+
+// Build a ready-to-submit idea for an existing location, so proposing a sport at
+// a known venue reuses that venue's details instead of re-entering them.
+function ideaInputFromProfile(
+  profile: Row<"sport_profiles">,
+  sportId: string,
+  sportName: string,
+  userId: string,
+): SportIdeaInput {
+  const location = profile.location_name?.trim() || [profile.postal_code?.trim(), profile.location_city?.trim()].filter(Boolean).join(" ") || profile.location_city?.trim() || "Standort";
+  return {
+    userId,
+    name: sportName,
+    profileName: `${sportName}: ${location}`,
+    sportId,
+    sportIds: [sportId],
+    locationMode: "fixed",
+    location,
+    postalCode: profile.postal_code,
+    locationCity: profile.location_city,
+    mapUrl: profile.map_url,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    locationType: profile.location_type,
+    minimumGroupSize: profile.minimum_group_size ?? 2,
+    maximumGroupSize: profile.maximum_group_size,
+    requiredEquipment: profile.required_equipment ?? [],
+    availableEquipment: profile.available_equipment ?? [],
+    costNote: profile.cost_note,
+    openingNotes: profile.opening_notes,
+    transitNotes: profile.transit_notes,
+    amenityNotes: profile.amenity_notes,
+    reservationRequired: profile.reservation_required,
+    lightingAvailable: profile.lighting_available,
+    safetyNotes: profile.safety_notes,
+    locationRules: profile.location_rules,
+    apRequired: profile.ap_required,
+    weatherRules: profile.weather_rules,
+  };
 }
 
 function recentLocationsFromProfiles(profiles: Row<"sport_profiles">[], userCity: string | null): RecentLocation[] {
