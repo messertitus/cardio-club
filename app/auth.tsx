@@ -146,6 +146,21 @@ export default function AuthScreen() {
       return;
     }
 
+    // Re-check the invite right before creating the account. The code may have
+    // been used or revoked since the invite step; verifying now avoids creating
+    // an auth user (and burning an SMS) that can never finish onboarding —
+    // exactly the orphaned, phone-confirmed-but-membership-less state that then
+    // blocks the number from re-registering.
+    const inviteStillValid = await validateInvitationCode(supabase, verifiedInviteCode);
+    if (inviteStillValid.error || !inviteStillValid.data.valid) {
+      setMessage("Dieser Einladungscode ist nicht mehr gültig. Bitte fordere einen neuen Code an.");
+      setVerifiedInviteCode(null);
+      setInviteCode("");
+      setStep("invite");
+      setLoading(false);
+      return;
+    }
+
     await AsyncStorage.setItem(PENDING_INVITE_KEY, verifiedInviteCode);
     await AsyncStorage.setItem(PENDING_DISPLAY_NAME_KEY, displayName.trim());
     await AsyncStorage.setItem(PENDING_PHONE_KEY, normalizedPhone);
