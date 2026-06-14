@@ -47,6 +47,7 @@ type RecentLocation = {
   key: string;
   location: string;
   subtitle: string | null;
+  inUserCity: boolean;
   mapUrl: string | null;
   postalCode: string | null;
   locationCity: string | null;
@@ -738,16 +739,23 @@ export default function IdeasScreen() {
                 <View style={styles.formGrid}>
                   {recentLocations.length > 0 && !draft.location.trim() ? (
                     <View style={[styles.recentLocations, { backgroundColor: theme.softSurface }]}>
-                      <Text style={[styles.recentLocationsKicker, { color: theme.muted }]}>Zuletzt verwendete Standorte</Text>
+                      <Text style={[styles.recentLocationsKicker, { color: theme.muted }]}>
+                        {userCity?.trim() && recentLocations.some((location) => location.inUserCity)
+                          ? `Standorte in ${userCity.trim()}`
+                          : "Zuletzt verwendete Standorte"}
+                      </Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentLocationsRow}>
                         {recentLocations.map((location) => (
                           <Pressable
                             key={location.key}
-                            style={[styles.recentLocationChip, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                            style={[
+                              styles.recentLocationChip,
+                              { backgroundColor: theme.surface, borderColor: location.inUserCity ? theme.accent : theme.border },
+                            ]}
                             onPress={() => applyRecentLocation(location)}
                           >
                             <View style={styles.recentLocationHeader}>
-                              <MaterialCommunityIcons name="map-marker-outline" size={16} color={theme.accent} />
+                              <MaterialCommunityIcons name="map-marker-outline" size={16} color={location.inUserCity ? theme.accent : theme.muted} />
                               <Text style={[styles.recentLocationName, { color: theme.text }]} numberOfLines={1}>{location.location}</Text>
                             </View>
                             {location.subtitle ? (
@@ -1318,13 +1326,13 @@ function sortIdeasForUser(ideas: SportIdeaWithCreator[], userId: string | null):
 }
 
 function recentLocationsFromProfiles(profiles: Row<"sport_profiles">[], userCity: string | null): RecentLocation[] {
-  const city = userCity?.trim().toLowerCase() || null;
+  const city = normalizeCity(userCity);
   const byKey = new Map<string, RecentLocation>();
   // Newest first, but locations in the member's own city float to the top so the
   // most likely picks are visible without scrolling.
   const sorted = [...profiles].sort((a, b) => {
-    const aInCity = city && a.location_city?.trim().toLowerCase() === city ? 1 : 0;
-    const bInCity = city && b.location_city?.trim().toLowerCase() === city ? 1 : 0;
+    const aInCity = city && normalizeCity(a.location_city) === city ? 1 : 0;
+    const bInCity = city && normalizeCity(b.location_city) === city ? 1 : 0;
     if (aInCity !== bInCity) return bInCity - aInCity;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
@@ -1340,6 +1348,7 @@ function recentLocationsFromProfiles(profiles: Row<"sport_profiles">[], userCity
       key,
       location,
       subtitle: subtitle || null,
+      inUserCity: Boolean(city && normalizeCity(profile.location_city) === city),
       mapUrl: profile.map_url,
       postalCode: profile.postal_code,
       locationCity: profile.location_city,
@@ -1349,6 +1358,13 @@ function recentLocationsFromProfiles(profiles: Row<"sport_profiles">[], userCity
     if (byKey.size >= 8) break;
   }
   return [...byKey.values()];
+}
+
+// Compare cities loosely: ignore case, surrounding whitespace and a leading
+// postal code (so "78462 Konstanz" and "Konstanz" match).
+function normalizeCity(value: string | null): string | null {
+  const trimmed = value?.replace(/^\s*\d{4,5}\s*/, "").trim().toLowerCase();
+  return trimmed ? trimmed : null;
 }
 
 function groupProfilesBySport(profiles: Row<"sport_profiles">[], links: Row<"sport_profile_sports">[]): Map<string, Row<"sport_profiles">[]> {
