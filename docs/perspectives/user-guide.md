@@ -39,6 +39,9 @@
 - **Chat** je Event/Stadt.
 - **Push-Benachrichtigungen** aktivieren (Voting-Erinnerung, Entscheidung) — funktionieren auch bei geschlossener App. App als **PWA installieren** für beste Erfahrung.
 
+### Verstehen, wie entschieden wird
+- Menü → **„So entscheidet der Club"**: einfache Erklärung, wie aus Teilnahme, Wunsch-Sportarten und No-Gos ein fairer Cardiotag wird (kurz, ohne Technik-Details).
+
 ### Profil
 - **Stadt** im Profil setzen — sie steuert, welche Events/Standorte dir zuerst angezeigt werden.
 

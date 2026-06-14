@@ -44,6 +44,7 @@ export const SCREEN_EVENTS = {
   install: "screen.install_viewed",
   history: "screen.history_viewed",
   clubs: "screen.clubs_viewed",
+  howItWorks: "screen.how_it_works_viewed",
 } as const;
 
 // Feature adoption — which tools members actually use.
@@ -146,6 +147,7 @@ export const STAT_KEY_LABELS: Record<string, string> = {
   [SCREEN_EVENTS.install]: "Installationsseite geöffnet",
   [SCREEN_EVENTS.history]: "Verlauf geöffnet",
   [SCREEN_EVENTS.clubs]: "Club-Seite geöffnet",
+  [SCREEN_EVENTS.howItWorks]: "Fairness-Erklärung geöffnet",
   [FEATURE_EVENTS.mapRouteOpened]: "Karte/Route geöffnet",
   [FEATURE_EVENTS.themeToggled]: "Design gewechselt (hell/dunkel)",
   [FEATURE_EVENTS.directChatStarted]: "Direktchat gestartet",

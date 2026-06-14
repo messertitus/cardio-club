@@ -9,6 +9,14 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-14 — Menüseite „So entscheidet der Club" (Nutzer-Erklärung)
+
+### Hinzugefügt
+- Neue Route `app/how-it-works.tsx` und Menüeintrag „So entscheidet der Club": einfache, motivierende Erklärung des Fairness-Algorithmus für Mitglieder (kein Detail/keine Formeln) mit CTA „Jetzt abstimmen".
+- Screen-Event `SCREEN_EVENTS.howItWorks` (+ Label) für Analytics.
+
+---
+
 ## 2026-06-14 — Standort-Export/-Import (Admin)
 
 ### Hinzugefügt
