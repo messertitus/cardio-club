@@ -37,10 +37,20 @@ export default function AuthScreen() {
   const [smsCode, setSmsCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [introDone, setIntroDone] = useState(false);
   const [memberCount, setMemberCount] = useState<number | null>(null);
+
+  // Count down the resend cooldown once per second. Supabase throttles repeated
+  // SMS sends server-side, so we gate the button locally to set expectations and
+  // avoid silently-dropped resends.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => setResendCooldown((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Aggregate member count for the (logged-out) intro lockup. Best-effort.
   useEffect(() => {
@@ -155,6 +165,7 @@ export default function AuthScreen() {
     if (!authResult.data.session) {
       setSuccessMessage("Wir haben dir einen SMS-Code geschickt.");
       setStep("sms");
+      setResendCooldown(60);
       setLoading(false);
       return;
     }
@@ -163,6 +174,7 @@ export default function AuthScreen() {
   }
 
   async function resendSmsCode() {
+    if (resendCooldown > 0) return;
     setResending(true);
     setMessage(null);
     setSuccessMessage(null);
@@ -183,10 +195,13 @@ export default function AuthScreen() {
     if (result.error) {
       setMessage(mapAuthError(result.error.message));
       setResending(false);
+      // If we were throttled, keep the button disabled for the suggested window.
+      setResendCooldown(retryAfterSeconds(result.error.message) ?? 60);
       return;
     }
 
-    setSuccessMessage("Neuer SMS-Code ist unterwegs.");
+    setSuccessMessage("Neuer SMS-Code ist unterwegs. Das kann eine Minute dauern.");
+    setResendCooldown(60);
     setResending(false);
   }
 
@@ -534,8 +549,10 @@ export default function AuthScreen() {
                 {successMessage ? <Text style={styles.success}>{successMessage}</Text> : null}
                 <Button label={loading ? "Bestätige..." : "Telefon bestätigen"} onPress={submitSmsCode} disabled={loading || smsCode.length < 4} />
                 <View style={styles.smsActions}>
-                  <Pressable onPress={resendSmsCode} disabled={resending || loading} style={styles.textButton}>
-                    <Text style={styles.textButtonLabel}>{resending ? "Sende..." : "SMS erneut senden"}</Text>
+                  <Pressable onPress={resendSmsCode} disabled={resending || loading || resendCooldown > 0} style={styles.textButton}>
+                    <Text style={[styles.textButtonLabel, resendCooldown > 0 && styles.textButtonLabelDisabled]}>
+                      {resending ? "Sende..." : resendCooldown > 0 ? `Erneut senden in ${resendCooldown}s` : "SMS erneut senden"}
+                    </Text>
                   </Pressable>
                   <Pressable onPress={() => switchStep("signup")} disabled={loading} style={styles.textButton}>
                     <Text style={styles.textButtonLabel}>Zurück</Text>
@@ -1133,7 +1150,28 @@ function mapAuthError(message: string): string {
     return "Telefonnummer oder App-PIN stimmt nicht.";
   }
 
+  const retryAfter = retryAfterSeconds(message);
+  if (retryAfter !== null) {
+    return `Zu viele SMS-Anfragen. Bitte warte ${retryAfter} Sekunden und versuche es erneut.`;
+  }
+
+  if (isSmsRateLimitError(message)) {
+    return "Zu viele SMS-Anfragen. Bitte warte einen Moment und versuche es erneut.";
+  }
+
   return message;
+}
+
+// Supabase returns "For security purposes, you can only request this after N seconds."
+// when an SMS resend is throttled. Pull the wait time out so we can gate the button.
+function retryAfterSeconds(message: string): number | null {
+  const match = /after (\d+) seconds?/i.exec(message);
+  return match ? Number(match[1]) : null;
+}
+
+function isSmsRateLimitError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("rate limit") || normalized.includes("too many requests");
 }
 
 function isInvalidLoginError(message: string): boolean {
@@ -1349,6 +1387,7 @@ const styles = StyleSheet.create({
   smsActions: { flexDirection: "row", justifyContent: "center", gap: 12, flexWrap: "wrap" },
   textButton: { alignSelf: "center", padding: 8 },
   textButtonLabel: { color: "#8fc7ff", fontSize: 14, fontWeight: "900" },
+  textButtonLabelDisabled: { color: "#5a6b80" },
   subtleTextButton: { alignSelf: "center", paddingHorizontal: 8, paddingVertical: 2, marginTop: -6 },
   subtleTextButtonLabel: { fontSize: 13, opacity: 0.72 },
 });

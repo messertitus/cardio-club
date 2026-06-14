@@ -129,6 +129,8 @@ export function MapLocationPicker({
   onConfirmed,
   required,
   error,
+  searchCity,
+  searchCountryCodes = "de",
 }: {
   label?: string;
   location: string;
@@ -142,6 +144,11 @@ export function MapLocationPicker({
   onConfirmed?: () => void;
   required?: boolean;
   error?: string | null;
+  // Bias the online search toward the member's place: results in this city rank
+  // first and the search is restricted to these country codes (comma-separated,
+  // ISO 3166-1 alpha-2), so we never surface a same-named spot in the USA.
+  searchCity?: string | null;
+  searchCountryCodes?: string;
 }) {
   const { theme } = useTheme();
   const [searchText, setSearchText] = useState(location);
@@ -166,7 +173,7 @@ export function MapLocationPicker({
     setSearching(true);
     setMapNotice(null);
     try {
-      const found = await searchLocationVariants(query);
+      const found = await searchLocationVariants(query, { city: searchCity, countryCodes: searchCountryCodes });
       setResults(found);
       if (found.length === 0) {
         setMapNotice("Keine Treffer gefunden. Versuche einen genaueren Namen, Stadtteil oder die PLZ.");
@@ -286,8 +293,12 @@ export function MapLocationPicker({
   );
 }
 
-async function searchLocationVariants(query: string): Promise<LocationSearchResult[]> {
-  const variants = queryVariants(query);
+async function searchLocationVariants(
+  query: string,
+  options: { city?: string | null; countryCodes?: string } = {},
+): Promise<LocationSearchResult[]> {
+  const variants = queryVariants(query, options.city);
+  const countryParam = options.countryCodes?.trim() ? `&countrycodes=${encodeURIComponent(options.countryCodes.trim())}` : "";
   const seen = new Set<string>();
   const results: LocationSearchResult[] = localLocationMatches(query);
 
@@ -296,7 +307,7 @@ async function searchLocationVariants(query: string): Promise<LocationSearchResu
   }
 
   for (const variant of variants) {
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(variant)}`);
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5${countryParam}&q=${encodeURIComponent(variant)}`);
     if (!response.ok) continue;
     const payload = (await response.json()) as Array<{ display_name?: string; lat?: string; lon?: string }>;
     for (const entry of payload) {
@@ -312,7 +323,7 @@ async function searchLocationVariants(query: string): Promise<LocationSearchResu
   return results.slice(0, 5);
 }
 
-function queryVariants(query: string): string[] {
+function queryVariants(query: string, city?: string | null): string[] {
   const normalized = query.trim();
   const aliases = localSearchAliases(normalized);
   const ascii = normalized
@@ -324,8 +335,15 @@ function queryVariants(query: string): string[] {
     .replace(/Ü/g, "Ue")
     .replace(/ß/g, "ss");
   const base = [normalized, ascii, ...aliases].filter(Boolean);
-  const withLocalContext = base.flatMap((entry) => [entry, `${entry} Konstanz`, `${entry} Baden-Württemberg`, `${entry} Deutschland`]);
-  return [...new Set(withLocalContext)];
+  // Strip a leading postal code so "78462 Konstanz" still biases to "Konstanz".
+  const cityName = city?.replace(/^\s*\d{4,5}\s*/, "").trim();
+  // Try the member's city first so a nearby match wins before a bare,
+  // country-wide query; fall back to the plain query, then a generic context.
+  const cityQualified = cityName
+    ? base.filter((entry) => !entry.toLowerCase().includes(cityName.toLowerCase())).map((entry) => `${entry} ${cityName}`)
+    : [];
+  const withContext = [...cityQualified, ...base, ...base.map((entry) => `${entry} Deutschland`)];
+  return [...new Set(withContext)];
 }
 
 function localLocationMatches(query: string): LocationSearchResult[] {

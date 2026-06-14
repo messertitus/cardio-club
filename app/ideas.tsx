@@ -17,8 +17,11 @@ import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import {
+  getMyProfile,
   isCurrentUserAdmin,
   linkSportIdeaToSports,
+  listMccSports,
+  setMccSportActive,
   listSportIdeas,
   listSportProfileSportLinks,
   listSportProfiles,
@@ -31,6 +34,7 @@ import {
   upsertSportProfile,
   type Json,
   type Row,
+  type ServiceResult,
   type SportIdeaDraftStep,
   type SportIdeaLocationMode,
   type SportIdeaWithCreator,
@@ -38,6 +42,18 @@ import {
 } from "../src/services";
 
 type IdeaFlowStep = "location" | "locationName" | "sport" | "type" | "group" | "weather" | "equipment" | "available" | "schedule" | "logistics" | "review";
+
+type RecentLocation = {
+  key: string;
+  location: string;
+  subtitle: string | null;
+  inUserCity: boolean;
+  mapUrl: string | null;
+  postalCode: string | null;
+  locationCity: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
 
 type SportSpecificDraft = {
   locationType: SportLocationType | null;
@@ -160,6 +176,7 @@ export default function IdeasScreen() {
   const [sports, setSports] = useState<Row<"sports">[]>([]);
   const [sportProfiles, setSportProfiles] = useState<Row<"sport_profiles">[]>([]);
   const [sportProfileLinks, setSportProfileLinks] = useState<Row<"sport_profile_sports">[]>([]);
+  const [userCity, setUserCity] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -181,17 +198,19 @@ export default function IdeasScreen() {
   async function load() {
     if (!user) return;
     setBusy(true);
-    const [sportsResult, profilesResult, linksResult, ideasResult, adminResult] = await Promise.all([
+    const [sportsResult, profilesResult, linksResult, ideasResult, adminResult, myProfileResult] = await Promise.all([
       listSports(supabase),
       listSportProfiles(supabase),
       listSportProfileSportLinks(supabase),
       listSportIdeas(supabase),
       isCurrentUserAdmin(supabase, user.id),
+      getMyProfile(supabase, user.id),
     ]);
     setBusy(false);
     if (sportsResult.data) setSports(sportsResult.data);
     if (profilesResult.data) setSportProfiles(profilesResult.data);
     if (linksResult.data) setSportProfileLinks(linksResult.data);
+    if (myProfileResult.data) setUserCity(myProfileResult.data.city);
     if (ideasResult.data) {
       setIdeas(ideasResult.data);
       const ownDraft = ideasResult.data.find((idea) => idea.suggested_by === user.id && idea.is_draft);
@@ -239,6 +258,11 @@ export default function IdeasScreen() {
 
   const ownDraft = useMemo(() => ideas.find((idea) => user && idea.suggested_by === user.id && idea.is_draft) ?? null, [ideas, user]);
   const profilesBySport = useMemo(() => groupProfilesBySport(sportProfiles, sportProfileLinks), [sportProfileLinks, sportProfiles]);
+
+  // Recently used locations, distilled from existing profiles so a new idea at a
+  // known venue can be started with one tap instead of re-typing the address.
+  // Locations in the member's own city come first.
+  const recentLocations = useMemo(() => recentLocationsFromProfiles(sportProfiles, userCity), [sportProfiles, userCity]);
 
   // Active sports list: optionally only sports that already have a location,
   // sorted so sports with profiles come first, then alphabetically. Easy to scan
@@ -367,19 +391,39 @@ export default function IdeasScreen() {
     const requestedName = (idea.name ?? idea.profile_name ?? "").trim();
     if (!requestedName) return { idea, error: "Bitte lege vor der Freigabe eine abstrakte Sportart für diese Idee an." };
 
-    const existingSport = sports.find((sport) => sport.name.trim().toLowerCase() === requestedName.toLowerCase());
-    const sportResult = existingSport
-      ? { data: existingSport, error: null }
-      : await upsertMccSport(supabase, {
-          sportId: null,
-          name: requestedName,
-          description: "Aus einer Standortidee angefragt.",
-          category: "unbekannt",
-          iconName: "",
-          intensityLevel: "medium",
-          combinableTags: [],
-          isActive: true,
-        });
+    // The requested name may already exist as a sport that is inactive or simply
+    // has no profile yet, so it never shows up in the pickers (which only list
+    // active sports with locations). Check the full catalog before creating a new
+    // one — otherwise the insert hits the "sports_name_key" unique constraint.
+    const matchesRequestedName = (name: string) => name.trim().toLowerCase() === requestedName.toLowerCase();
+    let existingSport = sports.find((sport) => matchesRequestedName(sport.name)) ?? null;
+    if (!existingSport) {
+      const allSportsResult = await listMccSports(supabase);
+      if (allSportsResult.error) {
+        return { idea, error: allSportsResult.error.message };
+      }
+      existingSport = allSportsResult.data?.find((sport) => matchesRequestedName(sport.name)) ?? null;
+    }
+
+    let sportResult: ServiceResult<Row<"sports">>;
+    if (existingSport) {
+      // Reuse the existing sport. Reactivate it if needed, but never touch its
+      // icon or other details — those belong to the admin sports panel.
+      sportResult = existingSport.is_active
+        ? { data: existingSport, error: null }
+        : await setMccSportActive(supabase, { sportId: existingSport.id, isActive: true });
+    } else {
+      sportResult = await upsertMccSport(supabase, {
+        sportId: null,
+        name: requestedName,
+        description: "Aus einer Standortidee angefragt.",
+        category: "unbekannt",
+        iconName: "",
+        intensityLevel: "medium",
+        combinableTags: [],
+        isActive: true,
+      });
+    }
 
     if (sportResult.error || !sportResult.data) {
       return { idea, error: sportResult.error?.message ?? "Abstrakte Sportart konnte nicht angelegt werden." };
@@ -404,11 +448,20 @@ export default function IdeasScreen() {
   async function createProfileFromIdea(idea: SportIdeaWithCreator): Promise<string | null> {
     const sportIds = ideaSportIds(idea);
     if (sportIds.length === 0) return "Bitte wähle vor der Freigabe mindestens eine abstrakte Sportart aus.";
+    // Flexible ideas skip the "short location name" step, so idea.location is
+    // empty. Fall back to the city/postal the member did provide (e.g.
+    // "78462 Konstanz") so the profile still has a usable location label.
+    const locationName =
+      idea.location?.trim() ||
+      [idea.postal_code?.trim(), idea.location_city?.trim()].filter(Boolean).join(" ") ||
+      idea.location_city?.trim() ||
+      idea.postal_code?.trim() ||
+      null;
     const result = await upsertSportProfile(supabase, {
       sportId: sportIds[0],
       sportIds,
       name: idea.profile_name ?? idea.name ?? "",
-      locationName: idea.location,
+      locationName,
       mapUrl: idea.map_url,
       postalCode: idea.postal_code,
       locationCity: idea.location_city,
@@ -487,6 +540,20 @@ export default function IdeasScreen() {
       Animated.delay(140),
       Animated.timing(confirmationPulse, { toValue: 0, duration: 120, useNativeDriver: true }),
     ]).start(() => setDraft((current) => ({ ...current, activeSportId: sportId })));
+  }
+
+  function applyRecentLocation(location: RecentLocation) {
+    setDraft((current) => ({
+      ...current,
+      locationMode: "fixed",
+      location: location.location,
+      mapUrl: location.mapUrl ?? "",
+      postalCode: location.postalCode ?? "",
+      locationCity: location.locationCity ?? "",
+      latitude: location.latitude,
+      longitude: location.longitude,
+    }));
+    goToStepWithFeedback("locationName");
   }
 
   function clearMessages() {
@@ -670,6 +737,35 @@ export default function IdeasScreen() {
 
               {activeStep === "location" ? (
                 <View style={styles.formGrid}>
+                  {recentLocations.length > 0 && !draft.location.trim() ? (
+                    <View style={[styles.recentLocations, { backgroundColor: theme.softSurface }]}>
+                      <Text style={[styles.recentLocationsKicker, { color: theme.muted }]}>
+                        {userCity?.trim() && recentLocations.some((location) => location.inUserCity)
+                          ? `Standorte in ${userCity.trim()}`
+                          : "Zuletzt verwendete Standorte"}
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentLocationsRow}>
+                        {recentLocations.map((location) => (
+                          <Pressable
+                            key={location.key}
+                            style={[
+                              styles.recentLocationChip,
+                              { backgroundColor: theme.surface, borderColor: location.inUserCity ? theme.accent : theme.border },
+                            ]}
+                            onPress={() => applyRecentLocation(location)}
+                          >
+                            <View style={styles.recentLocationHeader}>
+                              <MaterialCommunityIcons name="map-marker-outline" size={16} color={location.inUserCity ? theme.accent : theme.muted} />
+                              <Text style={[styles.recentLocationName, { color: theme.text }]} numberOfLines={1}>{location.location}</Text>
+                            </View>
+                            {location.subtitle ? (
+                              <Text style={[styles.recentLocationSubtitle, { color: theme.muted }]} numberOfLines={1}>{location.subtitle}</Text>
+                            ) : null}
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  ) : null}
                   <SegmentedControl
                     label="Standort"
                     value={draft.locationMode}
@@ -691,6 +787,7 @@ export default function IdeasScreen() {
                       onMapUrlChange={(mapUrl) => setDraft((current) => ({ ...current, mapUrl }))}
                       onCoordinatesChange={({ latitude, longitude }) => setDraft((current) => ({ ...current, latitude, longitude }))}
                       showNameInput={false}
+                      searchCity={draft.locationCity?.trim() || userCity}
                       onConfirmed={() => goToStepWithFeedback("locationName")}
                     />
                   ) : (
@@ -736,7 +833,8 @@ export default function IdeasScreen() {
                       setRequestSportOpen(true);
                       setDraft((current) => ({ ...current, sportId: "", sportIds: [], activeSportId: null, sportDetails: {}, name: "", requestedSportName: current.requestedSportName }));
                     }}>
-                      <Text style={[styles.choiceText, { color: draft.requestedSportName ? theme.inverse : theme.text }]}>+</Text>
+                      <MaterialCommunityIcons name="plus" size={18} color={draft.requestedSportName ? theme.inverse : theme.text} />
+                      <Text style={[styles.choiceText, { color: draft.requestedSportName ? theme.inverse : theme.text }]}>Hinzufügen</Text>
                     </Pressable>
                   </View>
                   {errors.sport ? <Text style={styles.notice}>{errors.sport}</Text> : null}
@@ -1229,6 +1327,48 @@ function sortIdeasForUser(ideas: SportIdeaWithCreator[], userId: string | null):
   });
 }
 
+function recentLocationsFromProfiles(profiles: Row<"sport_profiles">[], userCity: string | null): RecentLocation[] {
+  const city = normalizeCity(userCity);
+  const byKey = new Map<string, RecentLocation>();
+  // Newest first, but locations in the member's own city float to the top so the
+  // most likely picks are visible without scrolling.
+  const sorted = [...profiles].sort((a, b) => {
+    const aInCity = city && normalizeCity(a.location_city) === city ? 1 : 0;
+    const bInCity = city && normalizeCity(b.location_city) === city ? 1 : 0;
+    if (aInCity !== bInCity) return bInCity - aInCity;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+  for (const profile of sorted) {
+    const location = profile.location_name?.trim();
+    if (!location) continue;
+    const key = [location, profile.location_city, profile.postal_code, profile.latitude, profile.longitude]
+      .map((part) => (part ?? "").toString().trim().toLowerCase())
+      .join("|");
+    if (byKey.has(key)) continue;
+    const subtitle = [profile.postal_code?.trim(), profile.location_city?.trim()].filter(Boolean).join(" ");
+    byKey.set(key, {
+      key,
+      location,
+      subtitle: subtitle || null,
+      inUserCity: Boolean(city && normalizeCity(profile.location_city) === city),
+      mapUrl: profile.map_url,
+      postalCode: profile.postal_code,
+      locationCity: profile.location_city,
+      latitude: profile.latitude,
+      longitude: profile.longitude,
+    });
+    if (byKey.size >= 8) break;
+  }
+  return [...byKey.values()];
+}
+
+// Compare cities loosely: ignore case, surrounding whitespace and a leading
+// postal code (so "78462 Konstanz" and "Konstanz" match).
+function normalizeCity(value: string | null): string | null {
+  const trimmed = value?.replace(/^\s*\d{4,5}\s*/, "").trim().toLowerCase();
+  return trimmed ? trimmed : null;
+}
+
 function groupProfilesBySport(profiles: Row<"sport_profiles">[], links: Row<"sport_profile_sports">[]): Map<string, Row<"sport_profiles">[]> {
   const result = new Map<string, Row<"sport_profiles">[]>();
   for (const profile of profiles.filter((entry) => entry.is_active)) {
@@ -1628,13 +1768,20 @@ const styles = StyleSheet.create({
   choiceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   choiceChip: { borderRadius: 999, flexGrow: 1, minWidth: 96, paddingHorizontal: 11, paddingVertical: 8 },
   sportChoiceChip: { alignItems: "center", flexDirection: "row", gap: 7 },
-  plusChoice: { minWidth: 42, alignItems: "center" },
+  plusChoice: { alignItems: "center", flexDirection: "row", gap: 5, justifyContent: "center", minWidth: 96 },
   choiceText: { fontSize: 12, fontWeight: "900" },
   subflowPanel: { borderRadius: 18, gap: 8, padding: 10 },
   subflowKicker: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   subflowChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   subflowChip: { alignItems: "center", borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 7, paddingHorizontal: 10, paddingVertical: 7 },
   subflowChipText: { fontSize: 12, fontWeight: "900" },
+  recentLocations: { borderRadius: 18, gap: 8, padding: 10 },
+  recentLocationsKicker: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
+  recentLocationsRow: { flexDirection: "row", gap: 8, paddingRight: 4 },
+  recentLocationChip: { borderRadius: 14, borderWidth: 1, gap: 4, maxWidth: 220, paddingHorizontal: 12, paddingVertical: 9 },
+  recentLocationHeader: { alignItems: "center", flexDirection: "row", gap: 6 },
+  recentLocationName: { flexShrink: 1, fontSize: 13, fontWeight: "900" },
+  recentLocationSubtitle: { fontSize: 11, fontWeight: "600" },
   reviewSportList: { gap: 8 },
   reviewSportCard: { borderRadius: 16, gap: 8, padding: 10 },
   reviewSportTitle: { fontSize: 14, fontWeight: "900" },

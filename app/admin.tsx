@@ -760,6 +760,7 @@ export default function AdminScreen() {
                   onLocationChange={(locationName) => setProfileDraft((draft) => ({ ...draft, locationName }))}
                   onMapUrlChange={(mapUrl) => setProfileDraft((draft) => ({ ...draft, mapUrl }))}
                   onCoordinatesChange={({ latitude, longitude }) => setProfileDraft((draft) => ({ ...draft, latitude: latitude?.toString() ?? "", longitude: longitude?.toString() ?? "" }))}
+                  searchCity={profileDraft.locationCity?.trim() || null}
                 />
                 <AdminInput value={profileDraft.locationCity} onChangeText={(locationCity) => setProfileDraft((draft) => ({ ...draft, locationCity }))} placeholder="Stadt optional, z. B. Konstanz" />
                 <AdminInput value={profileDraft.postalCode} onChangeText={(postalCode) => setProfileDraft((draft) => ({ ...draft, postalCode: postalCode.replace(/\D/g, '').slice(0, 5) }))} placeholder="PLZ für Outdoor-Wetter, z. B. 78462" keyboardType="number-pad" inputMode="numeric" />
