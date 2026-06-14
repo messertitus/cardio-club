@@ -832,7 +832,8 @@ export default function IdeasScreen() {
                       setRequestSportOpen(true);
                       setDraft((current) => ({ ...current, sportId: "", sportIds: [], activeSportId: null, sportDetails: {}, name: "", requestedSportName: current.requestedSportName }));
                     }}>
-                      <Text style={[styles.choiceText, { color: draft.requestedSportName ? theme.inverse : theme.text }]}>+</Text>
+                      <MaterialCommunityIcons name="plus" size={18} color={draft.requestedSportName ? theme.inverse : theme.text} />
+                      <Text style={[styles.choiceText, { color: draft.requestedSportName ? theme.inverse : theme.text }]}>Hinzufügen</Text>
                     </Pressable>
                   </View>
                   {errors.sport ? <Text style={styles.notice}>{errors.sport}</Text> : null}
@@ -1766,7 +1767,7 @@ const styles = StyleSheet.create({
   choiceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   choiceChip: { borderRadius: 999, flexGrow: 1, minWidth: 96, paddingHorizontal: 11, paddingVertical: 8 },
   sportChoiceChip: { alignItems: "center", flexDirection: "row", gap: 7 },
-  plusChoice: { minWidth: 42, alignItems: "center" },
+  plusChoice: { alignItems: "center", flexDirection: "row", gap: 5, justifyContent: "center", minWidth: 96 },
   choiceText: { fontSize: 12, fontWeight: "900" },
   subflowPanel: { borderRadius: 18, gap: 8, padding: 10 },
   subflowKicker: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
