@@ -51,6 +51,9 @@
 ### Push kommt nicht an
 - VAPID-Keys, Subscriptions und `send-push` prüfen; Details in [../push-setup.md](../push-setup.md) und [../notifications-and-weekly-decision.md](../notifications-and-weekly-decision.md).
 
+### Standorte sichern / wiederherstellen
+- Admin-Bereich → **Sportprofile** → „Standorte exportieren" lädt ein JSON aller Standorte (inkl. Sportart-Zuordnung). „Standorte importieren" spielt eine solche Datei wieder ein (gleiche ID = Update, sonst Insert; Sportarten werden per Name aufgelöst). Nur im Web verfügbar. Eignet sich als leichtgewichtiges Backup vor größeren Standort-Änderungen.
+
 ## Wartungsartefakte
 
 | Pfad | Zweck |

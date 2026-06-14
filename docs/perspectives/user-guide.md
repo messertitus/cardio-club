@@ -47,6 +47,7 @@
 Im **Admin-Bereich** (Menü):
 - **Sportarten** anlegen/bearbeiten/aktiv schalten.
 - **Sportprofile (Standorte)** verwalten; **eine Sportart mehreren Standorten zuordnen** (Schnellzuordnung).
+- **Standorte exportieren/importieren** (JSON, nur im Web): Sicherung anlegen oder Standorte aus einer Datei einspielen. Import aktualisiert gleiche IDs und legt neue an; Sportarten werden über den Namen zugeordnet (fehlende Sportarten vorher anlegen).
 - **Ideen-Warteschlange** prüfen: freigeben/ablehnen; bei neuer angefragter Sportart wird sie angelegt/wiederverwendet.
 - **Mitglieder & Rollen**, **Einladungsbaum**, **Namensanfragen**.
 - **Aktive Städte** festlegen (steuert, für welche Städte Events erzeugt werden).

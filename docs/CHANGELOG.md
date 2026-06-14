@@ -9,6 +9,15 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-14 — Standort-Export/-Import (Admin)
+
+### Hinzugefügt
+- **Admin → Sportprofile:** „Standorte exportieren / importieren". Export als JSON (alle Standorte inkl. zugeordneter Sportarten per Name + ID); Import legt fehlende Standorte an und aktualisiert vorhandene (gleiche ID). Sportarten werden über den **Namen** aufgelöst (robust über Datenbanken hinweg), Fallback auf ID.
+- **Service:** `exportSportProfiles` / `importSportProfiles` in `src/services/sportProfiles.ts` (+ Typen `SportProfileExport`, `SportProfileImportResult`).
+- Datei-Download/-Upload nur im **Web** (Platform-Guard); auf Native erscheint ein Hinweis.
+
+---
+
 ## 2026-06-14 — Doku-System eingeführt; Onboarding/Voting/Standorte gehärtet
 
 ### Doku
