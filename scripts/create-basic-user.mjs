@@ -88,11 +88,13 @@ if (error) {
   console.error("Could not create user:", error.message);
   console.error("If the number already exists, delete the orphaned auth user first");
   console.error("(supabase/maintenance/delete_orphaned_phone_user.sql), then re-run.");
-  process.exit(1);
+  // Set the exit code instead of process.exit() so Node can tear down the
+  // Supabase client handles cleanly (avoids a libuv assertion crash on Windows).
+  process.exitCode = 1;
+} else {
+  console.log("Created login-ready account:");
+  console.log("  user id:", data.user?.id);
+  console.log("  phone:  ", data.user?.phone);
+  console.log(`  login:   open the app, enter phone ${phoneArg} and PIN ${pinArg}`);
+  console.log("  next:    club membership is added automatically on first login.");
 }
-
-console.log("Created login-ready account:");
-console.log("  user id:", data.user?.id);
-console.log("  phone:  ", data.user?.phone);
-console.log(`  login:   open the app, enter phone ${phoneArg} and PIN ${pinArg}`);
-console.log("  next:    club membership is added automatically on first login.");
