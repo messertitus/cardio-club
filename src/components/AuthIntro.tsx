@@ -7,9 +7,10 @@ const blackSymbolLogo = require("../../assets/mcc-logo-black-symbol-transparent.
 
 type AuthIntroProps = {
   onDone: () => void;
+  memberCount?: number | null;
 };
 
-export function AuthIntro({ onDone }: AuthIntroProps) {
+export function AuthIntro({ onDone, memberCount }: AuthIntroProps) {
   const { width } = useWindowDimensions();
   const { mode, theme } = useTheme();
   const settle = useRef(new Animated.Value(0)).current;
@@ -40,13 +41,21 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
   const compact = width < 390;
   const stageWidth = compact ? 214 : 286;
   const symbolHeight = stageWidth * 0.66;
-  const wordmarkHeight = compact ? 66 : 82;
-  const stageHeight = symbolHeight + wordmarkHeight + 14;
+  const hasMemberCount = typeof memberCount === "number";
+  // The member count lives INSIDE the wordmark, right under the line. The
+  // with-count height is sized TIGHT to the actual content (MESSERS + CARDIO
+  // CLUB + bar + count) so there is no slack below the count — otherwise that
+  // slack pushes the title ("Willkommen zurück.") far away. The no-count height
+  // keeps the original breathing room.
+  const wordmarkHeight = hasMemberCount ? (compact ? 76 : 85) : (compact ? 66 : 82);
+  const stageHeight = symbolHeight + wordmarkHeight + (hasMemberCount ? 2 : 14);
   const introScale = compact ? 2.05 : 2.2;
   const logoScale = settle.interpolate({ inputRange: [0, 1], outputRange: [introScale, 1] });
   const logoTranslateY = settle.interpolate({ inputRange: [0, 1], outputRange: [compact ? 54 : 74, 0] });
   const logoOpacity = settle.interpolate({ inputRange: [0, 0.1, 1], outputRange: [0, 1, 1] });
   const lineWidth = mark.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  // Fade the member count in WITH the wordmark, but only to a subtle 0.6.
+  const memberCountOpacity = mark.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] });
 
   return (
     <View style={[styles.slot, { height: stageHeight }]}>
@@ -83,6 +92,12 @@ export function AuthIntro({ onDone }: AuthIntroProps) {
           <Animated.View style={[styles.logoLineTrack, { opacity: mark, width: stageWidth * 0.44 }]}>
             <Animated.View style={[styles.logoLineFill, { backgroundColor: theme.text, width: lineWidth }]} />
           </Animated.View>
+
+          {hasMemberCount ? (
+            <Animated.Text style={[styles.memberCount, { color: theme.muted, opacity: memberCountOpacity }]} numberOfLines={1}>
+              {memberCount} {memberCount === 1 ? "Mitglied" : "Mitglieder"} aktuell
+            </Animated.Text>
+          ) : null}
         </Animated.View>
       </Animated.View>
     </View>
@@ -143,5 +158,14 @@ const styles = StyleSheet.create({
   logoLineFill: {
     borderRadius: 999,
     height: "100%",
+  },
+  memberCount: {
+    marginTop: 8,
+    fontSize: 11,
+    lineHeight: 13,
+    fontWeight: "700",
+    letterSpacing: 2,
+    textAlign: "center",
+    textTransform: "uppercase",
   },
 });

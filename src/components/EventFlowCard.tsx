@@ -9,13 +9,16 @@ import {
   decisionReleaseFrom,
   decisionReleasedNow,
   eventDayTitle,
+  eventInputOpen,
   formatBerlinDate,
   formatBerlinTime,
   formatEventDayDate,
   getDecisionReleaseDate,
   getVotingOpenDate,
   getWeekStartDate,
+  isEventOver,
   isEventPast,
+  isEventRunningNow,
   votingOpenNow,
   votingOpensFrom,
 } from "../services/date";
@@ -168,7 +171,12 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   // Within the "On Hold" state, distinguish "voting hasn't opened yet" from
   // "voting closed, decision pending" (the buffer window).
   const votingNotYetOpen = Date.now() < votingOpensAt.getTime();
-  const eventPast = isEventPast(event.weekStartDate, event.eventDay);
+  // "Over" (Berlin day rolled over) marks the event as past/archived; "running"
+  // is the live window from the event's start time until that midnight.
+  const eventPast = isEventOver(startsAt, event.weekStartDate, event.eventDay);
+  const eventRunning = isEventRunningNow(startsAt, event.weekStartDate, event.eventDay);
+  // Attendance & results entry only from the exact event start time on.
+  const canEnterResults = eventInputOpen(startsAt, event.weekStartDate, event.eventDay);
   const eventCompleted = state.event.status === "completed";
   // Date label with the event's start time (Berlin), e.g. "Sonntag, 14. Juni · 15:00 Uhr".
   const eventDateLabel = formatEventDayDate(event.weekStartDate, event.eventDay);
@@ -209,7 +217,17 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const goingCount = state.attendance.filter((entry) => entry.status === "going").length;
   const maybeCount = state.attendance.filter((entry) => entry.status === "maybe").length;
   const votersCount = new Set(state.votes.map((vote) => vote.user_id)).size;
-  const phaseLabel = eventCompleted ? "Abgeschlossen" : eventPast ? "Vorbei" : isDecided ? "Entscheidung steht" : votingInputOpen ? "Voting läuft" : "On Hold";
+  const phaseLabel = eventCompleted
+    ? "Abgeschlossen"
+    : eventPast
+      ? "Vorbei"
+      : eventRunning
+        ? "Läuft gerade"
+        : isDecided
+          ? "Entscheidung steht"
+          : votingInputOpen
+            ? "Voting läuft"
+            : "On Hold";
   const myFairness = state.decision.viewerFairness ?? null;
   // Keep the card open while the tour mirrors a flow step, so the attendance /
   // sports panel it wants to spotlight is actually rendered.
@@ -602,6 +620,23 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
         </View>
       ) : null}
 
+      {eventRunning ? (
+        <View style={[styles.runningCard, { borderColor: theme.mcc.accent, backgroundColor: theme.mcc.accentFaint, shadowColor: theme.mcc.accent }]}>
+          <View style={[styles.runningBadge, { borderColor: theme.mcc.accent, backgroundColor: theme.mcc.surface }]}>
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <SpinnerRing size={22} duration={1400} stroke={2} />
+            </View>
+            <View style={[styles.runningDot, { backgroundColor: theme.mcc.accent }]} />
+          </View>
+          <View style={styles.runningText}>
+            <Text style={[styles.runningTitle, { color: theme.mcc.accent }]}>Läuft gerade</Text>
+            <Text style={[styles.body, { color: theme.mcc.textPrimary }]}>
+              Der Cardiotag läuft{startsAt ? ` seit ${formatBerlinTime(startsAt)} Uhr` : ""}. Anwesenheit und Ergebnisse können jetzt eingetragen werden.
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
       {!onHold && myFairness && myFairness.active ? (
         <View style={[styles.fairnessNote, { borderColor: theme.mcc.strongLine, backgroundColor: theme.mcc.accentFaint }]}>
           <MaterialCommunityIcons name="scale-balance" size={20} color={theme.mcc.accent} />
@@ -808,9 +843,17 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
             {canManage && (isDecided || eventPast) ? (
               <View style={[styles.manage, { borderTopColor: theme.mcc.line }]}>
                 <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>Verwaltung (Admin / Moderator / AP):</Text>
-                <SecondaryButton label="Anwesenheit eintragen" onPress={() => router.push({ pathname: "/events/[eventId]/attendance", params: { eventId: event.id } })} />
-                <SecondaryButton label="Ergebnisse eintragen" onPress={() => router.push({ pathname: "/events/[eventId]/results", params: { eventId: event.id } })} />
-                {!eventCompleted ? <PrimaryButton label="Event abschließen" onPress={() => router.push({ pathname: "/events/[eventId]/close", params: { eventId: event.id } })} /> : null}
+                {canEnterResults ? (
+                  <>
+                    <SecondaryButton label="Anwesenheit eintragen" onPress={() => router.push({ pathname: "/events/[eventId]/attendance", params: { eventId: event.id } })} />
+                    <SecondaryButton label="Ergebnisse eintragen" onPress={() => router.push({ pathname: "/events/[eventId]/results", params: { eventId: event.id } })} />
+                    {!eventCompleted ? <PrimaryButton label="Event abschließen" onPress={() => router.push({ pathname: "/events/[eventId]/close", params: { eventId: event.id } })} /> : null}
+                  </>
+                ) : (
+                  <Text style={[styles.body, { color: theme.mcc.textSecondary }]}>
+                    Anwesenheit und Ergebnisse können erst ab Eventbeginn{startsAt ? ` (${formatBerlinTime(startsAt)} Uhr)` : ""} eingetragen werden.
+                  </Text>
+                )}
               </View>
             ) : null}
           </View>
@@ -1009,6 +1052,22 @@ const styles = StyleSheet.create({
   onHoldBadge: { alignItems: "center", borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 6, paddingHorizontal: 12, paddingVertical: 7 },
   onHoldBadgeText: { fontSize: 13, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
   onHoldText: { textAlign: "center" },
+  runningCard: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  runningBadge: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 40, justifyContent: "center", width: 40 },
+  runningDot: { borderRadius: 999, height: 12, width: 12 },
+  runningText: { flex: 1, minWidth: 0, gap: 3 },
+  runningTitle: { fontSize: 13, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" },
   fairnessNote: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 11, paddingHorizontal: 14, paddingVertical: 12 },
   fairnessText: { flex: 1, minWidth: 0, gap: 3 },
   fairnessTitle: { fontSize: 14, fontWeight: "900" },

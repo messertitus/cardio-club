@@ -4,7 +4,7 @@ import { View } from "react-native";
 import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
-import { isVotingInputOpen } from "../../../src/services/date";
+import { eventInputOpen, formatBerlinTime, isVotingInputOpen } from "../../../src/services/date";
 import {
   isCurrentUserAdmin,
   listAttendance,
@@ -110,6 +110,8 @@ export default function AttendanceScreen() {
     return isAdmin || event?.activity_contact_id === user.id || eventActivities.some((activity) => activity.activity_contact_id === user.id);
   }, [event?.activity_contact_id, eventActivities, isAdmin, ownStatus, user]);
   const rsvpOpen = Boolean(event && isVotingInputOpen(event.week_start_date, event.event_day));
+  // Actual attendance may only be recorded from the exact event start time on.
+  const reviewOpen = Boolean(event && eventInputOpen(event.starts_at, event.week_start_date, event.event_day));
 
   return (
     <MccScreen title="Teilnahme" kicker="RSVP" subtitle="Plane deine Teilnahme — und trage nach dem Event die tatsächliche Anwesenheit ein.">
@@ -135,12 +137,17 @@ export default function AttendanceScreen() {
         <MccBody muted>Geplantes RSVP bleibt getrennt von der tatsächlichen Anwesenheit.</MccBody>
         <MccBody muted>Auch Personen mit "Nicht dabei" können hier als tatsächlich anwesend markiert werden.</MccBody>
         {!canReview ? <MccBody muted>Die Prüfung ist nur für Admins, Event-Kontakt oder Profil-AP sichtbar, wenn diese Person selbst Dabei oder Vielleicht gesetzt hat.</MccBody> : null}
+        {canReview && !reviewOpen ? (
+          <MccBody muted>
+            Die tatsächliche Anwesenheit kann erst ab Eventbeginn{event?.starts_at ? ` (${formatBerlinTime(event.starts_at)} Uhr)` : ""} eingetragen werden.
+          </MccBody>
+        ) : null}
         {attendance.map((entry) => (
           <View key={entry.id} style={{ gap: 8 }}>
             <MccBody>
               {displayName(entry, profileNames, user?.id)} · geplant: {plannedLabel(entry.status)} · tatsächlich: {actualLabel(entry.actual_status)}
             </MccBody>
-            {canReview ? (
+            {canReview && reviewOpen ? (
               <>
                 <MccButton label={entry.status === "not_going" ? "War doch da" : "War da"} variant="secondary" onPress={() => setActualStatus(entry, "present")} />
                 <MccButton label="Nicht erschienen" variant="secondary" onPress={() => setActualStatus(entry, "absent")} />

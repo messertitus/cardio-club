@@ -24,7 +24,16 @@ Create `.env` on the server. Do not commit this file:
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+# Required for background Web Push. Same value as the Supabase secret
+# VAPID_PUBLIC_KEY. Baked into the bundle at build time, so it MUST exist in
+# this server .env before `npm run export:web` — a key only in a local .env does
+# nothing for production. See docs/push-setup.md.
+EXPO_PUBLIC_VAPID_PUBLIC_KEY=your-vapid-public-key
 ```
+
+> If push shows "VAPID key not configured" in the deployed app, this line is
+> almost always missing from the **server** `.env`. Add it, then rebuild and
+> rsync again (the steps below).
 
 Build:
 
