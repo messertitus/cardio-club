@@ -9,6 +9,22 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — SMS-Code „ungültig": Doppel-OTP-Regression behoben (Hauptursache)
+
+### Behoben
+- **Root Cause der „Code ungültig"-Fehler seit 14.06.** In `submitSignup` wurde nach `signUp` ein zweites OTP per `resend` gesendet, wenn `user.identities` leer war. Bei aktiver Phone-Confirmation liefert Supabase aber **auch für neue Nutzer** ein leeres `identities`-Array → es wurde bei **jedem** Signup ein zweites OTP gesendet, das das erste **ungültig** machte. Eingegeben wurde dann der erste (tote) Code → „invalid". Eingeführt durch Commit `b829582`, jetzt entfernt: nach `signUp` geht es direkt zum Code-Schritt (signUp hat den Code bereits gesendet).
+- **Hinweis:** Die damit entfernte „bereits registriert"-Erkennung war ohnehin unzuverlässig (Obfuscation). Verwaiste Alt-Accounts weiter über `supabase/maintenance/delete_orphaned_phone_user.sql` bereinigen.
+
+---
+
+## 2026-06-15 — SMS-Code „ungültig/abgelaufen": Resend-Race entschärft
+
+### Behoben/Geändert
+- Beim erneuten SMS-Senden wird das Code-Eingabefeld jetzt **geleert** und der Nutzer angewiesen, den **zuletzt** erhaltenen Code zu verwenden (ein Resend macht ältere Codes ungültig — bisher konnte ein veralteter, bereits getippter Code abgeschickt werden → „invalid").
+- **Hauptursache bleibt serverseitig:** zu kurze **SMS-OTP-Ablaufzeit** in Supabase (Auth → Providers → Phone → „SMS OTP Expiry", Empfehlung 600 s). Runbook in [operations.md](perspectives/operations.md) ergänzt.
+
+---
+
 ## 2026-06-15 — Schwebende Bottom-Navigation (Instagram-Stil)
 
 ### Hinzugefügt

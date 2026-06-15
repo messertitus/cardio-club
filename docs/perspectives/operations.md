@@ -26,6 +26,12 @@
 
 ## Runbooks (häufige Vorfälle)
 
+### SMS kommt an, aber Code wird als „ungültig/abgelaufen" gemeldet
+Sende- und Prüf-Pfad nutzen dieselbe normalisierte Nummer und `verifyOtp(type:"sms")` — der Code ist korrekt. Ursachen + Fix:
+1. **OTP-Ablaufzeit zu kurz (Hauptursache):** Supabase → **Authentication → Providers → Phone → „SMS OTP Expiry"** auf **600 s** erhöhen. Der Default ist sehr kurz; bei Zustell-/Tippverzögerung ist der Code sonst schon abgelaufen.
+2. **Resend-Race:** Ein erneutes Senden macht den vorherigen Code ungültig. Der Client leert jetzt das Eingabefeld beim Resend und weist an, den **zuletzt** erhaltenen Code zu nutzen.
+3. **Max-Verify-Versuche:** Nach mehreren Fehlversuchen invalidiert Supabase den Code — neuen anfordern.
+
 ### SMS kommt bei Registrierung nicht an
 1. **Twilio-Logs** und **Supabase → Logs → Auth** prüfen (echter Provider-Fehler/Rate-Limit).
 2. **Supabase → Authentication → Rate Limits → SMS** prüfen/erhöhen.

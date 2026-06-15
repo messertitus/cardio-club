@@ -179,29 +179,17 @@ export default function AuthScreen() {
     }
 
     if (!authResult.data.session) {
-      // Supabase obfuscates signUp for an already-registered phone: it returns a
-      // success-shaped response with an EMPTY identities array and does NOT send
-      // a fresh SMS. Detect that instead of falsely claiming a code went out.
-      const alreadyRegistered = (authResult.data.user?.identities?.length ?? 0) === 0;
-      if (alreadyRegistered) {
-        // Trigger the confirmation SMS explicitly (signUp won't for an existing
-        // account). If that fails, the number is likely already verified.
-        const resendResult = await supabase.auth.resend({ type: "sms", phone: normalizedPhone });
-        if (resendResult.error) {
-          const rate = retryAfterSeconds(resendResult.error.message);
-          if (rate !== null || isSmsRateLimitError(resendResult.error.message)) {
-            setMessage(mapAuthError(resendResult.error.message));
-            setResendCooldown(rate ?? 60);
-          } else {
-            setMessage("Diese Telefonnummer ist bereits registriert. Bitte melde dich an oder nutze „PIN vergessen“.");
-          }
-          setLoading(false);
-          return;
-        }
-      }
+      // signUp has already sent the confirmation SMS. Do NOT resend here: with
+      // phone confirmation enabled Supabase returns an empty identities array
+      // even for brand-new users (anti-enumeration), so a resend would fire a
+      // second OTP and invalidate the first — which made the SMS code show up as
+      // "invalid". Just go to the code step.
       setSuccessMessage("Wir haben dir einen SMS-Code geschickt.");
       setStep("sms");
-      setResendCooldown(60);
+      // Long enough to clear Supabase's per-number SMS rate limit, so a resend
+      // actually delivers a fresh code instead of silently invalidating the
+      // first one without sending a replacement.
+      setResendCooldown(90);
       setLoading(false);
       return;
     }
@@ -236,8 +224,12 @@ export default function AuthScreen() {
       return;
     }
 
-    setSuccessMessage("Neuer SMS-Code ist unterwegs. Das kann eine Minute dauern.");
-    setResendCooldown(60);
+    // A resend invalidates the previous code. Clear any code the user already
+    // typed so they can't submit the now-dead one, and tell them to use the
+    // newest SMS.
+    setSmsCode("");
+    setSuccessMessage("Neuer SMS-Code ist unterwegs. Bitte gib den zuletzt erhaltenen Code ein – ältere Codes sind nicht mehr gültig.");
+    setResendCooldown(90);
     setResending(false);
   }
 
