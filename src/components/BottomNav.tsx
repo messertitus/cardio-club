@@ -65,7 +65,7 @@ function NavItem({ item, active, compact }: { item: NavItemData; active: boolean
       style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
       onPress={() => router.push(item.href as never)}
     >
-      <View style={[styles.activeDot, { backgroundColor: active ? theme.mcc.accent : "transparent" }]} />
+      <View style={[styles.activeBar, { backgroundColor: active ? theme.mcc.accent : "transparent" }]} />
       <Text style={[styles.label, compact && styles.labelCompact, { color: active ? theme.mcc.textPrimary : theme.mcc.textMuted }]} numberOfLines={1}>
         {item.label}
       </Text>
@@ -103,14 +103,17 @@ const styles = StyleSheet.create({
     minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
     paddingHorizontal: 2,
     paddingVertical: 8,
   },
   itemPressed: { opacity: 0.6 },
-  activeDot: {
-    width: 6,
-    height: 6,
+  // Small active bar pinned near the top; absolute so it never shifts the
+  // vertically-centered label.
+  activeBar: {
+    position: "absolute",
+    top: 7,
+    width: 22,
+    height: 3,
     borderRadius: 999,
   },
   label: {
