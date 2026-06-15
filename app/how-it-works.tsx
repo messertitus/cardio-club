@@ -91,9 +91,9 @@ export default function HowItWorksScreen() {
         <Reveal index={3}>
           <MccCard>
             <MccBadge icon="lightbulb-outline">Beispiel</MccBadge>
-            <MccCardTitle>Kurz veranschaulicht</MccCardTitle>
+            <MccCardTitle>Zusammen statt getrennt</MccCardTitle>
             <MccBody muted>
-              12 kommen. Die Mehrheit will Fußball, eine kleinere Gruppe Badminton – und drei Leute hatten Fußball schon die letzten Male. Ergebnis: Fußball läuft (Mehrheit zählt), aber weil Halle und Wetter passen, gibt's parallel Badminton für die kleine Gruppe. Ein No-Go gegen Schwimmen sorgt dafür, dass Schwimmen gar nicht erst gewählt wird.
+              In der Abstimmung landen Beachvolleyball, Outdoor-Boxen und Schwimmen vorne. Statt drei Gruppen an drei Orten aufzuteilen, wählt der Club das Strandbad Horn – denn dort ist alles drei am selben Ort möglich. So macht jeder seinen Sport und trotzdem seid ihr gemeinsam unterwegs. Der Algorithmus sucht genau solche Standorte, an denen die gewählten Sportarten zusammenpassen.
             </MccBody>
           </MccCard>
         </Reveal>
