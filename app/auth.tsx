@@ -236,7 +236,11 @@ export default function AuthScreen() {
       return;
     }
 
-    setSuccessMessage("Neuer SMS-Code ist unterwegs. Das kann eine Minute dauern.");
+    // A resend invalidates the previous code. Clear any code the user already
+    // typed so they can't submit the now-dead one, and tell them to use the
+    // newest SMS.
+    setSmsCode("");
+    setSuccessMessage("Neuer SMS-Code ist unterwegs. Bitte gib den zuletzt erhaltenen Code ein – ältere Codes sind nicht mehr gültig.");
     setResendCooldown(60);
     setResending(false);
   }
