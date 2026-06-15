@@ -409,7 +409,10 @@ type DecisionContext = {
 };
 
 export const DEFAULT_OPTIONS: FairConstellationOptions = {
-  maxActivities: 2,
+  // Upper bound for a combined event: a single venue may host several sports at
+  // once (e.g. a Strandbad with volleyball + boxing + swimming), each only added
+  // when it is co-located and has its own meaningful support.
+  maxActivities: 4,
   maybeParticipationWeight: 0.55,
   maybePreferenceWeight: 0.8,
   noAttendanceWeight: 0,
@@ -440,7 +443,10 @@ export const DEFAULT_OPTIONS: FairConstellationOptions = {
   majorityProtectionMaxPracticalityProblem: 0.6,
   twinFairnessMargin: 0.7,
   socialRadiusKm: 0.75,
-  sameSpotRadiusKm: 0.12,
+  // "Same spot" (one physical venue): 300 m air-line, generous enough that a
+  // large facility (e.g. a Strandbad/lido spanning several areas) still counts
+  // as one place; stays well below the 750 m social ("Rufnähe") radius.
+  sameSpotRadiusKm: 0.3,
   previousPrimaryCannotRepeatAsPrimary: true,
   previousPrimaryAllowedAsSecondary: true,
   previousPrimaryPenalty: 0.85,
@@ -673,7 +679,72 @@ function generateCandidates(context: DecisionContext, profileEvaluations: Profil
     }
   }
 
+  candidates.push(...generateCombinedCandidates(context, profilesBySport));
+
   return dedupeCandidates(candidates);
+}
+
+// Combined-event candidates with 3+ sports at one place. Anchored at each ranked
+// sport, we greedily add further co-located sports (same spot / within calling
+// radius) that each clear the "meaningful support" bar, up to maxActivities. The
+// pairwise loop already covers single and 2-sport constellations; this only adds
+// the larger combinations (e.g. three sports together at a Strandbad).
+function generateCombinedCandidates(
+  context: DecisionContext,
+  profilesBySport: Map<string, ProfileEvaluation[]>,
+): CandidateScore[] {
+  const options = context.input.options;
+  const maxSports = Math.max(2, options.maxActivities);
+  if (maxSports < 3) return [];
+
+  const ranked = rankSportIds(context);
+  if (ranked.length < 3) return [];
+
+  const requiredSecondaryVoters =
+    context.eligibleParticipantUserIds.length <= options.smallGroupThreshold && options.allowSingleUserSecondaryInSmallGroups
+      ? 1
+      : options.minimumSecondaryUniqueVoters;
+
+  const combined: CandidateScore[] = [];
+
+  for (const anchorSportId of ranked) {
+    const anchorProfile = chooseBestProfileForSport(profilesBySport.get(anchorSportId) ?? [], undefined, options);
+    if (!anchorProfile) continue;
+    const anchorSupport = sportSupport(anchorSportId, context);
+    if (anchorSupport.uniqueVoters < 1 && !context.lowVoteFallback) continue;
+
+    const groupSportIds = [anchorSportId];
+    const groupProfiles = [anchorProfile];
+    let worstProximity: ProximityLevel = "same_spot";
+
+    for (const sportId of ranked) {
+      if (groupSportIds.length >= maxSports) break;
+      if (groupSportIds.includes(sportId)) continue;
+
+      const profile = chooseBestProfileForSport(profilesBySport.get(sportId) ?? [], anchorProfile.profile, options);
+      if (!profile) continue;
+
+      const proximity = getProfileProximity(anchorProfile.profile, profile.profile, options);
+      if (proximity !== "same_spot" && proximity !== "social_radius") continue;
+
+      const support = sportSupport(sportId, context);
+      const meaningful =
+        support.voteScore >= options.minSecondaryVoteScore &&
+        support.voteScore >= anchorSupport.voteScore * options.strongSecondaryVoteRatio &&
+        support.uniqueVoters >= requiredSecondaryVoters;
+      if (!meaningful && !context.lowVoteFallback) continue;
+
+      groupSportIds.push(sportId);
+      groupProfiles.push(profile);
+      if (proximity === "social_radius") worstProximity = "social_radius";
+    }
+
+    if (groupSportIds.length >= 3) {
+      combined.push(buildCandidate("multi_sport", groupSportIds, groupProfiles, worstProximity, context));
+    }
+  }
+
+  return combined;
 }
 
 function orderedSportPair(firstSportId: string, secondSportId: string, context: DecisionContext): [string, string] {
@@ -1238,11 +1309,10 @@ function groupActivitiesByLocation(
     if (!profile) continue;
     const group = groups.find((candidateGroup) => {
       const anchor = candidateGroup.profiles[0];
-      return (
-        anchor.id === profile.id ||
-        (anchor.venueGroupKey && anchor.venueGroupKey === profile.venueGroupKey) ||
-        getProfileProximity(anchor, profile, options) === "same_spot"
-      );
+      // Distance-first via getProfileProximity (which only falls back to the
+      // venue name when coordinates are missing), so capacity is grouped by the
+      // real physical site rather than by a shared name.
+      return anchor.id === profile.id || getProfileProximity(anchor, profile, options) === "same_spot";
     });
 
     if (group) {
@@ -1797,13 +1867,22 @@ function chooseBestProfilePair(
 
 function getProfileProximity(first: SportProfile, second: SportProfile, options: FairConstellationOptions): ProximityLevel {
   if (first.id === second.id) return "same_spot";
-  if (first.venueGroupKey && first.venueGroupKey === second.venueGroupKey) return "same_spot";
 
+  // Distance is the authoritative signal: two venues are the "same spot" only if
+  // their coordinates actually sit within the same-spot radius, and within the
+  // social ("Rufnähe") radius they count as nearby. This prevents two different
+  // places that happen to share a name from being treated as one location.
   const distance = distanceKm(first, second);
-  if (typeof distance !== "number") return "unknown";
-  if (distance <= options.sameSpotRadiusKm) return "same_spot";
-  if (distance <= options.socialRadiusKm) return "social_radius";
-  return "split_location";
+  if (typeof distance === "number") {
+    if (distance <= options.sameSpotRadiusKm) return "same_spot";
+    if (distance <= options.socialRadiusKm) return "social_radius";
+    return "split_location";
+  }
+
+  // Only when at least one venue has no coordinates do we fall back to the
+  // name-derived venue key as a best-effort grouping hint.
+  if (first.venueGroupKey && first.venueGroupKey === second.venueGroupKey) return "same_spot";
+  return "unknown";
 }
 
 function proximityScore(proximity: ProximityLevel): number {

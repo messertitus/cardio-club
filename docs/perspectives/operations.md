@@ -51,6 +51,11 @@
 ### Push kommt nicht an
 - VAPID-Keys, Subscriptions und `send-push` prüfen; Details in [../push-setup.md](../push-setup.md) und [../notifications-and-weekly-decision.md](../notifications-and-weekly-decision.md).
 
+### Standorte am selben Ort gruppieren (für die Entscheidung)
+- Der Entscheidungs-Algorithmus entscheidet „gleicher Ort/Rufnähe" **primär über die Distanz** der Koordinaten (`sameSpotRadiusKm` ≈ 120 m = selber Standort, `socialRadiusKm` ≈ 750 m = Rufnähe). Mehrere Sportarten an Standorten in Rufnähe werden so bevorzugt zu einer gemeinsamen Aktivität kombiniert.
+- **Wichtig:** Standorte, die denselben Ort meinen (z. B. drei „Strandbad Horn"-Profile), sollten **Koordinaten** (Map-Pin) nah beieinander haben — dann gruppiert die Distanz sie automatisch, unabhängig vom Namen.
+- **Fallback:** Fehlen Koordinaten, greift der namensbasierte `venue_group_key`. Prüfen/füllen: `supabase/maintenance/align_venue_group_keys.sql` (Inspect + sicheres Backfill nur für `null`-Keys + optionales Zusammenführen per Namensmuster).
+
 ### Standorte sichern / wiederherstellen
 - Admin-Bereich → **Sportprofile** → „Standorte exportieren" lädt ein JSON aller Standorte (inkl. Sportart-Zuordnung). „Standorte importieren" spielt eine solche Datei wieder ein (gleiche ID = Update, sonst Insert; Sportarten werden per Name aufgelöst). Nur im Web verfügbar. Eignet sich als leichtgewichtiges Backup vor größeren Standort-Änderungen.
 

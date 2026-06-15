@@ -9,6 +9,47 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Kombinierte Events mit 3+ Sportarten möglich
+
+### Hinzugefügt
+- Der Entscheidungs-Algorithmus kann jetzt **mehr als zwei** Sportarten zu **einem** kombinierten Event an einem Ort zusammenfassen (z. B. Beachvolleyball + Outdoor-Boxen + Schwimmen am Strandbad). Neuer Generator `generateCombinedCandidates`: ankert an jeder Sportart und nimmt greedy weitere **ko-lokalisierte** Sportarten (selber Standort/Rufnähe) auf, die jede für sich **echten Support** haben, bis `maxActivities`.
+- Test: „combines three co-located sports into one multi-sport event".
+
+### Geändert
+- `DEFAULT_OPTIONS.maxActivities` von 2 auf **4** erhöht und in der Generierung **erzwungen** (bisher nur deklariert). Single- und 2-Sport-Kandidaten unverändert; nur größere Kombinationen kommen hinzu.
+- Greift nach **Neu-Deploy der `decision`-Function**. Bestehende 27 Algorithmus-Tests weiter grün.
+
+---
+
+## 2026-06-15 — „Selber Standort"-Radius erhöht (120 m → 300 m)
+
+### Geändert
+- `DEFAULT_OPTIONS.sameSpotRadiusKm` von 0.12 auf **0.3 km** erhöht, damit eine größere Anlage (z. B. Strandbad) als **ein** Standort zählt. Bleibt unter `socialRadiusKm` (0.75 km, Rufnähe). Greift nach Neu-Deploy der `decision`-Function.
+
+---
+
+## 2026-06-15 — Gleicher Ort: Distanz statt Name als primäres Signal
+
+### Geändert
+- `getProfileProximity` (Entscheidungs-Algorithmus) entscheidet „gleicher Ort/Rufnähe" jetzt **zuerst über die Distanz** der Koordinaten (Haversine; `sameSpotRadiusKm`=120 m „selber Standort", `socialRadiusKm`=750 m „Rufnähe"). Der namensbasierte `venue_group_key` ist nur noch **Fallback**, wenn bei mindestens einem Profil Koordinaten fehlen.
+- Die Standort-/Kapazitätsgruppierung (`groupActivitiesByLocation`) nutzt dieselbe distanzbasierte Logik, statt direkt über den `venue_group_key` (Namen) kurzzuschließen. Verhindert, dass zwei gleichnamige, aber weit entfernte Orte als einer behandelt werden.
+- Praxis: Standorte am selben Platz brauchen primär **Koordinaten** (Map-Pin). Der Namens-Key bleibt für koordinatenlose Profile nützlich.
+
+---
+
+## 2026-06-15 — Standorte gruppieren (venue_group_key) + Beispiel verfeinert
+
+### Hinzugefügt
+- `supabase/maintenance/align_venue_group_keys.sql`: prüft/füllt `venue_group_key` aus dem Standortnamen, damit gleichnamige Profile (z. B. drei Profile „Strandbad Horn" für Boxen/Volleyball/Schwimmen) vom Entscheidungs-Algorithmus als **ein Ort** gruppiert werden und gemeinsam laufen können.
+
+### Geändert
+- how-it-works-Beispiel auf das realistische Szenario umgestellt: Beachvolleyball, Outdoor-Boxen und Schwimmen → ein Standort (Strandbad Horn), an dem alles zusammen möglich ist.
+
+### Doku
+- Hintergrund zur Standort-Gruppierung (`venue_group_key`, „same_spot") ergänzt — siehe [operations.md](perspectives/operations.md).
+
+---
+
 ## 2026-06-15 — Benachrichtigungen: „Voting offen" statt „neue Woche"; Einladung nur tagsüber
 
 ### Geändert
