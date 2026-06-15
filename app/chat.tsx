@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
   replyClose: { alignItems: "center", height: 32, justifyContent: "center", width: 32 },
   meta: { color: "#728197", fontSize: 12, fontWeight: "900" },
   body: { color: "#ffffff", fontSize: 15, lineHeight: 21 },
-  inputRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },
+  inputRow: { flexDirection: "row", gap: 8, marginBottom: 100 },
   input: {
     flex: 1,
     minHeight: 50,

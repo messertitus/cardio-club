@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingHorizontal: 18,
     paddingTop: 14,
-    paddingBottom: 30,
+    paddingBottom: 96,
   },
   noticeButton: {
     alignItems: "center",

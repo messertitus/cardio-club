@@ -36,7 +36,7 @@ export function BottomNav({ active }: { active: BottomNavKey }) {
   const pillBackground = mode === "dark" ? "rgba(10,18,31,0.62)" : "rgba(255,255,255,0.66)";
 
   return (
-    <View style={[styles.layer, { paddingBottom: insets.bottom + 6 }]}>
+    <View pointerEvents="box-none" style={[styles.layer, { paddingBottom: insets.bottom + 6 }]}>
       <Animated.View
         style={[
           styles.pill,
@@ -74,9 +74,14 @@ function NavItem({ item, active, compact }: { item: NavItemData; active: boolean
 }
 
 const styles = StyleSheet.create({
-  // In-flow floating layer: a transparent strip at the bottom of the screen that
-  // centers the pill, with see-through side margins around it.
+  // Floating layer pinned over the content so the page scrolls visibly behind
+  // the translucent pill. box-none lets the transparent margins pass touches
+  // through. Screens add ~96px bottom padding so nothing stays hidden.
   layer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: "center",
     paddingHorizontal: 14,
     paddingTop: 6,

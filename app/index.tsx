@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   appShell: { flex: 1 },
   scrollFill: { flex: 1 },
-  screen: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  screen: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 96 },
   eventsArea: { gap: 16 },
   historyButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   weekGroup: { gap: 12 },
