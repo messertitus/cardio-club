@@ -7,6 +7,7 @@ import { SwipeNavigator } from "../src/components/SwipeNavigator";
 import { TourProvider } from "../src/components/TourGuide";
 import { UpdateBanner } from "../src/components/UpdateBanner";
 import { AuthProvider } from "../src/context/AuthContext";
+import { NavChromeProvider } from "../src/context/NavChromeContext";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 import { CACHE_SCHEMA_VERSION } from "../src/lib/appInfo";
 import { purgeAppCachesIfOutdated } from "../src/services/localCache";
@@ -44,6 +45,7 @@ function RootStack() {
 
   return (
     <AuthProvider>
+      <NavChromeProvider>
       <TourProvider>
         <StatusBar style={mode === "dark" ? "light" : "dark"} />
         <AppNotificationBridge />
@@ -85,6 +87,7 @@ function RootStack() {
         </Stack>
       </SwipeNavigator>
       </TourProvider>
+      </NavChromeProvider>
     </AuthProvider>
   );
 }

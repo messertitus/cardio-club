@@ -16,6 +16,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavChrome } from "../context/NavChromeContext";
 import { useTheme } from "../context/ThemeContext";
 import { BackButton } from "./BackButton";
 
@@ -75,6 +76,7 @@ export function MccScreen({
   withBottomNav?: boolean;
 }) {
   const { theme } = useTheme();
+  const { onScroll } = useNavChrome();
   const back = showBack ?? Boolean(title);
   const content = (
     <View style={[styles.screenContent, { paddingBottom: bottomInset }]}>
@@ -103,7 +105,7 @@ export function MccScreen({
     >
       <MotionBackground />
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
           {content}
         </ScrollView>
       ) : (

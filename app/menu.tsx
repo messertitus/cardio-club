@@ -8,6 +8,7 @@ import { MotionPressable, Reveal } from "../src/components/Motion";
 import { MainHeader } from "../src/components/PageHeader";
 import { useTourTarget } from "../src/components/TourGuide";
 import { useAuth } from "../src/context/AuthContext";
+import { useNavChrome } from "../src/context/NavChromeContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { directChatNotificationId, isNotificationVisible, loadReadNotifications, saveReadNotifications } from "../src/lib/adminNotifications";
 import { supabase } from "../src/lib/supabase";
@@ -24,6 +25,7 @@ type AdminNotification = {
 export default function MenuScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { onScroll } = useNavChrome();
   useScreenView(SCREEN_EVENTS.menu);
   const ideasTarget = useTourTarget("menu-ideas");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -106,7 +108,7 @@ export default function MenuScreen() {
     <SafeAreaView edges={["top", "left", "right"]} style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
       <MotionBackground />
       <View style={styles.shell}>
-        <ScrollView style={styles.shell} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.shell} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
           <MainHeader
             title="Menü"
             actions={isAdmin ? <AdminNoticeButton count={unreadNotifications.length} open={notificationsOpen} onPress={() => setNotificationsOpen((open) => !open)} /> : null}
