@@ -33,10 +33,10 @@ export function MainHeader({ title, actions }: { title?: string; actions?: React
 const mainStyles = StyleSheet.create({
   header: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between", marginTop: -8 },
   brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 12, minWidth: 0 },
-  logo: { height: 60, width: 60 },
+  logo: { height: 52, width: 52 },
   textBlock: { flex: 1, minWidth: 0, marginTop: -6 },
   kicker: { fontSize: 12, fontWeight: "800", lineHeight: 14 },
-  title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 36, marginTop: -2 },
+  title: { fontSize: 30, fontWeight: "900", letterSpacing: 0, lineHeight: 41, marginTop: -2, paddingBottom: 2 },
   titleBrand: { fontSize: 34, fontWeight: "900", letterSpacing: 6, lineHeight: 44 },
   actions: { alignItems: "center", flexDirection: "row", gap: 8 },
 });
