@@ -9,6 +9,24 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Schwebende Bottom-Navigation (Instagram-Stil)
+
+### Hinzugefügt
+- Neue, **schwebende runde Pille** als Bottom-Navigation: transparenter/leicht verschwommener Hintergrund (Web-Backdrop-Blur), Schatten, runde Ecken.
+- **Scroll-Reaktion:** beim Runterscrollen wird die Leiste leicht kleiner, beim Hochscrollen/oben wieder voll groß. Umgesetzt über `NavChromeProvider`/`useNavChrome` (geteilter Scroll-Zustand), eingehängt in die Scroller von Event (`index`), Chat, Menü und allen `MccScreen`-Seiten.
+
+### Geändert
+- `BottomNav` von der durchgehenden Vollbreiten-Leiste auf die zentrierte Pille umgestellt; aktiver Tab als kleiner Punkt statt Linie. Bewusst **im Layout-Fluss** (nicht über Inhalt schwebend), damit das Chat-Eingabefeld nicht verdeckt wird und keine Reflow-/Überlappungsprobleme entstehen.
+
+---
+
+## 2026-06-15 — BottomNav: doppelten unteren Safe-Area-Inset entfernt
+
+### Behoben
+- Auf Screens mit `MccScreen` **und** `BottomNav` (Mitglieder, Einstellungen, Push, Einladungen, App installieren, „So entscheidet der Club") wurde der untere Safe-Area-Inset **doppelt** angewandt (einmal von `MccScreen`s SafeAreaView, einmal von der BottomNav). Dadurch saß die Navigationsleiste auf dem iPhone nicht bündig am unteren Rand. Neue Prop `MccScreen withBottomNav` lässt den unteren Edge weg, sodass nur die BottomNav den Inset trägt. Sub-Seiten ohne BottomNav (events/*, clubs/*) bleiben unverändert.
+
+---
+
 ## 2026-06-15 — Kombinierte Events mit 3+ Sportarten möglich
 
 ### Hinzugefügt

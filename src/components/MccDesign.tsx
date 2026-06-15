@@ -16,6 +16,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavChrome } from "../context/NavChromeContext";
 import { useTheme } from "../context/ThemeContext";
 import { BackButton } from "./BackButton";
 
@@ -60,6 +61,7 @@ export function MccScreen({
   scroll = true,
   bottomInset = 36,
   showBack,
+  withBottomNav = false,
 }: {
   children: ReactNode;
   title?: string;
@@ -68,8 +70,13 @@ export function MccScreen({
   scroll?: boolean;
   bottomInset?: number;
   showBack?: boolean;
+  // When the screen also renders a <BottomNav/>, that bar already pads itself by
+  // the bottom safe-area inset. Drop the bottom edge here so the inset is not
+  // applied twice (which leaves a gap and makes the nav look detached).
+  withBottomNav?: boolean;
 }) {
   const { theme } = useTheme();
+  const { onScroll } = useNavChrome();
   const back = showBack ?? Boolean(title);
   const content = (
     <View style={[styles.screenContent, { paddingBottom: bottomInset }]}>
@@ -92,10 +99,13 @@ export function MccScreen({
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+    <SafeAreaView
+      edges={withBottomNav ? ["top", "left", "right"] : undefined}
+      style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}
+    >
       <MotionBackground />
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
           {content}
         </ScrollView>
       ) : (

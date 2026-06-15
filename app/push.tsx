@@ -65,7 +65,7 @@ export default function PushScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <MccScreen title="Push" kicker="Updates" subtitle="Benachrichtigungen für Entscheidungen und Event-Updates." bottomInset={96}>
+      <MccScreen title="Push" kicker="Updates" subtitle="Benachrichtigungen für Entscheidungen und Event-Updates." bottomInset={96} withBottomNav>
         <Reveal>
           <MccCard accent>
             <MccBadge icon="bell-ring-outline">Live Updates</MccBadge>

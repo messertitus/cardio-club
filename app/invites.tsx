@@ -67,7 +67,7 @@ export default function InvitesScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <MccScreen title="Einladungscodes" kicker="Exklusiver Zugang" subtitle={isAdmin ? "Admin-Kontingent: unbegrenzt." : `Noch ${remaining} von 3 Codes verfügbar.`} bottomInset={96}>
+      <MccScreen title="Einladungscodes" kicker="Exklusiver Zugang" subtitle={isAdmin ? "Admin-Kontingent: unbegrenzt." : `Noch ${remaining} von 3 Codes verfügbar.`} bottomInset={96} withBottomNav>
         <MccCard accent>
           <MccBadge icon="account-multiple-plus-outline">Einladen</MccBadge>
           <MccCardTitle>Bring deine Leute mit</MccCardTitle>

@@ -15,6 +15,7 @@ import {
   type ReadNotificationMap,
 } from "../src/lib/adminNotifications";
 import { useAuth } from "../src/context/AuthContext";
+import { useNavChrome } from "../src/context/NavChromeContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { decisionReleasedNow, eventDayTitle, formatEventDayDate, getEventDate, getWeekStartDate } from "../src/services/date";
 import { readLocalCache, writeLocalCache } from "../src/services/localCache";
@@ -77,6 +78,7 @@ export default function ChatScreen() {
   const { directChatId } = useLocalSearchParams<{ directChatId?: string }>();
   const { loading, user } = useAuth();
   const { theme } = useTheme();
+  const { onScroll: onNavScroll } = useNavChrome();
   useScreenView(SCREEN_EVENTS.chat);
   const [eventStates, setEventStates] = useState<MccEventState[]>([]);
   const [members, setMembers] = useState<MccMember[]>([]);
@@ -416,7 +418,7 @@ export default function ChatScreen() {
             </View>
           ) : null}
 
-          <ScrollView ref={scrollRef} contentContainerStyle={styles.messages} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView ref={scrollRef} contentContainerStyle={styles.messages} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScroll={onNavScroll} scrollEventThrottle={16}>
             {messagesBusy && messages.length === 0 ? <ScreenLoader /> : null}
             {messages.length === 0 && !messagesBusy && activeChannel ? <Text style={[styles.empty, { color: theme.mcc.textSecondary }]}>Noch keine Nachrichten.</Text> : null}
             {messages.map((message) => {
@@ -739,7 +741,7 @@ const styles = StyleSheet.create({
   replyClose: { alignItems: "center", height: 32, justifyContent: "center", width: 32 },
   meta: { color: "#728197", fontSize: 12, fontWeight: "900" },
   body: { color: "#ffffff", fontSize: 15, lineHeight: 21 },
-  inputRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },
+  inputRow: { flexDirection: "row", gap: 8, marginBottom: 100 },
   input: {
     flex: 1,
     minHeight: 50,

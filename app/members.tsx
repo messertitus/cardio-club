@@ -91,7 +91,7 @@ export default function MembersScreen() {
 
   return (
     <View style={styles.shell}>
-      <MccScreen bottomInset={96}>
+      <MccScreen bottomInset={96} withBottomNav>
         <MainHeader title="Mitglieder" actions={<HeaderIconButton open={locationFilterOpen} onPress={() => setLocationFilterOpen((open) => !open)} />} />
         <View style={styles.toolRow}>
           <Pressable accessibilityRole="button" onPress={() => setLocationFilterOpen((open) => !open)} style={({ pressed }) => pressed && { opacity: 0.7 }}>

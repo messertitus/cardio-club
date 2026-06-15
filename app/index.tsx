@@ -11,6 +11,7 @@ import { Reveal } from "../src/components/Motion";
 import { MainHeader } from "../src/components/PageHeader";
 import { useTour, useTourTarget } from "../src/components/TourGuide";
 import { useAuth } from "../src/context/AuthContext";
+import { useNavChrome } from "../src/context/NavChromeContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { lookupCityByPostalCode } from "../src/lib/postalCity";
 import { supabase } from "../src/lib/supabase";
@@ -48,6 +49,7 @@ const INSTALL_HINT_REVEAL_DELAY_MS = 2000;
 export default function HomeScreen() {
   const { loading, user, session } = useAuth();
   const { theme } = useTheme();
+  const { onScroll } = useNavChrome();
   const [events, setEvents] = useState<Row<"weekly_events">[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -317,6 +319,8 @@ export default function HomeScreen() {
           style={styles.scrollFill}
           refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={theme.mcc.textPrimary} />}
           contentContainerStyle={styles.screen}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         >
           <Header />
 
@@ -575,7 +579,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   appShell: { flex: 1 },
   scrollFill: { flex: 1 },
-  screen: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 34 },
+  screen: { flexGrow: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 96 },
   eventsArea: { gap: 16 },
   historyButton: { alignItems: "center", borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   weekGroup: { gap: 12 },
