@@ -31,7 +31,7 @@ export function MainHeader({ title, actions }: { title?: string; actions?: React
 }
 
 const mainStyles = StyleSheet.create({
-  header: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  header: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between", marginTop: -8 },
   brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 12, minWidth: 0 },
   logo: { height: 60, width: 60 },
   textBlock: { flex: 1, minWidth: 0, marginTop: -6 },
