@@ -9,6 +9,13 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — „Selber Standort"-Radius erhöht (120 m → 300 m)
+
+### Geändert
+- `DEFAULT_OPTIONS.sameSpotRadiusKm` von 0.12 auf **0.3 km** erhöht, damit eine größere Anlage (z. B. Strandbad) als **ein** Standort zählt. Bleibt unter `socialRadiusKm` (0.75 km, Rufnähe). Greift nach Neu-Deploy der `decision`-Function.
+
+---
+
 ## 2026-06-15 — Gleicher Ort: Distanz statt Name als primäres Signal
 
 ### Geändert

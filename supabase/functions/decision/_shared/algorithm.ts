@@ -440,7 +440,10 @@ export const DEFAULT_OPTIONS: FairConstellationOptions = {
   majorityProtectionMaxPracticalityProblem: 0.6,
   twinFairnessMargin: 0.7,
   socialRadiusKm: 0.75,
-  sameSpotRadiusKm: 0.12,
+  // "Same spot" (one physical venue): 300 m air-line, generous enough that a
+  // large facility (e.g. a Strandbad/lido spanning several areas) still counts
+  // as one place; stays well below the 750 m social ("Rufnähe") radius.
+  sameSpotRadiusKm: 0.3,
   previousPrimaryCannotRepeatAsPrimary: true,
   previousPrimaryAllowedAsSecondary: true,
   previousPrimaryPenalty: 0.85,
