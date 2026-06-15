@@ -41,6 +41,7 @@ export default function InstallScreen() {
         kicker="Anleitung"
         subtitle="Einmal zum Homescreen hinzufügen – danach öffnest du sie wie eine normale App."
         bottomInset={96}
+        withBottomNav
       >
         <Reveal>
           <MccCard accent>

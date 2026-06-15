@@ -193,7 +193,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.shell}>
       <KeyboardAvoidingView behavior={undefined} style={styles.shell}>
-        <MccScreen title="Einstellungen" kicker="Konto" subtitle="PIN und Telefonnummer verwalten." bottomInset={96}>
+        <MccScreen title="Einstellungen" kicker="Konto" subtitle="PIN und Telefonnummer verwalten." bottomInset={96} withBottomNav>
           <MccCard accent>
             <MccBadge icon="shield-lock-outline">Sicherheit</MccBadge>
             <MccCardTitle>PIN ändern</MccCardTitle>

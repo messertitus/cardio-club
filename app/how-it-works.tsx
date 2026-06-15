@@ -48,6 +48,7 @@ export default function HowItWorksScreen() {
         kicker="Fair für alle"
         subtitle="Kurz erklärt, wie aus euren Stimmen ein fairer Cardiotag wird."
         bottomInset={96}
+        withBottomNav
       >
         <Reveal>
           <MccCard accent>

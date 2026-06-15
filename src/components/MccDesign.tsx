@@ -60,6 +60,7 @@ export function MccScreen({
   scroll = true,
   bottomInset = 36,
   showBack,
+  withBottomNav = false,
 }: {
   children: ReactNode;
   title?: string;
@@ -68,6 +69,10 @@ export function MccScreen({
   scroll?: boolean;
   bottomInset?: number;
   showBack?: boolean;
+  // When the screen also renders a <BottomNav/>, that bar already pads itself by
+  // the bottom safe-area inset. Drop the bottom edge here so the inset is not
+  // applied twice (which leaves a gap and makes the nav look detached).
+  withBottomNav?: boolean;
 }) {
   const { theme } = useTheme();
   const back = showBack ?? Boolean(title);
@@ -92,7 +97,10 @@ export function MccScreen({
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}>
+    <SafeAreaView
+      edges={withBottomNav ? ["top", "left", "right"] : undefined}
+      style={[styles.safeArea, { backgroundColor: theme.mcc.background }]}
+    >
       <MotionBackground />
       {scroll ? (
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

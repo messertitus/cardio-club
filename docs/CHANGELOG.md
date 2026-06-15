@@ -9,6 +9,13 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — BottomNav: doppelten unteren Safe-Area-Inset entfernt
+
+### Behoben
+- Auf Screens mit `MccScreen` **und** `BottomNav` (Mitglieder, Einstellungen, Push, Einladungen, App installieren, „So entscheidet der Club") wurde der untere Safe-Area-Inset **doppelt** angewandt (einmal von `MccScreen`s SafeAreaView, einmal von der BottomNav). Dadurch saß die Navigationsleiste auf dem iPhone nicht bündig am unteren Rand. Neue Prop `MccScreen withBottomNav` lässt den unteren Edge weg, sodass nur die BottomNav den Inset trägt. Sub-Seiten ohne BottomNav (events/*, clubs/*) bleiben unverändert.
+
+---
+
 ## 2026-06-15 — Kombinierte Events mit 3+ Sportarten möglich
 
 ### Hinzugefügt
