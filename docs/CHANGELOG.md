@@ -9,11 +9,26 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Benachrichtigungen: „Voting offen" statt „neue Woche"; Einladung nur tagsüber
+
+### Geändert
+- **„Neue Cardio-Abstimmung"** wird nicht mehr beim Anlegen der Wochen-Events ausgelöst, sondern erst, **wenn das Voting eines Events wirklich offen ist** (zeitgesteuerter, dedup-sicherer Job `enqueue_vote_open_notifications`, eingehängt in `run_mcc_notification_jobs`). Verhindert die doppelte Meldung bei zwei neuen Cardiotagen, von denen nur einer abstimmbar ist.
+- **Wöchentliche Einladungs-Erinnerung** nur noch **tagsüber** (Berlin 10:00–20:00) — keine 02:00-Push mehr (`enqueue_weekly_invite_reminders` mit Tageszeit-Gate).
+
+### Entfernt
+- Insert-Trigger `enqueue_weekly_event_notification_trigger` auf `weekly_events` entfernt. Grund: löste die „neue Woche"-Push pro angelegtem Event aus, unabhängig vom Voting-Status. Ersatz: o. g. zeitgesteuerter Job.
+- DB: Migration **063**.
+
+---
+
 ## 2026-06-14 — Menüseite „So entscheidet der Club" (Nutzer-Erklärung)
 
 ### Hinzugefügt
-- Neue Route `app/how-it-works.tsx` und Menüeintrag „So entscheidet der Club": einfache, motivierende Erklärung des Fairness-Algorithmus für Mitglieder (kein Detail/keine Formeln) mit CTA „Jetzt abstimmen".
+- Neue Route `app/how-it-works.tsx` und Menüeintrag „So entscheidet der Club": Erklärung des Fairness-Algorithmus für Mitglieder mit CTA „Jetzt abstimmen".
 - Screen-Event `SCREEN_EVENTS.howItWorks` (+ Label) für Analytics.
+
+### Geändert
+- Seite **detaillierter**: 5-Schritte-Ablauf, Karte „Was fair abgewogen wird" (Ranked Voting, No-Go-Härte, Vernachlässigungs-/Mehrheitsschutz, Standort/Wetter, parallele Gruppen) und ein konkretes Beispiel — weiterhin einfach und ohne Formeln.
 
 ---
 

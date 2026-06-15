@@ -27,11 +27,13 @@ Votes without an explicit `going` or `maybe` attendance row should not influence
 
 A queue table `app_notifications` is filled, then delivered. The five cases:
 
-1. **Voting opened** — trigger `enqueue_weekly_event_notification` on `weekly_events` insert (all club members).
+1. **Voting opened** — job `enqueue_vote_open_notifications()` (migration 063). Fires when an event's voting window is actually open (`weekly_event_is_open_for_voting`), once per member/event, city-scoped. Replaces the former `enqueue_weekly_event_notification` insert trigger, which fired per created event (so a new week with a Saturday + Sunday event produced two pushes even when only one was votable).
 2. **Vote closing in ~12h** (only if the member has not voted and is not `not_going`) — job `enqueue_vote_reminders()`.
 3. **Decision released** (only `going`/`maybe` attendees) — job `enqueue_decision_release_notifications()` (time-based, needs no admin finalize) plus the `enqueue_decision_notification` trigger if an admin finalizes.
 4. **Chat message** — trigger `enqueue_chat_notification` (event `going`/`maybe` attendees, excluding the author).
-5. **Weekly invite reminder** (only members with at least one unused invite code) — job `enqueue_weekly_invite_reminders()` (once per ISO week).
+5. **Weekly invite reminder** (only members with at least one unused invite code) — job `enqueue_weekly_invite_reminders()` (once per ISO week, **daytime only: Berlin 10:00–20:00**, migration 063).
+
+> The shared runner `run_mcc_notification_jobs()` runs every few minutes (via the `send-push` scheduled function), so time-gated jobs (1 and 5) fire on the first run inside their window.
 
 `run_mcc_notification_jobs()` runs jobs 2/3/5 and is dedup-safe. The app calls it
 every few minutes while open (`AppNotificationBridge`), so notifications appear
