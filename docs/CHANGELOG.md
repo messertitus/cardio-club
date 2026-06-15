@@ -9,6 +9,19 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Standorte gruppieren (venue_group_key) + Beispiel verfeinert
+
+### Hinzugefügt
+- `supabase/maintenance/align_venue_group_keys.sql`: prüft/füllt `venue_group_key` aus dem Standortnamen, damit gleichnamige Profile (z. B. drei Profile „Strandbad Horn" für Boxen/Volleyball/Schwimmen) vom Entscheidungs-Algorithmus als **ein Ort** gruppiert werden und gemeinsam laufen können.
+
+### Geändert
+- how-it-works-Beispiel auf das realistische Szenario umgestellt: Beachvolleyball, Outdoor-Boxen und Schwimmen → ein Standort (Strandbad Horn), an dem alles zusammen möglich ist.
+
+### Doku
+- Hintergrund zur Standort-Gruppierung (`venue_group_key`, „same_spot") ergänzt — siehe [operations.md](perspectives/operations.md).
+
+---
+
 ## 2026-06-15 — Benachrichtigungen: „Voting offen" statt „neue Woche"; Einladung nur tagsüber
 
 ### Geändert
