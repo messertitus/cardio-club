@@ -63,6 +63,23 @@ describe("selectFairConstellation", () => {
     expect(result.activities.map((activity) => activity.sportId)).toEqual(["volleyball", "boxing"]);
   });
 
+  it("combines three co-located sports into one multi-sport event", () => {
+    const result = selectFairConstellation(
+      input({
+        votes: [
+          ...votesFor("volleyball", ["u1", "u2", "u3", "u4"]),
+          ...votesFor("boxing", ["u5", "u6", "u7"]),
+          ...votesFor("running", ["u8", "u9", "u10"]),
+        ],
+      }),
+    );
+
+    expect(result.mode).toBe("multi_sport");
+    const sportIds = result.activities.map((activity) => activity.sportId);
+    expect(sportIds.length).toBeGreaterThanOrEqual(3);
+    expect(sportIds).toEqual(expect.arrayContaining(["volleyball", "boxing", "running"]));
+  });
+
   it("selects a twin event when two real groups are split across locations", () => {
     const result = selectFairConstellation(
       input({

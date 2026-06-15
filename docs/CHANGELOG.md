@@ -9,6 +9,18 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Kombinierte Events mit 3+ Sportarten möglich
+
+### Hinzugefügt
+- Der Entscheidungs-Algorithmus kann jetzt **mehr als zwei** Sportarten zu **einem** kombinierten Event an einem Ort zusammenfassen (z. B. Beachvolleyball + Outdoor-Boxen + Schwimmen am Strandbad). Neuer Generator `generateCombinedCandidates`: ankert an jeder Sportart und nimmt greedy weitere **ko-lokalisierte** Sportarten (selber Standort/Rufnähe) auf, die jede für sich **echten Support** haben, bis `maxActivities`.
+- Test: „combines three co-located sports into one multi-sport event".
+
+### Geändert
+- `DEFAULT_OPTIONS.maxActivities` von 2 auf **4** erhöht und in der Generierung **erzwungen** (bisher nur deklariert). Single- und 2-Sport-Kandidaten unverändert; nur größere Kombinationen kommen hinzu.
+- Greift nach **Neu-Deploy der `decision`-Function**. Bestehende 27 Algorithmus-Tests weiter grün.
+
+---
+
 ## 2026-06-15 — „Selber Standort"-Radius erhöht (120 m → 300 m)
 
 ### Geändert
