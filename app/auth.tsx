@@ -53,10 +53,11 @@ export default function AuthScreen() {
   }, [resendCooldown]);
 
   // Aggregate member count for the (logged-out) intro lockup. Best-effort.
+  // Subtract the hidden test account so the public count reflects real members.
   useEffect(() => {
     let active = true;
     void getPublicMemberCount(supabase).then((count) => {
-      if (active) setMemberCount(count);
+      if (active) setMemberCount(count == null ? null : Math.max(0, count - 1));
     });
     return () => {
       active = false;
