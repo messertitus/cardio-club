@@ -1238,11 +1238,10 @@ function groupActivitiesByLocation(
     if (!profile) continue;
     const group = groups.find((candidateGroup) => {
       const anchor = candidateGroup.profiles[0];
-      return (
-        anchor.id === profile.id ||
-        (anchor.venueGroupKey && anchor.venueGroupKey === profile.venueGroupKey) ||
-        getProfileProximity(anchor, profile, options) === "same_spot"
-      );
+      // Distance-first via getProfileProximity (which only falls back to the
+      // venue name when coordinates are missing), so capacity is grouped by the
+      // real physical site rather than by a shared name.
+      return anchor.id === profile.id || getProfileProximity(anchor, profile, options) === "same_spot";
     });
 
     if (group) {
@@ -1797,13 +1796,22 @@ function chooseBestProfilePair(
 
 function getProfileProximity(first: SportProfile, second: SportProfile, options: FairConstellationOptions): ProximityLevel {
   if (first.id === second.id) return "same_spot";
-  if (first.venueGroupKey && first.venueGroupKey === second.venueGroupKey) return "same_spot";
 
+  // Distance is the authoritative signal: two venues are the "same spot" only if
+  // their coordinates actually sit within the same-spot radius, and within the
+  // social ("Rufnähe") radius they count as nearby. This prevents two different
+  // places that happen to share a name from being treated as one location.
   const distance = distanceKm(first, second);
-  if (typeof distance !== "number") return "unknown";
-  if (distance <= options.sameSpotRadiusKm) return "same_spot";
-  if (distance <= options.socialRadiusKm) return "social_radius";
-  return "split_location";
+  if (typeof distance === "number") {
+    if (distance <= options.sameSpotRadiusKm) return "same_spot";
+    if (distance <= options.socialRadiusKm) return "social_radius";
+    return "split_location";
+  }
+
+  // Only when at least one venue has no coordinates do we fall back to the
+  // name-derived venue key as a best-effort grouping hint.
+  if (first.venueGroupKey && first.venueGroupKey === second.venueGroupKey) return "same_spot";
+  return "unknown";
 }
 
 function proximityScore(proximity: ProximityLevel): number {

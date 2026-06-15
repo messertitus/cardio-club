@@ -9,6 +9,15 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Gleicher Ort: Distanz statt Name als primäres Signal
+
+### Geändert
+- `getProfileProximity` (Entscheidungs-Algorithmus) entscheidet „gleicher Ort/Rufnähe" jetzt **zuerst über die Distanz** der Koordinaten (Haversine; `sameSpotRadiusKm`=120 m „selber Standort", `socialRadiusKm`=750 m „Rufnähe"). Der namensbasierte `venue_group_key` ist nur noch **Fallback**, wenn bei mindestens einem Profil Koordinaten fehlen.
+- Die Standort-/Kapazitätsgruppierung (`groupActivitiesByLocation`) nutzt dieselbe distanzbasierte Logik, statt direkt über den `venue_group_key` (Namen) kurzzuschließen. Verhindert, dass zwei gleichnamige, aber weit entfernte Orte als einer behandelt werden.
+- Praxis: Standorte am selben Platz brauchen primär **Koordinaten** (Map-Pin). Der Namens-Key bleibt für koordinatenlose Profile nützlich.
+
+---
+
 ## 2026-06-15 — Standorte gruppieren (venue_group_key) + Beispiel verfeinert
 
 ### Hinzugefügt
