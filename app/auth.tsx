@@ -186,7 +186,10 @@ export default function AuthScreen() {
       // "invalid". Just go to the code step.
       setSuccessMessage("Wir haben dir einen SMS-Code geschickt.");
       setStep("sms");
-      setResendCooldown(60);
+      // Long enough to clear Supabase's per-number SMS rate limit, so a resend
+      // actually delivers a fresh code instead of silently invalidating the
+      // first one without sending a replacement.
+      setResendCooldown(90);
       setLoading(false);
       return;
     }
@@ -226,7 +229,7 @@ export default function AuthScreen() {
     // newest SMS.
     setSmsCode("");
     setSuccessMessage("Neuer SMS-Code ist unterwegs. Bitte gib den zuletzt erhaltenen Code ein – ältere Codes sind nicht mehr gültig.");
-    setResendCooldown(60);
+    setResendCooldown(90);
     setResending(false);
   }
 
