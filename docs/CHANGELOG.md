@@ -9,6 +9,13 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Einladungscode nach SMS „nicht einlösbar": consume idempotent
+
+### Behoben
+- Nachdem die SMS-Verifizierung wieder funktioniert, wanderte der Fehler zu `consume_invitation_code`: lief die Einlösung im selben Registrierungs-Flow zweimal (bzw. erneut durch denselben gerade angelegten Nutzer), setzte der erste Aufruf `used_by` und der zweite meldete „bereits benutzt" → „Einladungscode konnte nicht eingelöst werden". Migration **064** macht `consume_invitation_code` **idempotent**: ist der Code bereits von **diesem** Nutzer eingelöst, gibt sie `true` zurück (fremd-genutzte Codes bleiben gesperrt).
+
+---
+
 ## 2026-06-15 — SMS-Code „ungültig": Doppel-OTP-Regression behoben (Hauptursache)
 
 ### Behoben
