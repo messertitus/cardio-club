@@ -46,7 +46,10 @@ export async function consumeInvitationCode(
   });
 
   if (error) {
-    return fail("Einladungscode konnte nicht eingelöst werden.", error);
+    // TEMP DIAGNOSTIC: surface the raw RPC error (message + code) so we can see
+    // the real reason (e.g. "Not authenticated", "permission denied", schema cache).
+    const code = (error as { code?: string }).code;
+    return fail(`${error.message}${code ? ` [${code}]` : ""}`, error);
   }
 
   return ok({ consumed: Boolean(data) });
