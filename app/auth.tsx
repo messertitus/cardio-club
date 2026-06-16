@@ -423,14 +423,8 @@ export default function AuthScreen() {
       const consumeResult = await consumeInvitationCode(supabase, pendingInvite);
 
       if (consumeResult.error || !consumeResult.data.consumed) {
-        // TEMP DIAGNOSTIC: show the real reason on screen so we can see whether
-        // there is a session (auth) at consume time and what consume returned.
-        const sessionCheck = await supabase.auth.getSession();
-        const authState = sessionCheck.data.session ? "Session OK" : "KEINE Session";
-        const codeInfo = pendingInvite ? `${pendingInvite.length} Zeichen` : "leer";
-        const reason = consumeResult.error ? `Fehler: ${consumeResult.error.message}` : "consumed=false";
         await supabase.auth.signOut();
-        setMessage(`Diagnose Einladungscode — ${authState} · Code ${codeInfo} · ${reason}`);
+        setMessage("Der Einladungscode konnte nicht eingelöst werden. Bitte fordere einen neuen Code an.");
         setLoading(false);
         return;
       }
