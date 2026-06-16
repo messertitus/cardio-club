@@ -14,6 +14,7 @@ import { consumeInvitationCode, ensureProfile, getPublicMemberCount, validateInv
 const PENDING_INVITE_KEY = "mcc.pendingInviteCode";
 const PENDING_DISPLAY_NAME_KEY = "mcc.pendingDisplayName";
 const PENDING_PHONE_KEY = "mcc.pendingPhone";
+const PENDING_PIN_KEY = "mcc.pendingPin";
 const PENDING_RESET_PHONE_KEY = "mcc.pendingResetPhone";
 
 type AuthStep = "login" | "invite" | "signup" | "sms" | "resetPhone" | "resetSms" | "resetPin";
@@ -165,36 +166,32 @@ export default function AuthScreen() {
     await AsyncStorage.setItem(PENDING_INVITE_KEY, verifiedInviteCode);
     await AsyncStorage.setItem(PENDING_DISPLAY_NAME_KEY, displayName.trim());
     await AsyncStorage.setItem(PENDING_PHONE_KEY, normalizedPhone);
+    await AsyncStorage.setItem(PENDING_PIN_KEY, pin);
 
-    const authResult = await supabase.auth.signUp({
+    // OTP-first signup: send ONE SMS code and create the account on verify. This
+    // is the canonical phone flow — verifyOtp then returns a real session, so the
+    // follow-up invite consumption runs authenticated. (The previous
+    // signUp(phone,password) confirmation could leave the client without a
+    // session, so consume_invitation_code ran unauthenticated and failed with
+    // "Einladungscode konnte nicht eingelöst werden" even on a valid, unused code.)
+    // The PIN is set as the password after verification (see submitSmsCode).
+    const otpResult = await supabase.auth.signInWithOtp({
       phone: normalizedPhone,
-      password: appPinToAuthPassword(normalizedPhone, pin),
-      options: { data: { display_name: displayName.trim() } },
+      options: { shouldCreateUser: true, channel: "sms", data: { display_name: displayName.trim() } },
     });
 
-    if (authResult.error) {
-      setMessage(mapAuthError(authResult.error.message));
+    if (otpResult.error) {
+      setMessage(mapAuthError(otpResult.error.message));
       setLoading(false);
       return;
     }
 
-    if (!authResult.data.session) {
-      // signUp has already sent the confirmation SMS. Do NOT resend here: with
-      // phone confirmation enabled Supabase returns an empty identities array
-      // even for brand-new users (anti-enumeration), so a resend would fire a
-      // second OTP and invalidate the first — which made the SMS code show up as
-      // "invalid". Just go to the code step.
-      setSuccessMessage("Wir haben dir einen SMS-Code geschickt.");
-      setStep("sms");
-      // Long enough to clear Supabase's per-number SMS rate limit, so a resend
-      // actually delivers a fresh code instead of silently invalidating the
-      // first one without sending a replacement.
-      setResendCooldown(90);
-      setLoading(false);
-      return;
-    }
-
-    await finishAuthenticatedFlow(authResult.data.user?.id, normalizedPhone);
+    setSuccessMessage("Wir haben dir einen SMS-Code geschickt.");
+    setStep("sms");
+    // Long enough to clear Supabase's per-number SMS rate limit, so a resend
+    // actually delivers a fresh code instead of silently invalidating the first.
+    setResendCooldown(90);
+    setLoading(false);
   }
 
   async function resendSmsCode() {
@@ -211,9 +208,11 @@ export default function AuthScreen() {
       return;
     }
 
-    const result = await supabase.auth.resend({
-      type: "sms",
+    // Re-send via the same OTP-first path used at signup (resend() is for the
+    // password-signup confirmation, which we no longer use).
+    const result = await supabase.auth.signInWithOtp({
       phone: pendingPhone,
+      options: { shouldCreateUser: true, channel: "sms" },
     });
 
     if (result.error) {
@@ -257,6 +256,16 @@ export default function AuthScreen() {
       setLoading(false);
       return;
     }
+
+    // Account is now confirmed and a session exists. Set the PIN-derived password
+    // so the member can log in with their PIN later (OTP-first creates the user
+    // without a password). Non-fatal if it fails — they can use "PIN vergessen".
+    const pendingPin = (await AsyncStorage.getItem(PENDING_PIN_KEY)) ?? (isValidPin(pin) ? pin : null);
+    if (pendingPin && isValidPin(pendingPin)) {
+      const passwordUpdate = await supabase.auth.updateUser({ password: appPinToAuthPassword(pendingPhone, pendingPin) });
+      if (passwordUpdate.error) console.warn("PIN konnte nicht gesetzt werden:", passwordUpdate.error.message);
+    }
+    await AsyncStorage.removeItem(PENDING_PIN_KEY);
 
     await finishAuthenticatedFlow(result.data.user?.id, pendingPhone);
   }

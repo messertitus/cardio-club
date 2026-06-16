@@ -9,6 +9,22 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — Registrierung auf OTP-first umgestellt (Session nach Verify garantiert)
+
+### Geändert
+- Registrierung nutzt jetzt **`signInWithOtp`** (eine SMS, Account-Erstellung bei Verify) statt `signUp(phone,password)`. Nach `verifyOtp` existiert **zuverlässig eine Session** — dadurch läuft die anschließende Einladungs-Einlösung **authentifiziert**. Vorher konnte der Passwort-`signUp`-Bestätigungsflow den Client ohne Session lassen → `consume_invitation_code` lief unauthentifiziert (`auth.uid()` null) → „Einladungscode konnte nicht eingelöst werden" **trotz freiem, gültigem Code** (per SQL bestätigt: `used_by/used_at/expires_at` alle NULL).
+- Die **PIN** wird nach der Verifizierung per `updateUser({ password })` gesetzt (PIN-Login bleibt unverändert). Resend nutzt ebenfalls `signInWithOtp`.
+- Nebeneffekt: bestehende/verwaiste Accounts werden per OTP eingeloggt und sauber fertig-onboarded — ein vorheriges Löschen ist nicht mehr zwingend nötig.
+
+---
+
+## 2026-06-15 — Einladungscode nach SMS „nicht einlösbar": consume idempotent
+
+### Behoben
+- Nachdem die SMS-Verifizierung wieder funktioniert, wanderte der Fehler zu `consume_invitation_code`: lief die Einlösung im selben Registrierungs-Flow zweimal (bzw. erneut durch denselben gerade angelegten Nutzer), setzte der erste Aufruf `used_by` und der zweite meldete „bereits benutzt" → „Einladungscode konnte nicht eingelöst werden". Migration **064** macht `consume_invitation_code` **idempotent**: ist der Code bereits von **diesem** Nutzer eingelöst, gibt sie `true` zurück (fremd-genutzte Codes bleiben gesperrt).
+
+---
+
 ## 2026-06-15 — SMS-Code „ungültig": Doppel-OTP-Regression behoben (Hauptursache)
 
 ### Behoben
