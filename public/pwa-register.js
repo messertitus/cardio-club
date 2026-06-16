@@ -1,7 +1,16 @@
 (function () {
   if (!("serviceWorker" in navigator)) return;
 
+  // Was the page already controlled by a service worker when it first loaded?
+  // Captured ONCE, before the worker can skipWaiting()/claim() the page. If it
+  // was not controlled at start, this is a brand-new install — never a "new
+  // version available" situation. Using the live navigator.serviceWorker.
+  // controller instead would misfire on first install, because the fresh SW
+  // claims the page before its "installed" state fires.
+  var controlledAtStart = navigator.serviceWorker.controller != null;
+
   function emitUpdateReady() {
+    if (!controlledAtStart) return; // first install → no update hint, ever
     try {
       window.dispatchEvent(new CustomEvent("mcc:update-ready"));
     } catch (error) {
@@ -13,14 +22,13 @@
     navigator.serviceWorker
       .register("/mcc-push-worker.js")
       .then(function (registration) {
-        // A newer service worker was found. Once it finishes installing while an
-        // old one still controls the page, a new version is ready to use. We only
-        // surface a hint (no auto-reload) — see UpdateBanner.
+        // A newer service worker was found and finished installing while a
+        // previous one already controlled the page → a new version is ready.
         registration.addEventListener("updatefound", function () {
           var installing = registration.installing;
           if (!installing) return;
           installing.addEventListener("statechange", function () {
-            if (installing.state === "installed" && navigator.serviceWorker.controller) {
+            if (installing.state === "installed") {
               emitUpdateReady();
             }
           });
@@ -42,12 +50,7 @@
       });
   });
 
-  // If the controlling worker changes after the initial load (the new SW used
-  // skipWaiting), that also means a fresh version is live. Guard the very first
-  // install so we don't show an update hint on a brand-new installation.
-  var hadController = navigator.serviceWorker.controller != null;
-  navigator.serviceWorker.addEventListener("controllerchange", function () {
-    if (hadController) emitUpdateReady();
-    hadController = true;
-  });
+  // A controller change after the page was already controlled means the fresh SW
+  // (skipWaiting) is now live. emitUpdateReady() self-guards the first install.
+  navigator.serviceWorker.addEventListener("controllerchange", emitUpdateReady);
 })();
