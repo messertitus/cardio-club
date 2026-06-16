@@ -9,6 +9,13 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-15 — „Neue Version verfügbar" beim Erstinstall behoben
+
+### Behoben
+- Die PWA-Update-Erkennung (`public/pwa-register.js`) prüfte das **live** `navigator.serviceWorker.controller`. Da der frische SW per `skipWaiting()`/`clients.claim()` die Seite schon beim Erstinstall übernimmt, war der Controller gesetzt, wenn `statechange === "installed"` feuerte → fälschliche „Neue Version verfügbar"-Meldung beim **allerersten** Aufruf. Jetzt wird **einmalig** beim Laden erfasst, ob die Seite bereits von einem SW kontrolliert wurde; ein Update-Hinweis erscheint nur, wenn das der Fall war (echtes Update, kein Erstinstall).
+
+---
+
 ## 2026-06-15 — Registrierung auf OTP-first umgestellt (Session nach Verify garantiert)
 
 ### Geändert
