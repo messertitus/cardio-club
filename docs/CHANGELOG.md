@@ -25,6 +25,14 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-16 — ECHTE Ursache: Analytics-Trigger crasht Einladungs-Einlösung (42703)
+
+### Behoben
+- **Root Cause der „Einladungscode konnte nicht eingelöst werden"-Fehler.** Der Analytics-Trigger `track_invitation_used()` (Migration 057, 13.06.) referenzierte `new.id`, aber `public.invitation_codes` hat **kein `id`** (PK ist `code`). Jeder `update ... set used_by` (genau das macht `consume_invitation_code`) löste den Trigger aus → `record "new" has no field "id"` (SQLSTATE **42703**) → der Update brach ab → Einlösung schlug fehl, **trotz** gültigem freiem Code und gültiger Session. Migration **065** ersetzt `new.id` durch `new.code`. Erklärt auch, warum es „schon vor dem 14.06." auftrat (057 wurde am 13.06. eingespielt).
+- Per On-Screen-Diagnose verifiziert: „Session OK · Code 12 Zeichen · Fehler: record \"new\" has no field \"id\" [42703]". Diagnose danach wieder entfernt.
+
+---
+
 ## 2026-06-15 — Einladungscode nach SMS „nicht einlösbar": consume idempotent
 
 ### Behoben
