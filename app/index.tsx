@@ -20,6 +20,7 @@ import { readLocalCache, writeLocalCache } from "../src/services/localCache";
 import {
   decideInstallHint,
   dismissInstallHintForever,
+  isStandaloneDisplay,
   readInstallHintEnvironment,
   readInstallHintState,
   recordAppUsage,
@@ -121,10 +122,10 @@ export default function HomeScreen() {
   }, [citySkipped, user]);
 
   // Once the location step is settled, start the guided tour exactly once per
-  // account. The "seen" flag is persisted locally (AsyncStorage → localStorage
-  // on web/PWA), so after the first run it never appears again — on PC, mobile
-  // and the installed PWA. We mark it seen as it starts, so even closing the app
-  // mid-tour won't bring it back.
+  // account. The "seen" flag is persisted locally (AsyncStorage → localStorage),
+  // so after the first run it never appears again within the same context. We
+  // mark it seen as it starts, so even closing the app mid-tour won't bring it
+  // back.
   useEffect(() => {
     if (!user || !cityStepDone) return;
     if (introCheckedForUserRef.current === user.id) return;
@@ -132,6 +133,11 @@ export default function HomeScreen() {
     void hasSeenIntro(user.id).then((seen) => {
       if (seen) return;
       void markIntroSeen(user.id);
+      // The installed PWA has its own storage, separate from the browser tab, so
+      // the "seen" flag set in the browser doesn't carry over. Don't replay the
+      // tour in the installed PWA — the user already saw the intro in the browser
+      // before installing.
+      if (isStandaloneDisplay()) return;
       startTour();
     });
   }, [cityStepDone, startTour, user]);

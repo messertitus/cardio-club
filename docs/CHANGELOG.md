@@ -9,6 +9,13 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-17 — Intro-Tour nicht erneut in der installierten PWA
+
+### Behoben
+- Nach Installation der PWA spielte die Willkommens-Tour erneut, obwohl man sie im Browser schon gesehen hatte. Ursache: Die installierte PWA hat einen **eigenen** Storage, getrennt vom Browser-Tab — der `mcc.introSeen.<userId>`-Flag (AsyncStorage → localStorage) wandert nicht mit. Die Tour wird jetzt im **Standalone-Modus** (`isStandaloneDisplay()`) übersprungen, da der Browser-Erstkontakt bereits stattgefunden hat (`app/index.tsx`). Der irreführende Kommentar, der Persistenz über die installierte PWA hinweg behauptete, wurde korrigiert.
+
+---
+
 ## 2026-06-17 — Push nur tagsüber + Wochentag in Benachrichtigungen
 
 ### Geändert
