@@ -9,6 +9,17 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-17 — Push nur tagsüber + Wochentag in Benachrichtigungen
+
+### Geändert
+- **Keine Pushes nachts.** Benachrichtigungen werden nur noch zwischen **09:00 und 22:00 (Europe/Berlin)** ausgeliefert. Der Zeit-Gate sitzt an beiden Auslieferungswegen: der `send-push` Edge-Funktion (Hintergrund-Web-Push) und der In-App-`AppNotificationBridge` (Vordergrund). Außerhalb des Fensters bleiben die Einträge in `app_notifications` liegen und gehen beim ersten Lauf nach 09:00 raus — nichts wird verworfen. Gemeinsame Quelle der Logik: `isWithinPushWindow()` in `src/services/date.ts` (in der Edge-Funktion in Deno gespiegelt).
+- **Wochentag im Text.** Benachrichtigungen nennen jetzt den Tag des Events, z. B. „Neue Abstimmung für Samstag", „Stimme für Sonntag fällig", „Auswertung für Samstag ist da". Neuer SQL-Helper `mcc_event_day_label_de(weekday)` (Migration 064); admin-angepasste Titel aus den `notification_rules` bleiben erhalten und bekommen den Tag als „<Titel> – Samstag" angehängt.
+
+### Doku
+- `docs/notifications-and-weekly-decision.md`: Tagzeit-Fenster (09–22) und Wochentag-Texte ergänzt.
+
+---
+
 ## 2026-06-15 — „Neue Version verfügbar" beim Erstinstall behoben
 
 ### Behoben

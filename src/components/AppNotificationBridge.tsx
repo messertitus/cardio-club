@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { listUndeliveredAppNotifications, markAppNotificationsDelivered, runNotificationJobs, showBrowserNotification } from "../services";
+import { isWithinPushWindow } from "../services/date";
 
 const POLL_INTERVAL_MS = 45_000;
 const JOB_INTERVAL_MS = 5 * 60_000;
@@ -17,6 +18,9 @@ export function AppNotificationBridge() {
 
     async function syncNotifications() {
       if (!mounted || busy.current || !user) return;
+      // Quiet hours: never show a push at night. Queued notifications wait and
+      // surface on the first poll after 09:00 (Berlin). Mirrors send-push.
+      if (!isWithinPushWindow()) return;
       busy.current = true;
       // Populate time-based notifications (vote reminder / decision / weekly invite)
       // at most every few minutes, so they appear without a server cron.

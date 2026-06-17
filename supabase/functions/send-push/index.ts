@@ -62,6 +62,19 @@ Deno.serve(async () => {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // 0) Quiet hours: never deliver a push at night. Outside Berlin 09:00–22:00 we
+  // skip both enqueueing and delivery; queued notifications simply wait and go
+  // out on the first run after 09:00. Mirrors isWithinPushWindow() in
+  // src/services/date.ts (shared with the in-app AppNotificationBridge).
+  const PUSH_WINDOW_START_HOUR = 9;
+  const PUSH_WINDOW_END_HOUR = 22;
+  const berlinHour = Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Berlin", hour: "2-digit", hourCycle: "h23" }).format(new Date()),
+  );
+  if (berlinHour < PUSH_WINDOW_START_HOUR || berlinHour >= PUSH_WINDOW_END_HOUR) {
+    return Response.json({ skipped: "quiet-hours", berlinHour });
+  }
+
   // 1) Enqueue the time-based notifications (vote reminder / decision / weekly invite).
   // Best-effort: a job error must not abort delivery of already-queued notifications.
   const jobs = await supabase.rpc("run_mcc_notification_jobs");

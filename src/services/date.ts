@@ -223,6 +223,21 @@ export function decisionReleasedNow(startsAt: string | null | undefined, weekSta
   return startsAt ? isDecisionReleaseOpenAt(startsAt, now) : isDecisionReleaseOpen(weekStartDate, eventDay, now);
 }
 
+// Quiet hours: pushes are only delivered during the day, Berlin 09:00–22:00.
+// Outside this window notifications stay queued in app_notifications and are
+// delivered on the first run after 09:00, so members are never woken at night.
+// Both delivery paths honor this — the in-app AppNotificationBridge and the
+// send-push edge function (which mirrors this check in Deno).
+export const PUSH_WINDOW_START_HOUR = 9;
+export const PUSH_WINDOW_END_HOUR = 22;
+
+export function isWithinPushWindow(now = new Date()): boolean {
+  const berlinHour = Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Berlin", hour: "2-digit", hourCycle: "h23" }).format(now),
+  );
+  return berlinHour >= PUSH_WINDOW_START_HOUR && berlinHour < PUSH_WINDOW_END_HOUR;
+}
+
 function addUtcDays(dateString: string, days: number): Date {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day + days));

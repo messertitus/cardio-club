@@ -23,6 +23,25 @@ Votes without an explicit `going` or `maybe` attendance row should not influence
 
 ## Push notifications
 
+### Quiet hours (daytime only)
+
+Pushes are delivered only during **Berlin 09:00–22:00**. Both delivery paths
+enforce this: the `send-push` edge function (background Web Push) and the in-app
+`AppNotificationBridge` (foreground). Outside the window, notifications stay
+queued in `app_notifications` and go out on the first run after 09:00 — nothing
+is dropped. The shared source of truth is `isWithinPushWindow()` in
+`src/services/date.ts`; the edge function mirrors the same Berlin 09–22 check in
+Deno. (The weekly invite reminder additionally enqueues only Berlin 10:00–20:00,
+a subset of this window.)
+
+### Weekday in the text
+
+Notifications name the event's day, e.g. **"Neue Abstimmung für Samstag"**,
+**"Stimme für Sonntag fällig"**, **"Auswertung für Samstag ist da"**. The SQL
+helper `mcc_event_day_label_de(weekday)` (migration 064) maps the `event_day`
+enum text to a German weekday. Admin-customized titles from `notification_rules`
+are preserved and get the day appended as "&lt;title&gt; – Samstag".
+
 ### The five notifications
 
 A queue table `app_notifications` is filled, then delivered. The five cases:

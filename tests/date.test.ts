@@ -10,6 +10,7 @@ import {
   isEventRunningNow,
   isVotingInputOpen,
   isVotingOpenAt,
+  isWithinPushWindow,
 } from "../src/services/date";
 
 describe("MCC event timing", () => {
@@ -76,6 +77,15 @@ describe("MCC event timing", () => {
     const startsAt = "2026-06-14T13:00:00.000Z"; // Sunday 15:00 Berlin
     expect(eventInputOpen(startsAt, ws, "sunday", new Date("2026-06-14T12:59:00Z"))).toBe(false);
     expect(eventInputOpen(startsAt, ws, "sunday", new Date("2026-06-14T13:00:00Z"))).toBe(true);
+  });
+
+  it("push quiet hours: deliver only during Berlin 09:00–22:00", () => {
+    // June → Berlin is CEST (UTC+2).
+    expect(isWithinPushWindow(new Date("2026-06-14T01:00:00Z"))).toBe(false); // 03:00 Berlin, night
+    expect(isWithinPushWindow(new Date("2026-06-14T06:59:00Z"))).toBe(false); // 08:59 Berlin
+    expect(isWithinPushWindow(new Date("2026-06-14T07:00:00Z"))).toBe(true); // 09:00 Berlin, opens
+    expect(isWithinPushWindow(new Date("2026-06-14T19:59:00Z"))).toBe(true); // 21:59 Berlin
+    expect(isWithinPushWindow(new Date("2026-06-14T20:00:00Z"))).toBe(false); // 22:00 Berlin, closes
   });
 
   it("any weekday: Friday event decides Wednesday, voting Sat–Tue (4 days)", () => {
