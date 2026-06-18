@@ -22,7 +22,6 @@ import { supabase } from "../../../src/lib/supabase";
 import { excludeNonAttendingEntries, excludeNonAttendingVotes } from "../../../src/lib/votingEligibility";
 import type { VoteRank } from "../../../src/lib/votingRules";
 import {
-  getEventDecisionPreview,
   listAttendance,
   listEventNoGos,
   listEventProposals,
@@ -36,7 +35,6 @@ import {
   voteForSport,
   SCREEN_EVENTS,
   type AttendanceStatus,
-  type EventDecisionPreview,
   type Row,
 } from "../../../src/services";
 import { useScreenView } from "../../../src/components/useScreenView";
@@ -51,15 +49,12 @@ export default function VoteOnSportsScreen() {
   const [votes, setVotes] = useState<Row<"sport_votes">[]>([]);
   const [noGos, setNoGos] = useState<Row<"sport_no_gos">[]>([]);
   const [attendance, setAttendance] = useState<Row<"attendance">[]>([]);
-  const [preview, setPreview] = useState<EventDecisionPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [proposalSearch, setProposalSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(0);
 
   const sportsById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport])), [sports]);
-  // The preview now arrives from the server already sanitized and presentation-ready.
-  const previewPresentation = preview;
   const myVotes = useMemo(
     () => votes.filter((vote) => vote.user_id === user?.id).sort((a, b) => a.vote_rank - b.vote_rank),
     [user?.id, votes],
@@ -86,12 +81,11 @@ export default function VoteOnSportsScreen() {
 
   async function load() {
     setLoading(true);
-    const [sportsResult, proposalsResult, votesResult, attendanceResult, previewResult] = await Promise.all([
+    const [sportsResult, proposalsResult, votesResult, attendanceResult] = await Promise.all([
       listSports(supabase),
       listEventProposals(supabase, eventId),
       listEventVotes(supabase, eventId),
       listAttendance(supabase, eventId),
-      getEventDecisionPreview(supabase, { eventId }),
     ]);
     const proposedSportIds = proposalsResult.data?.map((proposal) => proposal.sport_id) ?? [];
     const [profilesResult, noGosResult] = await Promise.all([
@@ -104,7 +98,6 @@ export default function VoteOnSportsScreen() {
     setAttendance(attendanceResult.data ?? []);
     setVotes(excludeNonAttendingVotes(votesResult.data ?? [], attendanceResult.data ?? []));
     setNoGos(excludeNonAttendingEntries(noGosResult.data ?? [], attendanceResult.data ?? []));
-    setPreview(previewResult.data);
     setError(
       sportsResult.error?.message ??
         proposalsResult.error?.message ??
@@ -112,7 +105,6 @@ export default function VoteOnSportsScreen() {
         votesResult.error?.message ??
         attendanceResult.error?.message ??
         noGosResult.error?.message ??
-        previewResult.error?.message ??
         null,
     );
     setLoading(false);
@@ -240,15 +232,11 @@ export default function VoteOnSportsScreen() {
         <MccButton label="Nicht dabei" variant={myAttendance?.status === "not_going" ? "primary" : "ghost"} onPress={() => chooseAttendance("not_going")} />
       </MccCard>
 
-      {previewPresentation ? (
-        <MccCard>
-          <MccBadge icon="chart-timeline-variant">Live-Vorschau</MccBadge>
-          <MccCardTitle>Aktuelle Entscheidung: {previewPresentation.selectedSportName}</MccCardTitle>
-          {previewPresentation.secondarySportName ? <MccBody>+ {previewPresentation.secondarySportName}</MccBody> : null}
-          <MccBody muted>{previewPresentation.simpleExplanation}</MccBody>
-          <MccButton label="Entscheidung anzeigen" icon="arrow-right" variant="secondary" onPress={() => router.push(`/events/${eventId}/decision`)} />
-        </MccCard>
-      ) : null}
+      <MccCard>
+        <MccBadge icon="calendar-clock-outline">So läuft's</MccBadge>
+        <MccCardTitle>Entscheidung fällt 48 Stunden vorher</MccCardTitle>
+        <MccBody muted>Es gibt keine Live-Vorschau: Der Algorithmus läuft einmal 48 Stunden vor dem Event, wählt die Sport-Konstellation und legt sie fest. Danach öffnen sich die Event-Chats.</MccBody>
+      </MccCard>
 
       <MccCard>
         <MccCardTitle>Deine Stimmen</MccCardTitle>

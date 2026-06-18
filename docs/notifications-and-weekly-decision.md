@@ -2,15 +2,34 @@
 
 ## Weekly Decision
 
-The Fairness-First Constellation algorithm stays in TypeScript (`src/lib/fairConstellationSelection.ts`).
+The Fairness-First Constellation algorithm runs **server-side only**, in the
+`decision` Edge Function (`supabase/functions/decision/`). The client never
+recomputes it.
 
-For the MVP test phase:
+**One run, no preview.** The algorithm runs **exactly once, 48 h before the
+event** (the decision moment = `starts_at − 2 days`), picks the sport
+constellation and persists it (`status = decided`, `selected_sport_id`,
+`event_activities`, and a **frozen `weather_snapshot`**). There is no live
+preview: during the voting phase the UI only shows a hint ("Entscheidung fällt
+48 h vorher"); the decision appears once it is finalized, and because the weather
+snapshot is frozen it is identical on every device. The event chats open once the
+event is `decided`.
 
-- Users vote during the week.
-- The app shows a live preview.
-- On Wednesday, an admin can finalize the event decision from the service layer.
+**What triggers the single run (`action: "finalize-due"` on the decision
+function, idempotent via a `status in (proposing,voting)` guard):**
 
-For a fully automatic Wednesday decision, run a small server job or Supabase Edge Function every Wednesday. That job should:
+1. **Server sweep** — the periodic `send-push` Edge Function calls
+   `finalize-due` every run (independent of push quiet hours). This is the
+   primary, time-driven path (needs `send-push` scheduled).
+2. **Client fallback** — when a member opens the Home or Chat screen,
+   `triggerDueFinalize()` (throttled) calls the same `finalize-due`, so the
+   decision is finalized even without a server cron.
+
+Events that reach the decision moment with fewer than two attending voters have
+no eligible constellation; `finalize-due` skips them and
+`cancel_underused_events()` archives them (status `cancelled`).
+
+The finalize itself (`finalizeEventDecision`):
 
 1. Load the current weekly event.
 2. Call the existing TypeScript decision service.

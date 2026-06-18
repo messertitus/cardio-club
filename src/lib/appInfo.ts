@@ -13,7 +13,7 @@ export const CACHE_SCHEMA_VERSION = "1";
 // Prefixes of the *ephemeral data* caches we manage. User preferences
 // (mcc.theme, mcc.introSeen.*, mcc.installHint.*) and Supabase auth tokens are
 // intentionally NOT in this list — they must survive a cache purge.
-export const MANAGED_CACHE_PREFIXES = ["mcc.cache.", "mcc.weekEvents.", "mcc.chat."];
+export const MANAGED_CACHE_PREFIXES = ["mcc.cache.", "mcc.weekEvents.", "mcc.chat.", "mcc.members.", "mcc.eventDetail."];
 
 export function isManagedDataCacheKey(key: string): boolean {
   return MANAGED_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix));

@@ -4,7 +4,7 @@ import { useEffect, useState, type ComponentProps } from "react";
 import { StyleSheet, View } from "react-native";
 import { EmptyState, InlineError, LoadingSkeleton, MccBadge, MccBody, MccCard, MccCardTitle, MccScreen } from "../../../src/components/MccDesign";
 import { Reveal } from "../../../src/components/Motion";
-import { formatCardioSunday } from "../../../src/services/date";
+import { formatEventDayDate } from "../../../src/services/date";
 import { supabase } from "../../../src/lib/supabase";
 import { listEventHistory, SCREEN_EVENTS, type Row } from "../../../src/services";
 import { useScreenView } from "../../../src/components/useScreenView";
@@ -44,7 +44,7 @@ export default function EventHistoryScreen() {
                 {event.status === "completed" ? "Abgeschlossen" : event.status}
               </MccBadge>
             </View>
-            <MccCardTitle>Cardiotag am {formatCardioSunday(event.starts_at ?? event.week_start_date)}</MccCardTitle>
+            <MccCardTitle>Cardiotag am {formatEventDayDate(event.week_start_date, event.event_day)}</MccCardTitle>
             {event.decision_reason ? <MccBody muted>{event.decision_reason}</MccBody> : null}
           </MccCard>
         </Reveal>

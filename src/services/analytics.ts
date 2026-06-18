@@ -125,6 +125,47 @@ function normalizeStats(raw: Record<string, unknown>): UserStats {
   };
 }
 
+// Aggregated chapter overview (admin only) — retention + weekly-loop, computed
+// server-side from REAL attendance. windowDays filters the per-event list only.
+export type ChapterEventRow = {
+  eventNr: number;
+  date: string;
+  sport: string;
+  rsvpYes: number;
+  present: number;
+  noShows: number;
+  firstTimers: number;
+  returners: number;
+  noShowPercent: number | null;
+  votingPercent: number | null;
+};
+
+export type ChapterOverview = {
+  membersTotal: number;
+  membersWithPresent: number;
+  returners: number;
+  returnerPercent: number | null;
+  active7: number;
+  active30: number;
+  eventStreakWeeks: number;
+  heldEventsTotal: number;
+  loyalty: { one: number; two: number; three: number; fourPlus: number };
+  events: ChapterEventRow[];
+};
+
+export async function getChapterOverview(
+  supabase: AppSupabaseClient,
+  windowDays?: number | null,
+): Promise<ServiceResult<ChapterOverview>> {
+  const { data, error } = await supabase.rpc("get_chapter_overview", {
+    p_window_days: windowDays ?? undefined,
+  });
+  if (error || !data) {
+    return { data: null, error: fromPostgrestError(error, "Chapter-Übersicht konnte nicht geladen werden.") };
+  }
+  return ok(data as unknown as ChapterOverview);
+}
+
 // Read derived insights for self (any user) or a target (admins only).
 export async function getUserStatInsights(
   supabase: AppSupabaseClient,

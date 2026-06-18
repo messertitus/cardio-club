@@ -7,7 +7,7 @@ import { DetailLine } from "../../src/components/FormControls";
 import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, MccCardTitle, MccScreen, ScreenLoader } from "../../src/components/MccDesign";
 import { Reveal } from "../../src/components/Motion";
 import { SportIconBadge } from "../../src/components/SportIcon";
-import { formatBerlinDateTime, formatCardioSunday, isEventPast } from "../../src/services/date";
+import { formatBerlinDateTime, formatEventDayDate, isEventPast } from "../../src/services/date";
 import { useAuth } from "../../src/context/AuthContext";
 import { supabase } from "../../src/lib/supabase";
 import { canCloseEvent, getMccEventState, listEventActivities, listEventHistory, listEventResults, listSports, SCREEN_EVENTS, type Row } from "../../src/services";
@@ -127,7 +127,7 @@ export default function EventHistoryScreen() {
                 {skipped ? "Keine Teilnahme" : event.status === "completed" ? "Abgeschlossen" : "Vorbei"}
               </MccBadge>
             </View>
-            <MccCardTitle>Cardiotag am {formatCardioSunday(event.starts_at ?? event.week_start_date)}</MccCardTitle>
+            <MccCardTitle>Cardiotag am {formatEventDayDate(event.week_start_date, event.event_day)}</MccCardTitle>
             {skipped ? (
               <MccBody muted>Mangels Teilnahme übersprungen – es gab keine Abstimmung, daher kein Ort und keine Aktivität.</MccBody>
             ) : (

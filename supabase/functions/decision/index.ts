@@ -58,11 +58,12 @@ Deno.serve(async (req) => {
 
   const eventId = payload.eventId;
   const action = payload.action ?? "preview";
-  if (!eventId || typeof eventId !== "string") {
-    return json({ error: "eventId is required." }, 400);
-  }
-  if (action !== "preview" && action !== "finalize") {
+  if (action !== "preview" && action !== "finalize" && action !== "finalize-due") {
     return json({ error: "Unknown action." }, 400);
+  }
+  // finalize-due is a system sweep with no single eventId; the others need one.
+  if (action !== "finalize-due" && (!eventId || typeof eventId !== "string")) {
+    return json({ error: "eventId is required." }, 400);
   }
 
   // User-scoped client: reads honour the caller's RLS, exactly like the old
@@ -71,6 +72,46 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // System sweep: run the algorithm ONCE for every event whose 48h decision
+  // moment has passed and persist it (status -> decided). This is the single
+  // automatic run the flow relies on — there is no live preview anymore. It is
+  // idempotent: finalizeEventDecision guards `status in (proposing,voting)`, so
+  // it is safe to call both from the periodic send-push sweep (service key) and
+  // as a client fallback (any authenticated member) without double-deciding.
+  if (action === "finalize-due") {
+    const isServiceCall = authHeader === `Bearer ${serviceKey}`;
+    if (!isServiceCall) {
+      const { data: sweepUser, error: sweepUserError } = await userClient.auth.getUser();
+      if (sweepUserError || !sweepUser?.user) {
+        return json({ error: "Not authenticated." }, 401);
+      }
+    }
+    const sweepClient = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    // Decision moment = starts_at − 48h, i.e. the event is now within 48h.
+    const dueThresholdIso = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    const { data: dueEvents, error: dueError } = await sweepClient
+      .from("weekly_events")
+      .select("id")
+      .in("status", ["proposing", "voting"])
+      .not("starts_at", "is", null)
+      .lte("starts_at", dueThresholdIso);
+    if (dueError) {
+      return json({ error: dueError.message }, 500);
+    }
+    let finalized = 0;
+    let skipped = 0;
+    for (const due of (dueEvents ?? []) as Array<{ id: string }>) {
+      const result = await finalizeEventDecision(sweepClient, { eventId: due.id });
+      // Events with no eligible constellation (e.g. < 2 voters) error out here and
+      // are left for cancel_underused_events() to archive — that's expected.
+      if (result.error) skipped += 1;
+      else finalized += 1;
+    }
+    return json({ finalized, skipped, considered: (dueEvents ?? []).length });
+  }
 
   const { data: userData, error: userError } = await userClient.auth.getUser();
   if (userError || !userData?.user) {

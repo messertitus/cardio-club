@@ -6,6 +6,14 @@ type CachePayload<T> = {
   data: T;
 };
 
+// Cache-key builders, defined once so a screen and the prefetch can never write
+// to slightly different keys. Prefixes must stay in MANAGED_CACHE_PREFIXES
+// (src/lib/appInfo.ts) so a schema bump purges them.
+export const membersCacheKey = (userId: string): string => `mcc.members.${userId}`;
+export const chatCacheKey = (userId: string): string => `mcc.chat.${userId}`;
+export const weekEventsCacheKey = (userId: string): string => `mcc.weekEvents.${userId}`;
+export const eventDetailCacheKey = (eventId: string, userId: string): string => `mcc.eventDetail.${eventId}.${userId}`;
+
 const CACHE_SCHEMA_KEY = "mcc.cacheSchemaVersion";
 
 // Drops all managed data caches when the cache schema version changes, so a new

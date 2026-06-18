@@ -108,10 +108,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
     setState(result.data);
     void writeLocalCache(cacheKey, result.data);
     initExpansion(result.data);
-    const decided =
-      result.data.event.status === "decided" ||
-      result.data.event.status === "completed" ||
-      decisionReleasedNow(result.data.event.starts_at, event.weekStartDate, event.eventDay);
+    const decided = result.data.event.status === "decided" || result.data.event.status === "completed";
     const past = isEventPast(event.weekStartDate, event.eventDay);
     const manage = await canCloseEvent(supabase, event.id, userId);
     const isManager = Boolean(manage.data);
@@ -133,10 +130,7 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   const userDone = state ? computeUserDone(state, event.eventDay, event.weekStartDate) : false;
   useEffect(() => {
     if (!initRef.current || !state) return;
-    const decided =
-      state.event.status === "decided" ||
-      state.event.status === "completed" ||
-      decisionReleasedNow(state.event.starts_at, event.weekStartDate, event.eventDay);
+    const decided = state.event.status === "decided" || state.event.status === "completed";
     const past = isEventPast(event.weekStartDate, event.eventDay);
     if (canManage && (decided || past)) return; // managers keep the wrap-up view open
     if (userDone && manualStep === "overview" && !doneRef.current) {
@@ -159,8 +153,9 @@ export function EventFlowCard({ event, userId, index = 0 }: { event: WeekEvent; 
   }
 
   const startsAt = state.event.starts_at;
-  const decisionOpen = decisionReleasedNow(startsAt, event.weekStartDate, event.eventDay);
-  const isDecided = state.event.status === "decided" || state.event.status === "completed" || decisionOpen;
+  // "Decided" now means the 48h algorithm has actually run and persisted (status),
+  // not merely that the moment has passed — so the UI never shows a live preview.
+  const isDecided = state.event.status === "decided" || state.event.status === "completed";
   const votingInputOpen = votingOpenNow(startsAt, event.weekStartDate, event.eventDay);
   const votingOpensAt = startsAt ? votingOpensFrom(startsAt) : getVotingOpenDate(event.weekStartDate, event.eventDay);
   const decisionAt = startsAt ? decisionReleaseFrom(startsAt) : getDecisionReleaseDate(event.weekStartDate, event.eventDay);

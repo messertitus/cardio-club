@@ -6,6 +6,8 @@ describe("appInfo cache keys", () => {
     expect(isManagedDataCacheKey("mcc.cache.activeSportsWithProfiles.v2")).toBe(true);
     expect(isManagedDataCacheKey("mcc.weekEvents.user-123")).toBe(true);
     expect(isManagedDataCacheKey("mcc.chat.user-123")).toBe(true);
+    expect(isManagedDataCacheKey("mcc.members.user-123")).toBe(true);
+    expect(isManagedDataCacheKey("mcc.eventDetail.event-1.user-123")).toBe(true);
   });
 
   it("never purges user preferences or auth tokens", () => {

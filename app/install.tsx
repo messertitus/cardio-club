@@ -66,9 +66,9 @@ export default function InstallScreen() {
         <Reveal index={1}>
           <MccCard>
             <MccBadge icon="apple">iPhone & iPad · in 4 Schritten</MccBadge>
-            <View style={styles.grid}>
+            <View style={styles.iosSteps}>
               {IOS_STEPS.map((step, index) => (
-                <View key={step.title} style={styles.cell}>
+                <View key={step.title} style={styles.iosStep}>
                   <View style={styles.shotFrame}>
                     <Image source={step.shot} style={[styles.shot, { borderColor: theme.mcc.line }]} resizeMode="contain" accessibilityLabel={step.title} />
                     <View style={[styles.stepNum, { backgroundColor: theme.mcc.accentDeep, borderColor: theme.mcc.background }]}>
@@ -120,9 +120,9 @@ export default function InstallScreen() {
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 16 },
-  cell: { width: "47%", gap: 8 },
-  shotFrame: { position: "relative" },
+  iosSteps: { gap: 20 },
+  iosStep: { alignItems: "center", gap: 8 },
+  shotFrame: { position: "relative", width: "62%", maxWidth: 220, alignSelf: "center" },
   shot: { width: "100%", aspectRatio: 330 / 715, borderRadius: 16, borderWidth: 1 },
   stepNum: {
     alignItems: "center",
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     width: 26,
   },
   stepNumText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  cellText: { fontSize: 13, fontWeight: "800", lineHeight: 18 },
+  cellText: { fontSize: 13, fontWeight: "800", lineHeight: 18, textAlign: "center" },
   rows: { gap: 10 },
   row: { alignItems: "center", flexDirection: "row", gap: 10 },
   rowIcon: { alignItems: "center", borderRadius: 12, borderWidth: 1, height: 38, justifyContent: "center", width: 38 },
