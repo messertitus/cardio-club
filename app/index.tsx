@@ -26,7 +26,7 @@ import {
   recordAppUsage,
   type InstallHintVariant,
 } from "../src/services/pwaInstallHint";
-import { APP_EVENTS, getMccWeekEvents, getMyProfile, trackAppEvent, updateProfileCity, type Row } from "../src/services";
+import { APP_EVENTS, getMccWeekEvents, getMyProfile, prefetchSecondaryTabs, trackAppEvent, triggerDueFinalize, updateProfileCity, type Row } from "../src/services";
 import { eventDayTitle, formatEventDayDate, getWeekStartDate, isEventVisibleWindow } from "../src/services/date";
 
 const seenCityPromptUserIds = new Set<string>();
@@ -76,6 +76,9 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     if (!user) return;
+    // Fire the one-time 48h finalize for any due event (idempotent, throttled),
+    // so the decision is persisted before the events are read/cached.
+    void triggerDueFinalize(supabase);
     const cacheKey = `mcc.weekEvents.${user.id}`;
     const cached = await readLocalCache<Row<"weekly_events">[]>(cacheKey, 15 * 60 * 1000);
     if (cached) setEvents((current) => current ?? cached);
@@ -93,6 +96,10 @@ export default function HomeScreen() {
     // Events the user already joined (any city) stay on the home page.
     const { data: attendanceRows } = await supabase.from("attendance").select("event_id").eq("user_id", user.id);
     if (attendanceRows) setJoinedEventIds(new Set(attendanceRows.map((row) => row.event_id)));
+
+    // Warm the Members + Chat caches in the background (once per session) so the
+    // first switch to those tabs paints instantly instead of showing a spinner.
+    void prefetchSecondaryTabs(supabase, user.id);
   }, [user]);
 
   useEffect(() => {

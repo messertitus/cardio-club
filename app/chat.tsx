@@ -17,20 +17,21 @@ import {
 import { useAuth } from "../src/context/AuthContext";
 import { useNavChrome } from "../src/context/NavChromeContext";
 import { useTheme } from "../src/context/ThemeContext";
-import { decisionReleasedNow, eventDayTitle, formatEventDayDate, getEventDate, getWeekStartDate } from "../src/services/date";
-import { readLocalCache, writeLocalCache } from "../src/services/localCache";
+import { eventDayTitle, formatEventDayDate, getEventDate } from "../src/services/date";
+import { chatCacheKey, readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { supabase } from "../src/lib/supabase";
 import {
   closeDirectChat,
-  getEventStateById,
-  getMccWeekEvents,
+  isEventDecisionReadyForChat,
   listChatMessages,
   listDirectChatMessages,
   listDirectChats,
-  listMccMembers,
+  loadChatBundle,
   sendChatMessage,
   sendDirectChatMessage,
+  triggerDueFinalize,
   SCREEN_EVENTS,
+  type ChatBundle,
   type DirectChatWithNames,
   type MccEventState,
   type MccMember,
@@ -130,8 +131,11 @@ export default function ChatScreen() {
   useEffect(() => {
     async function loadInitial() {
       if (!user) return;
-      const cacheKey = `mcc.chat.${user.id}`;
-      const cached = await readLocalCache<{ eventStates: MccEventState[]; members: MccMember[]; directChats: DirectChatWithNames[] }>(cacheKey, 15 * 60 * 1000);
+      // Trigger the one-time 48h finalize (idempotent, throttled) so a freshly
+      // decided event's chat appears even if the user lands here first.
+      void triggerDueFinalize(supabase);
+      const cacheKey = chatCacheKey(user.id);
+      const cached = await readLocalCache<ChatBundle>(cacheKey, 15 * 60 * 1000);
       if (cached) {
         setEventStates(cached.eventStates);
         setMembers(cached.members);
@@ -140,35 +144,22 @@ export default function ChatScreen() {
       } else {
         setBusy(true);
       }
-      const [weekResult, directResult] = await Promise.all([getMccWeekEvents(supabase), listDirectChats(supabase)]);
-      if (weekResult.error || directResult.error) {
-        if (!cached) setNotice(weekResult.error?.message ?? directResult.error?.message ?? "Chat konnte nicht geladen werden.");
+
+      // One shared loader assembles exactly the cached shape — the home-screen
+      // prefetch uses the same function, so cache hits are byte-for-byte aligned.
+      const bundleResult = await loadChatBundle(supabase, user.id);
+      if (bundleResult.error) {
+        // Don't wipe a populated cache to empty on a transient load error.
+        if (!cached) setNotice(bundleResult.error.message);
         setBusy(false);
         return;
       }
+      const { eventStates: nextEventStates, members: nextMembers, directChats: nextDirectChats } = bundleResult.data;
 
-      const membersResult = await listMccMembers(supabase, { clubId: weekResult.data.clubId });
-      if (membersResult.error) {
-        if (!cached) setNotice(membersResult.error.message);
-        setBusy(false);
-        return;
-      }
-
-      // Load full state for this week's Cardiotage (Saturday + Sunday). Each gets
-      // its own chat once the decision is released; cancelled events are already
-      // excluded by getMccWeekEvents.
-      const currentWeek = getWeekStartDate();
-      const weekRows = weekResult.data.events.filter((row) => row.week_start_date === currentWeek);
-      const stateResults = await Promise.all(weekRows.map((row) => getEventStateById(supabase, user.id, row.id)));
-      const loadedStates = stateResults.flatMap((result) => (result.data ? [result.data] : []));
-      // Local chats: the user's own city plus any event they joined elsewhere.
-      const myCity = membersResult.data.find((member) => member.userId === user.id)?.city ?? null;
-      const nextEventStates = loadedStates.filter((entry) => !myCity || entry.event.city === myCity || entry.myAttendance != null);
-
-      void writeLocalCache(cacheKey, { eventStates: nextEventStates, members: membersResult.data, directChats: directResult.data });
+      void writeLocalCache(cacheKey, bundleResult.data);
 
       const nextEventChannels = buildEventChannels(nextEventStates.filter((entry) => isEventChatOpen(entry, Date.now())));
-      const nextDirectChannels = buildDirectChannels(directResult.data, user.id);
+      const nextDirectChannels = buildDirectChannels(nextDirectChats, user.id);
       const nextChannels = [...nextEventChannels, ...nextDirectChannels];
       const requestedChannelId = directChatId ? `direct:${directChatId}` : null;
       const nextActive =
@@ -178,8 +169,8 @@ export default function ChatScreen() {
       const nextActiveChannel = nextChannels.find((channel) => channel.id === nextActive) ?? null;
 
       setEventStates(nextEventStates);
-      setMembers(membersResult.data);
-      setDirectChats(directResult.data);
+      setMembers(nextMembers);
+      setDirectChats(nextDirectChats);
       setActiveChannelId(nextActive);
       setNotice(null);
       setBusy(false);
@@ -620,15 +611,11 @@ function buildEventChannels(states: MccEventState[]): EventChatChannel[] {
 const CHAT_CLOSE_AFTER_EVENT_MS = 2 * 24 * 60 * 60 * 1000; // through the day after the event
 
 function eventDecisionReady(state: MccEventState): boolean {
-  // Skipped (too few voters) events never get an event chat.
-  if (state.event.status === "cancelled") return false;
-  // A completed (already played + reviewed) event keeps its chat for the close-out window.
-  if (state.event.status === "completed") return true;
-  // An event with fewer than two distinct voters is treated as skipped (mirrors
-  // cancel_underused_events) — no chat, even before the server cancel job runs.
+  // Mirrors cancel_underused_events: fewer than two distinct attending voters is
+  // treated as skipped (no chat) even before the server cancel job runs. Shares
+  // the readiness rule with the chat loader so they can never disagree.
   const voterCount = new Set(state.votes.map((vote) => vote.user_id)).size;
-  if (voterCount < 2) return false;
-  return state.event.status === "decided" || decisionReleasedNow(state.event.starts_at, state.event.week_start_date, state.event.event_day);
+  return isEventDecisionReadyForChat(state.event, voterCount);
 }
 
 function eventChatClosesAt(state: MccEventState): number {

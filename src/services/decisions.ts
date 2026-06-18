@@ -32,6 +32,20 @@ export async function getEventDecisionPreview(
   return ok(result.data.view);
 }
 
+// Triggers the one-time, server-side finalize for every event whose 48h decision
+// moment has passed (no eventId — it's a sweep). The Edge Function is idempotent,
+// so this client fallback (any member) and the periodic send-push sweep can both
+// call it safely. Returns how many events were decided on this run.
+export async function finalizeDueDecisions(
+  supabase: AppSupabaseClient,
+): Promise<ServiceResult<{ finalized: number }>> {
+  const { data, error } = await supabase.functions.invoke("decision", { body: { action: "finalize-due" } });
+  if (error) {
+    return fail(await extractFunctionError(error, "Fällige Entscheidungen konnten nicht abgeschlossen werden."));
+  }
+  return ok({ finalized: Number((data as { finalized?: number } | null)?.finalized ?? 0) });
+}
+
 export async function finalizeEventDecision(
   supabase: AppSupabaseClient,
   input: GetEventDecisionPreviewInput,

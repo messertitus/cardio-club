@@ -9,6 +9,55 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-18 — Keine Vorschau mehr: Entscheidung läuft einmal 48 h vorher
+
+### Geändert
+- **Es gibt keine Live-Vorschau der Entscheidung mehr.** Bisher berechnete jeder Client die Entscheidung bei jedem Aufruf neu (mit Live-Wetter) — das konnte auf zwei Geräten unterschiedliche Sportarten zeigen. Jetzt läuft der Algorithmus **genau einmal, 48 h vor Eventstart**, wählt die Sport-Konstellation, persistiert sie (`status = decided`, `selected_sport_id`, `event_activities`) und **friert den `weather_snapshot` ein** → ab da auf allen Geräten identisch.
+- **Auslöser (beides):** Neue Edge-Function-Action `finalize-due` (idempotent über `status in (proposing,voting)`-Guard). (1) Server-Sweep: `send-push` ruft sie bei jedem Lauf auf (unabhängig von den Push-Ruhezeiten). (2) Client-Fallback: `triggerDueFinalize()` beim Öffnen von Home/Chat (gedrosselt), falls kein Cron läuft.
+- **UI ohne Vorschau:** Während der Abstimmung zeigt das Event nur einen Hinweis ("Entscheidung fällt 48 h vorher"), keine berechnete Sportart. `buildEventState` lädt die Entscheidung nur noch für `decided`/`completed`-Events. „Entschieden" heißt jetzt **persistierter Status**, nicht mehr „48h-Zeitpunkt überschritten" — betrifft `EventFlowCard`, `decision.tsx` und die Chat-Öffnung (`isEventDecisionReadyForChat`). Die „Live-Vorschau"-Karte in `vote.tsx` wurde entfernt.
+- **Chats** öffnen sich wie geplant, sobald das Event `decided` ist (= nach dem 48h-Lauf).
+
+### Hinweise
+- Erfordert Deploy beider Edge-Functions (`decision`, `send-push`). Für die echte Zeitsteuerung muss `send-push` per Cron laufen; sonst greift der Client-Fallback beim App-Öffnen.
+
+---
+
+## 2026-06-18 — Archiv: echter Wochentag im Titel (Samstag wurde als Sonntag angezeigt)
+
+### Behoben
+- Im Event-Archiv (`app/events/history.tsx`, `app/clubs/[clubId]/history.tsx`) trug **jede** Karte den Titel „Cardiotag am Sonntag …", auch reine Samstags-Events. Ursache: der Alt-Helfer `formatCardioSunday()` (aus der Sonntag-only-Phase) snappt jedes Datum auf „den Sonntag" der Woche und erzwingt den Wochentag. Der Titel widersprach so dem korrekten „Geplant für: Samstag, … 14:00". Jetzt wird `formatEventDayDate(week_start_date, event_day)` genutzt — der echte Wochentag aus `event_day`, konsistent mit Home und Chat. Damit lösen sich auch die scheinbaren „doppelten Sonntage" auf: Es waren Samstag + Sonntag derselben Woche, beide fälschlich als Sonntag beschriftet.
+
+---
+
+## 2026-06-18 — Unterbesetzte Events werden wieder übersprungen (Regression)
+
+### Behoben
+- **Events mit weniger als zwei teilnehmenden Abstimmenden wurden nicht mehr abgesagt.** `cancel_underused_events()` war seit Migration 041 in den Runner `run_mcc_notification_jobs()` eingebaut, ging aber bei der Neudefinition des Runners in **053** (und erneut 063) verloren — seitdem lief der Skip nie. Folge: Ein Samstag mit nur einer Stimme/einem „Vielleicht" blieb `voting` und zeigte eine Entscheidung statt ins Archiv zu wandern. Migration **067** stellt den Aufruf wieder her (läuft zuerst, damit ein abgesagtes Event keine „Auswertung ist da"-Push mehr auslöst).
+- Erklärt auch, warum dasselbe Event auf zwei Geräten **unterschiedliche** Sportarten zeigte: Für ein noch nicht finalisiertes Event ist die angezeigte Sportart eine **Live-Vorschau**, die mangels persistiertem `weather_snapshot` das **aktuelle Wetter** lädt. Der Algorithmus ist deterministisch, aber bei fast keinem Stimmen-Signal (1 Stimme) kippt das Wetter die Wahl — zwei Clients berechnen die Vorschau zu unterschiedlichen Zeitpunkten → unterschiedliches Ergebnis. Sobald das Event korrekt abgesagt (zu wenige) oder finalisiert (Wetter eingefroren) ist, ist die Anzeige stabil.
+
+---
+
+## 2026-06-18 — Ladezeiten: Caching, Bootstrap-Memo, schlanker Chat-Loader, Prefetch
+
+### Geändert
+- **A — Cache auf der Event-Detailseite** (`app/events/[eventId]/attendance.tsx`): stale-while-revalidate wie bei Mitgliedern/Chat. Beim Wiederöffnen erscheint sofort der gecachte Stand, im Hintergrund wird aktualisiert — kein sekundenlanger Spinner mehr. Mutations-Reloads umgehen den Cache (kein Flackern).
+- **B — `ensure_mcc_week` nur noch 1×/Session** statt bei jedem Seitenaufruf: `bootstrapMccWeek()` memoisiert das Ergebnis (clubId + Event-Refs) für 5 Minuten und teilt parallele Aufrufe. Davon profitieren Home, Mitglieder und Chat automatisch. Reset bei Logout (`resetMccBootstrapCache`, verdrahtet in `AuthContext`).
+- **C — Schlanker Chat-Loader** (`getWeekChatStates`): lädt Teilnahmen/Stimmen/Aktivitäten der ganzen Woche in gebündelten `.in(event_id, …)`-Queries statt pro Event eine volle `getEventStateById`. Lässt weg, was der Chat nie liest (Proposals, No-Gos, Sportprofile) und — am wichtigsten — ruft die **Decision-Edge-Function nur noch** für das seltene Event auf, das entscheidungsreif ist, aber noch keine persistierten `event_activities` hat (vorher: pro Event ein Edge-Call). Die Readiness-Regel liegt jetzt zentral in `src/lib/eventChatReadiness.ts` (`isEventDecisionReadyForChat`) und wird von Loader und Chat-Screen geteilt, damit **keine Chats verschwinden**.
+- **F — Prefetch** (`prefetchSecondaryTabs`): Der Home-Screen wärmt Mitglieder- und Chat-Cache einmal pro Session im Hintergrund (eine Assembly über `loadChatBundle` füllt beide Caches), sodass der erste Tab-Wechsel sofort aus dem Cache rendert.
+- Cache-Keys zentralisiert (`src/services/localCache.ts`), damit Screen und Prefetch garantiert denselben Key schreiben. `mcc.members.` und `mcc.eventDetail.` zur Purge-Liste (`MANAGED_CACHE_PREFIXES`) ergänzt — vorher wäre der Mitglieder-Cache bei einem Schema-Wechsel nicht geräumt worden.
+
+### Hinzugefügt
+- `tests/chatReadiness.test.ts` (5 Tests) sichert ab, welche Event-Chats erscheinen — direkter Schutz gegen versehentlich verschwindende Chats.
+
+---
+
+## 2026-06-18 — Installations-Anleitung: iPhone-Screenshots untereinander
+
+### Geändert
+- Die iPhone/iPad-Screenshots in der Installations-Anleitung (`app/install.tsx`) standen in einem 2-spaltigen Grid (zwei nebeneinander). Sie liegen jetzt **untereinander** in einer Spalte, zentriert und etwas größer (Bildbreite ~62 %, max. 220 px), mit der Bildunterschrift jeweils zentriert darunter.
+
+---
+
 ## 2026-06-17 — Intro-Tour nicht erneut in der installierten PWA
 
 ### Behoben

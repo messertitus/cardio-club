@@ -62,7 +62,17 @@ Deno.serve(async () => {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  // 0) Quiet hours: never deliver a push at night. Outside Berlin 09:00–22:00 we
+  // 0a) Run the one-time decision finalize for every event whose 48h moment has
+  // passed. This is NOT a push, so it runs regardless of quiet hours. The decision
+  // function is idempotent (status guard), so calling it every run is safe.
+  try {
+    const finalize = await supabase.functions.invoke("decision", { body: { action: "finalize-due" } });
+    if (finalize.error) console.error("decision finalize-due failed:", finalize.error.message);
+  } catch (finalizeError) {
+    console.error("decision finalize-due threw:", finalizeError);
+  }
+
+  // 0b) Quiet hours: never deliver a push at night. Outside Berlin 09:00–22:00 we
   // skip both enqueueing and delivery; queued notifications simply wait and go
   // out on the first run after 09:00. Mirrors isWithinPushWindow() in
   // src/services/date.ts (shared with the in-app AppNotificationBridge).

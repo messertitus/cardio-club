@@ -11,7 +11,7 @@ import { useAuth } from "../src/context/AuthContext";
 import { useTheme } from "../src/context/ThemeContext";
 import { supabase } from "../src/lib/supabase";
 import { useScreenView } from "../src/components/useScreenView";
-import { readLocalCache, writeLocalCache } from "../src/services/localCache";
+import { membersCacheKey, readLocalCache, writeLocalCache } from "../src/services/localCache";
 import { bootstrapMccWeek, getOrCreateDirectChat, listMccMembers, SCREEN_EVENTS, type MccMember } from "../src/services";
 
 const roleLabels = {
@@ -49,7 +49,7 @@ export default function MembersScreen() {
   useEffect(() => {
     async function load() {
       if (!user) return;
-      const cacheKey = `mcc.members.${user.id}`;
+      const cacheKey = membersCacheKey(user.id);
       const cached = await readLocalCache<MccMember[]>(cacheKey, 15 * 60 * 1000);
       if (cached) setMembers((current) => (current.length ? current : cached));
       const boot = await bootstrapMccWeek(supabase);

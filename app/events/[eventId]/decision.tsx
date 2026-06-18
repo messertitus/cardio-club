@@ -25,7 +25,6 @@ import { useTheme } from "../../../src/context/ThemeContext";
 import type { DecisionCharacter } from "../../../src/lib/decisionTypes";
 import type { DecisionAdminSummary } from "../../../src/lib/decisionView";
 import { supabase } from "../../../src/lib/supabase";
-import { isDecisionReleaseOpen } from "../../../src/services/date";
 import {
   canCloseEvent,
   getEventDecisionPreview,
@@ -89,27 +88,42 @@ export default function DecisionResultScreen() {
 
   async function load() {
     setLoading(true);
-    const [sportsResult, decisionResult, adminResult, eventResult, manageResult] = await Promise.all([
+    const [sportsResult, adminResult, eventResult, manageResult] = await Promise.all([
       listSports(supabase),
-      getEventDecisionPreview(supabase, { eventId }),
       user ? isCurrentUserAdmin(supabase, user.id) : Promise.resolve({ data: false, error: null }),
       supabase.from("weekly_events").select("status, week_start_date, event_day").eq("id", eventId).single(),
       user ? canCloseEvent(supabase, eventId, user.id) : Promise.resolve({ data: false, error: null }),
     ]);
-    const decisionSportIds = decisionResult.data ? [...new Set(decisionResult.data.activities.map((activity) => activity.sportId))] : [];
-    const profilesResult = await listSportProfilesForSports(supabase, decisionSportIds);
+
+    // No live preview: the decision is shown only once it has actually been
+    // finalized (status decided/completed). For a decided event the recompute uses
+    // the frozen weather_snapshot, so it is deterministic and identical everywhere.
+    const decided = eventResult.data?.status === "decided" || eventResult.data?.status === "completed";
+    let decisionData: EventDecisionPreview | null = null;
+    let decisionErrorMessage: string | null = null;
+    let profileRows: Row<"sport_profiles">[] = [];
+    if (decided) {
+      const decisionResult = await getEventDecisionPreview(supabase, { eventId });
+      decisionData = decisionResult.data;
+      decisionErrorMessage = decisionResult.error?.message ?? null;
+      const decisionSportIds = decisionData ? [...new Set(decisionData.activities.map((activity) => activity.sportId))] : [];
+      const profilesResult = await listSportProfilesForSports(supabase, decisionSportIds);
+      profileRows = profilesResult.data ?? [];
+      decisionErrorMessage = decisionErrorMessage ?? profilesResult.error?.message ?? null;
+    }
+
     setSports(sportsResult.data ?? []);
-    setSportProfiles(profilesResult.data ?? []);
+    setSportProfiles(profileRows);
     setEvent(eventResult.data ?? null);
-    setDecision(decisionResult.data);
+    setDecision(decisionData);
     setIsAdmin(Boolean(adminResult.data));
     setCanManage(Boolean(manageResult.data));
-    setError(sportsResult.error?.message ?? decisionResult.error?.message ?? adminResult.error?.message ?? eventResult.error?.message ?? profilesResult.error?.message ?? null);
+    setError(sportsResult.error?.message ?? decisionErrorMessage ?? adminResult.error?.message ?? eventResult.error?.message ?? null);
     setLoading(false);
   }
 
-  const released = Boolean(event && isDecisionReleaseOpen(event.week_start_date, event.event_day));
-  const showDecision = Boolean(decision && presentation && (isAdmin || !event || released));
+  const decided = Boolean(event && (event.status === "decided" || event.status === "completed"));
+  const showDecision = Boolean(decided && decision && presentation);
   const primarySport = decision ? sports.find((sport) => sport.id === decision.selectedSportId) : undefined;
   const secondarySport = decision?.secondarySportId ? sports.find((sport) => sport.id === decision.secondarySportId) : undefined;
   const isMulti = decision?.mode === "multi_sport" || decision?.mode === "twin";
@@ -120,11 +134,11 @@ export default function DecisionResultScreen() {
       <InlineError>{error}</InlineError>
       {loading ? <LoadingSkeleton lines={4} /> : null}
 
-      {!loading && event && !isAdmin && !released ? (
+      {!loading && event && !decided ? (
         <MccCard accent>
           <MccBadge icon="calendar-clock-outline">Auswertung folgt</MccBadge>
           <MccCardTitle>Die Auswertung ist noch zu</MccCardTitle>
-          <MccBody muted>Es wird abgestimmt, bis kurz vor dem Cardiotag. 2 Tage vorher erscheint hier automatisch die Entscheidung.</MccBody>
+          <MccBody muted>Es wird abgestimmt, bis kurz vor dem Cardiotag. Der Algorithmus läuft einmal 48 Stunden vor dem Event und legt die Sport-Konstellation fest – dann erscheint hier automatisch die Entscheidung.</MccBody>
           <MccButton label="Zur Abstimmung" icon="vote-outline" variant="secondary" onPress={() => router.push(`/events/${eventId}/vote`)} />
         </MccCard>
       ) : null}

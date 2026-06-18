@@ -5,6 +5,7 @@ import { InlineError, LoadingSkeleton, MccBadge, MccBody, MccButton, MccCard, Mc
 import { useAuth } from "../../../src/context/AuthContext";
 import { supabase } from "../../../src/lib/supabase";
 import { eventInputOpen, formatBerlinTime, isVotingInputOpen } from "../../../src/services/date";
+import { eventDetailCacheKey, readLocalCache, writeLocalCache } from "../../../src/services/localCache";
 import {
   isCurrentUserAdmin,
   listAttendance,
@@ -15,6 +16,14 @@ import {
   type AttendanceStatus,
   type Row,
 } from "../../../src/services";
+
+type AttendanceCacheShape = {
+  attendance: Row<"attendance">[];
+  event: Row<"weekly_events"> | null;
+  eventActivities: Row<"event_activities">[];
+  profiles: Array<Pick<Row<"profiles">, "id" | "display_name">>;
+  isAdmin: boolean;
+};
 
 export default function AttendanceScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
@@ -28,11 +37,29 @@ export default function AttendanceScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    load();
-  }, [eventId]);
+    void load(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, user?.id]);
 
-  async function load() {
-    setLoading(true);
+  const cacheKey = eventDetailCacheKey(eventId, user?.id ?? "anon");
+
+  // initial=true paints cached data immediately (no spinner on a repeat visit)
+  // and revalidates in the background. Post-action reloads pass initial=false so
+  // they never flicker back to the pre-action cache before the fresh data lands.
+  async function load(initial = false) {
+    if (initial) {
+      const cached = await readLocalCache<AttendanceCacheShape>(cacheKey, 15 * 60 * 1000);
+      if (cached) {
+        setAttendance(cached.attendance);
+        setEvent(cached.event);
+        setEventActivities(cached.eventActivities);
+        setIsAdmin(cached.isAdmin);
+        setProfileNames(new Map(cached.profiles.map((profile) => [profile.id, profile.display_name])));
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    }
     const [attendanceResult, eventResult, activitiesResult, adminResult] = await Promise.all([
       listAttendance(supabase, eventId),
       supabase.from("weekly_events").select().eq("id", eventId).maybeSingle(),
@@ -45,11 +72,12 @@ export default function AttendanceScreen() {
       ? await supabase.from("profiles").select("id, display_name").in("id", userIds)
       : { data: [] as Array<Pick<Row<"profiles">, "id" | "display_name">>, error: null };
 
+    const profiles = profilesResult.data ?? [];
     setAttendance(rows);
     setEvent(eventResult.data ?? null);
     setEventActivities(activitiesResult.data ?? []);
     setIsAdmin(adminResult.data ?? false);
-    setProfileNames(new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.display_name])));
+    setProfileNames(new Map(profiles.map((profile) => [profile.id, profile.display_name])));
     setError(
       attendanceResult.error?.message ??
         eventResult.error?.message ??
@@ -59,6 +87,16 @@ export default function AttendanceScreen() {
         null,
     );
     setLoading(false);
+
+    if (!attendanceResult.error && !eventResult.error && !activitiesResult.error && !profilesResult.error) {
+      void writeLocalCache<AttendanceCacheShape>(cacheKey, {
+        attendance: rows,
+        event: eventResult.data ?? null,
+        eventActivities: activitiesResult.data ?? [],
+        profiles,
+        isAdmin: adminResult.data ?? false,
+      });
+    }
   }
 
   async function setStatus(status: AttendanceStatus) {

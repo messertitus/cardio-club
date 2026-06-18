@@ -1351,6 +1351,10 @@ export type Database = {
         Args: { target_user_id?: string };
         Returns: Json;
       };
+      get_chapter_overview: {
+        Args: { p_window_days?: number | null };
+        Returns: Json;
+      };
       admin_set_user_metric: {
         Args: { target_user_id: string; p_metric_key: string; p_value: number; p_note?: string | null };
         Returns: undefined;

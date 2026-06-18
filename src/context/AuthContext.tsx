@@ -2,6 +2,8 @@ import type { Session, User } from "@supabase/supabase-js";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { AppState, StyleSheet, View } from "react-native";
 import { supabase } from "../lib/supabase";
+import { resetMccBootstrapCache } from "../services/liveApp";
+import { resetPrefetchGuard } from "../services/prefetch";
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 
@@ -59,6 +61,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      // Drop the session-memoized week bootstrap and the prefetch guard when the
+      // user signs out, so the next account re-runs ensure_mcc_week and re-warms
+      // its own caches instead of reusing a stale memo.
+      if (!nextSession) {
+        resetMccBootstrapCache();
+        resetPrefetchGuard();
+      }
       setSession(nextSession);
       setLoading(false);
     });

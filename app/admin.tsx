@@ -8,6 +8,7 @@ import { MapLocationPicker, SearchField, SegmentedControl } from "../src/compone
 import { MapRouteButton } from "../src/components/MapRouteButton";
 import { AdminNotificationRules } from "../src/components/AdminNotificationRules";
 import { AdminUserStats } from "../src/components/AdminUserStats";
+import { AdminChapterOverview } from "../src/components/AdminChapterOverview";
 import { MccBadge, MccBody, MccCardTitle, MotionBackground, ScreenLoader } from "../src/components/MccDesign";
 import { PageHeader } from "../src/components/PageHeader";
 import { SPORT_ICON_OPTIONS, SportIconBadge } from "../src/components/SportIcon";
@@ -72,7 +73,7 @@ const defaultSportCategoryOptions = [
   "unbekannt",
 ];
 
-type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule" | "cities" | "notifications" | "userStats";
+type AdminSection = "overview" | "sports" | "profiles" | "members" | "inviteTree" | "nameRequests" | "schedule" | "cities" | "notifications" | "userStats" | "chapter";
 
 type DayRow = { weekday: EventDay; enabled: boolean; time: string };
 
@@ -735,12 +736,15 @@ export default function AdminScreen() {
               <AdminMenuCard title="Namensanfragen" body={`${nameRequests.length} offene Freigaben`} onPress={() => setActiveSection("nameRequests")} />
               <AdminMenuCard title="Benachrichtigungen" body="Notification-Regeln erstellen und senden" onPress={() => setActiveSection("notifications")} />
               <AdminMenuCard title="Statistiken (Test)" body="Nutzerstatistiken ansehen, testweise ändern oder zurücksetzen" onPress={() => setActiveSection("userStats")} />
+              <AdminMenuCard title="Chapter-Übersicht" body="Kommen Leute wieder? Läuft der Wochen-Loop?" onPress={() => setActiveSection("chapter")} />
             </View>
           ) : null}
 
           {isAdmin && activeSection === "notifications" ? <AdminNotificationRules /> : null}
 
           {isAdmin && activeSection === "userStats" ? <AdminUserStats members={members} /> : null}
+
+          {isAdmin && activeSection === "chapter" ? <AdminChapterOverview /> : null}
 
           {isAdmin && activeSection === "sports" ? (
             <View style={[styles.card, { borderColor: theme.mcc.line, backgroundColor: theme.mcc.surface }]}>
@@ -1547,6 +1551,7 @@ function sectionTitle(section: AdminSection): string {
   if (section === "cities") return "Aktive Städte";
   if (section === "notifications") return "Benachrichtigungen";
   if (section === "userStats") return "Statistiken (Test)";
+  if (section === "chapter") return "Chapter-Übersicht";
   return "Club steuern";
 }
 
@@ -1561,7 +1566,8 @@ function isAdminSection(value: string): value is AdminSection {
     value === "schedule" ||
     value === "cities" ||
     value === "notifications" ||
-    value === "userStats"
+    value === "userStats" ||
+    value === "chapter"
   );
 }
 
