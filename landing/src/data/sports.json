@@ -1,0 +1,15 @@
+[
+  { "name": "Badminton",       "icon": "badminton" },
+  { "name": "Basketball",      "icon": "basketball" },
+  { "name": "Beachvolleyball", "icon": "volleyball" },
+  { "name": "Calisthenics",    "icon": "gymnastics" },
+  { "name": "Frisbee",         "icon": "disc" },
+  { "name": "Fußball",         "icon": "soccer" },
+  { "name": "Hiking",          "icon": "hiking" },
+  { "name": "Laufen",          "icon": "run" },
+  { "name": "Outdoor-Boxen",   "icon": "boxing-glove" },
+  { "name": "Radfahren",       "icon": "bike" },
+  { "name": "Schwimmen",       "icon": "swim" },
+  { "name": "Street-Soccer",   "icon": "soccer" },
+  { "name": "Tischtennis",     "icon": "table-tennis" }
+]

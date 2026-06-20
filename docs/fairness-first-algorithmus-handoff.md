@@ -1,131 +1,89 @@
 # Fairness-First Constellation Algorithmus - Technische Übergabe
 
-Stand: 2026-06-05  
+Stand: 2026-06-19  
 Projekt: Messers Cardio Club / Cardioclub  
 Zweck: Vollständige Übergabe des aktuellen Algorithmus, seiner Datenabhängigkeiten, Scores, Persistenzwege, UI-Einflüsse, Grenzen und Weiterentwicklungspunkte.
+
+> Wichtige Änderung gegenüber älteren Ständen: Der Algorithmus läuft **nicht mehr im Browser**, sondern ausschließlich server-seitig in der Supabase Edge Function `decision`. Der Client kennt nur noch die sanitisierte `DecisionView`. Siehe Abschnitt 2.
 
 ## 1. Kurzfassung
 
 Der produktive Entscheidungsalgorithmus ist `selectFairConstellation` in:
 
-`src/lib/fairConstellationSelection.ts`
+`supabase/functions/decision/_shared/algorithm.ts`
 
-Er wählt nicht mehr nur eine abstrakte Sportart, sondern eine konkrete Event-Konstellation aus Sportprofilen:
+Er wählt nicht eine abstrakte Sportart, sondern eine konkrete Event-Konstellation aus Sportprofilen:
 
 - `single`: eine Aktivität für alle akzeptierten Teilnehmenden.
-- `multi_sport`: zwei Aktivitäten im selben Ort oder Social Radius, weiterhin als gemeinsames Club-Event.
+- `multi_sport`: zwei bis vier Aktivitäten im selben Ort oder Social Radius, weiterhin als gemeinsames Club-Event (inklusive kombinierter Events mit 3+ Sportarten an einem Ort).
 - `twin`: zwei getrennte Gruppen, wenn zwei echte Gruppen entstehen und das fairer/praktikabler ist.
 - `none`: keine Entscheidung möglich.
 
 Die Nutzer stimmen bewusst einfach auf abstrakte Sportarten ab. Der Algorithmus sucht danach passende konkrete `sport_profiles` und bewertet Konstellationen aus Profilen.
 
-Wichtig: Die alte Funktion `selectFairSport` existiert noch in `src/lib/fairSportSelection.ts`, ist aber Legacy und nicht der aktuelle Entscheidungsweg für die App.
+Wichtig: Die alte Funktion `selectFairSport` ist Legacy und nicht der aktuelle Entscheidungsweg.
 
-## 2. Relevante Dateien
+## 2. Architektur: Algorithmus läuft server-seitig
 
-### Algorithmus-Kern
+Das Web/PWA-Bundle ist vollständig einsehbar. Früher lief der Algorithmus im Browser (`src/lib/fairConstellationSelection.ts`), sodass alle Formeln, Ranking-Margins und `DEFAULT_OPTIONS`-Gewichte an jeden Client ausgeliefert wurden. Das ist das zentrale Geschäftsgeheimnis der App.
 
-- `src/lib/fairConstellationSelection.ts`
-  - Typen für Sportarten, Profile, Votes, Attendance, Wetter, ScoreBreakdown.
-  - `DEFAULT_OPTIONS`.
-  - `selectFairConstellation`.
-  - Profilbewertung, Kandidatengenerierung, Scoring, Ranking, Gründe.
+Heute läuft der Algorithmus **nur** in der Edge Function `decision`. Der Client ruft die Funktion auf und rendert die sanitisierte `DecisionView`, die zurückkommt. Rohe Scores, Ranking-Margins, Kandidaten-IDs, Fairness-Debt, gewichtete Vote-Scores und Option-Gewichte verlassen den Server nie.
 
-- `src/lib/decisionPresentation.ts`
-  - Übersetzt die algorithmische Entscheidung in UI-taugliche Texte, Labels und Score-Zeilen.
+### Edge Function: `supabase/functions/decision/`
+
+| Datei | Rolle |
+|---|---|
+| `index.ts` | HTTP-Handler. Auth, Actions `preview` / `finalize` / `finalize-due`, CORS. |
+| `_shared/algorithm.ts` | Der Algorithmus. Selbstständig, **keine Imports**. Wortgleiche Kopie der früheren Client-Datei. |
+| `_shared/decisionService.ts` | Datenabruf, Algorithmus ausführen, finale Entscheidung persistieren. |
+| `_shared/decisionPresentation.ts` | Übersetzt eine Entscheidung in freundliche Erklärungstexte. |
+| `_shared/weather.ts` | Open-Meteo Wetter-Snapshot für Outdoor-Profile. |
+| `_shared/sanitize.ts` | Baut die sanitisierte `DecisionView` (das einzige Payload an den Client). |
+
+### Client
+
+- `src/services/decisions.ts`
+  - Dünner Client. Ruft die `decision`-Funktion via `supabase.functions.invoke("decision", { body })` auf.
+  - Actions: `preview`, `finalize`, `finalize-due`.
+  - Darf den Algorithmus **niemals** wieder importieren.
+
+- `src/lib/decisionView.ts`
+  - Frontend-sicherer Ergebnistyp `DecisionView` (sanitisiert). Wird in `_shared/sanitize.ts` wortgleich gespiegelt. Beide Shapes müssen synchron bleiben.
+
+- `src/lib/decisionTypes.ts`
+  - Reine I/O-Datentypen und Enums (`ConstellationMode`, `DecisionCharacter` usw.), die Client und Server teilen dürfen.
 
 - `src/lib/votingRules.ts`
-  - Rank 1/2/3, maximale Stimmenzahl, Rank-Gewichte.
+  - Rang 1/2/3, maximale Stimmenzahl, Rang-Gewichte.
 
 - `src/lib/votingEligibility.ts`
   - Filtert Votes/No-Gos von `not_going` und nicht teilnahmeberechtigten Nutzern für die App-Darstellung.
 
-### Services und Persistenz
+### Isolations-Guards (dürfen nicht gebrochen werden)
 
-- `src/services/decisions.ts`
-  - Baut den Input für `selectFairConstellation`.
-  - Lädt Event, Proposals, Votes, Attendance, No-Gos, Sports, Profiles, Historie, Reliability, Weather.
-  - Finalisiert die Entscheidung.
-  - Persistiert `event_activities`, `weekly_events`, `member_preference_history`, bei Twin auch `event_subgroups`.
+- Niemals etwas aus `supabase/functions/decision/` in Client-Code (`app/**`, `src/**`) importieren.
+- `tests/algorithmIsolation.test.ts` schlägt fehl, wenn Client-Quellcode den Algorithmus importiert oder `selectFairConstellation` referenziert.
+- `scripts/check-web-bundle.mjs` (verdrahtet in `npm run pwa:build`) schlägt fehl, wenn ein Algorithmus-Sentinel-String in `dist/` landet.
 
-- `src/services/sportProfiles.ts`
-  - Lädt und speichert Sportprofile.
-  - Wichtiger M:N-Mapping-Layer zwischen `sport_profiles` und `sport_profile_sports`.
+### API
 
-- `src/services/weather.ts`
-  - Holt Open-Meteo Forecastdaten.
-  - Baut `ProfileWeatherSnapshot`.
+`POST` mit `Authorization: Bearer <jwt>` eines Mitglieds.
 
-- `src/services/eventActivities.ts`
-  - Speichert finale Event-Aktivitäten aus der Entscheidung.
+```jsonc
+// preview — jedes Mitglied, das das Event lesen darf
+{ "eventId": "<uuid>", "action": "preview" }
+// -> { "view": DecisionView }
 
-- `src/services/votes.ts`
-  - Speichert Votes und erzwingt Voting-Regeln.
+// finalize — nur Admins / Verantwortliche; persistiert mit Service Role
+{ "eventId": "<uuid>", "action": "finalize" }
+// -> { "event": <weekly_events row>, "view": DecisionView }
 
-- `src/services/noGos.ts`
-  - Speichert persönliche No-Gos.
+// finalize-due — System-Sweep ohne eventId; finalisiert alle fälligen Events
+{ "action": "finalize-due" }
+// -> { "finalized": number, "skipped": number, "considered": number }
+```
 
-- `src/services/attendance.ts`
-  - Speichert Teilnahme.
-
-- `src/services/attendanceReview.ts`
-  - AP/Admin-Nachbereitung tatsächlicher Anwesenheit.
-
-- `src/services/liveApp.ts`
-  - Baut den aktuellen App-State inklusive Preview-Decision und Präsentation.
-
-### Datenbankmigrationen
-
-- `supabase/migrations/024_fairness_first_constellation.sql`
-  - Kernschema für Fairness-First:
-    - `sport_profiles`
-    - `sport_no_gos`
-    - `event_activities`
-    - `weekly_events.decision_type`
-    - `weekly_events.decision_scorecard`
-    - `weekly_events.weather_snapshot`
-    - `attendance.actual_status`
-    - `attendance.checked_by`
-    - `attendance.checked_at`
-    - Erweiterung `member_preference_history`
-
-- `supabase/migrations/025_sport_profile_site_ap_details.sql`
-  - `sport_profiles.location_rules`
-  - `sport_profiles.ap_contact_id`
-
-- `supabase/migrations/026_idea_profile_flow_admin_tools.sql`
-  - Standort-, Karten-, Wetter-, Draft- und Review-Felder für Sportideen.
-
-- `supabase/migrations/027_event_results_and_member_stats.sql`
-  - Event-Ergebnisse und spätere Statistikdaten.
-
-- `supabase/migrations/028_remove_wind_weather_rules.sql`
-  - Entfernt Wind-Regeln aus gespeicherten Weather Rules.
-
-- `supabase/migrations/031_sport_profile_sports_and_sport_active.sql`
-  - `sports.is_active`
-  - M:N-Tabelle `sport_profile_sports`
-  - Admin-Upsert für Sportarten.
-
-### Tests
-
-- `tests/fairConstellationSelection.test.ts`
-  - Zentrale Tests für Single, Multi-Sport, Twin, No-Go, Maybe, Wetter, Fairness Debt, Profilwahl, Reliability.
-
-- `tests/decisionPresentation.test.ts`
-  - Präsentationslogik.
-
-- `tests/votingRules.test.ts`
-  - Rank-Gewichte.
-
-- `tests/votingEligibility.test.ts`
-  - Sichtbarkeits-/Teilnahmefilter.
-
-- `tests/locationSelection.test.ts`
-  - Standort-/Profilnähe.
-
-- `tests/sportCompatibility.test.ts`
-  - Sport-/Profilkompatibilität.
+Reads nutzen einen Client mit dem JWT des Aufrufers (RLS gilt). Finalize-Writes nutzen die Service Role, damit der Client nie Schreibrechte auf die geschützten `weekly_events`-Entscheidungsspalten braucht.
 
 ## 3. Datenmodell: Fachliche Konzepte
 
@@ -133,137 +91,56 @@ Wichtig: Die alte Funktion `selectFairSport` existiert noch in `src/lib/fairSpor
 
 Tabelle: `sports`
 
-Eine Sportart ist abstrakt:
+Eine Sportart ist abstrakt (Beachvolleyball, Boxen, Radfahren, Laufen, Badminton).
 
-- Beachvolleyball
-- Boxen
-- Radfahren
-- Laufen
-- Badminton
+Relevante Felder: `id`, `name`, `category`, `intensity_level`, `combinable_tags`, `description`, `is_active`.
 
-Relevante Felder:
-
-- `id`
-- `name`
-- `category`
-- `intensity_level`
-- `combinable_tags`
-- `description`
-- `is_active`
-
-Die UI zeigt im Voting nur aktive Sportarten, die mindestens ein aktives Profil haben. Das passiert in `listSports`.
+Die UI zeigt im Voting nur aktive Sportarten, die mindestens ein aktives Profil haben.
 
 ### Sportprofil
 
 Tabelle: `sport_profiles`
 
-Ein Profil ist eine konkrete Variante einer Sportart oder eines Standortangebots:
+Ein Profil ist eine konkrete Variante einer Sportart oder eines Standortangebots (Beachvolleyball am Hörnle, Fußball am Stadtpark, Badminton in der Halle).
 
-- Beachvolleyball am Hörnle
-- Fußball am Stadtpark
-- Badminton in der Halle
-- Boxen im Park
-
-Relevante Felder:
-
-- `sport_id`: primäre/legacy Sportart.
-- `name`: Profilname.
-- `location_name`: kurzer Standortname.
-- `map_url`
-- `postal_code`
-- `location_city`
-- `latitude`, `longitude`
-- `venue_group_key`
-- `location_type`: `indoor`, `outdoor`, `water`, `field`, `flexible`
-- `is_indoor`
-- `minimum_group_size`
-- `maximum_group_size`
-- `required_equipment`
-- `available_equipment`
-- `cost_note`
-- `opening_notes`
-- `lighting_available`
-- `transit_notes`
-- `amenity_notes`
-- `reservation_required`
-- `safety_notes`
-- `location_rules`
-- `ap_required`
-- `ap_contact_id`
-- `weather_rules`
-- `is_active`
-- `created_by`
+Relevante Felder unter anderem: `sport_id`, `name`, `location_name`, `map_url`, `postal_code`, `location_city`, `latitude`, `longitude`, `venue_group_key`, `location_type` (`indoor`/`outdoor`/`water`/`field`/`flexible`), `is_indoor`, `minimum_group_size`, `maximum_group_size`, `minimum_participants`, `maximum_participants`, `required_equipment`, `available_equipment`, `cost_note`, `cost_required`, `cost_per_person`, `cost_currency`, `opening_notes`, `lighting_available`, `transit_notes`, `amenity_notes`, `reservation_required`, `safety_notes`, `location_rules`, `ap_required`, `ap_requirement_level`, `ap_contact_id`, `weather_rules`, `is_active`, `created_by`.
 
 ### Mehrere Sportarten pro Standortprofil
 
 Tabelle: `sport_profile_sports`
 
-Ein Standortprofil kann mit mehreren Sportarten verknüpft sein. Beispiel:
+Ein Standortprofil kann mit mehreren Sportarten verknüpft sein (z. B. Strandbad: Beachvolleyball + Schwimmen + Laufen).
 
-- Standort "Hörnle"
-  - Beachvolleyball
-  - Schwimmen
-  - Laufen
-
-Wichtige technische Umsetzung:
-
-Der Kernalgorithmus kennt pro `SportProfile` nur ein `sportId`. Deshalb expandiert `listSportProfilesForSports` in `src/services/sportProfiles.ts` verlinkte Profile virtuell:
+Der Kernalgorithmus kennt pro `SportProfile` nur ein `sportId`. Deshalb expandiert `listSportProfilesForSports` in `_shared/decisionService.ts` verlinkte Profile virtuell:
 
 - gleiches physisches Profil,
 - gleiche Profil-ID,
-- aber für den Algorithmus jeweils mit anderem `sport_id`.
+- aber für den Algorithmus jeweils mit anderem `sport_id` (Key `profileId:sportId`).
 
-Das ist zentral. Wer den Algorithmus weiterentwickelt, muss wissen: Die M:N-Logik liegt aktuell im Service-Layer, nicht im Algorithmus-Kern.
+Die M:N-Logik liegt im Service-Layer der Edge Function, nicht im Algorithmus-Kern. Fehlt die Tabelle `sport_profile_sports` (Fehlercode `42P01`), fällt der Service auf die Legacy-`sport_profiles.sport_id`-Auflösung zurück.
 
 ### Event-Aktivitäten
 
 Tabelle: `event_activities`
 
-Nach Finalisierung werden die konkreten Aktivitäten gespeichert:
+Nach Finalisierung gespeichert: `event_id`, `sport_id`, `sport_profile_id`, `role` (`primary`/`secondary`), `activity_type` (`single`/`multi_sport`/`twin`/`none`), `title`, `location`, `starts_at`, `activity_contact_id`, `assigned_user_ids`.
 
-- `event_id`
-- `sport_id`
-- `sport_profile_id`
-- `role`: `primary` oder `secondary`
-- `activity_type`: `single`, `multi_sport`, `twin`, `none`
-- `title`
-- `location`
-- `starts_at`
-- `activity_contact_id`
-- `assigned_user_ids`
-
-Diese Tabelle ist die persistierte Wahrheit für finale Single-, Multi-Sport- oder Twin-Aktivitäten.
+Das ist die persistierte Wahrheit für finale Aktivitäten und liefert auch die Rotation-Historie (siehe Abschnitt 12).
 
 ### No-Gos
 
 Tabelle: `sport_no_gos`
 
-No-Gos sind persönliche harte Unverträglichkeiten auf abstrakter Sportart-Ebene:
+Persönliche harte Unverträglichkeit auf abstrakter Sportart-Ebene: `event_id`, `sport_id`, `user_id`, `reason`.
 
-- `event_id`
-- `sport_id`
-- `user_id`
-- `reason`
-
-Fachlich: Kein normales Downvoting. Ein No-Go bedeutet: Diese Person soll für diese Sportart nicht akzeptiert eingeplant werden.
-
-Technisch aktuell: No-Go schließt eine Sportart nicht global aus. Es verhindert die persönliche Zuordnung und erzeugt eine hohe Strafkomponente, wenn die Person sonst keine Alternative bekommt.
+Fachlich kein normales Downvoting. Ein No-Go bedeutet: Diese Person soll für diese Sportart nicht akzeptiert eingeplant werden. Technisch schließt ein No-Go die Sportart nicht global aus; es verhindert die persönliche Zuordnung und erzeugt eine Strafkomponente, wenn die Person sonst keine Alternative bekommt. Es gibt zusätzlich einen harten Block für Single-Events mit zu vielen `going`-No-Gos (Abschnitt 15.4).
 
 ### Attendance
 
 Tabelle: `attendance`
 
-Geplante Teilnahme:
-
-- `going`
-- `maybe`
-- `not_going`
-
-Tatsächliche Nachbereitung:
-
-- `actual_status`: `present`, `absent`, `excused`, `unknown`
-- `checked_by`
-- `checked_at`
+Geplante Teilnahme: `going`, `maybe`, `not_going`.  
+Tatsächliche Nachbereitung: `actual_status` (`present`/`absent`/`excused`/`unknown`), `checked_by`, `checked_at`, `subgroup_id` (bei Twin).
 
 Für die Entscheidung zählen nur `going` und `maybe`.
 
@@ -271,80 +148,61 @@ Für die Entscheidung zählen nur `going` und `maybe`.
 
 Tabelle: `member_preference_history`
 
-Wird für Fairness Debt verwendet:
+Für Fairness Debt: `club_id`, `user_id`, `sport_id`, `week_start_date`, `voted_for`, `was_selected`, `vote_rank`, `covered_by_decision`, `covered_by_activity_type`.
 
-- `club_id`
-- `user_id`
-- `sport_id`
-- `week_start_date`
-- `voted_for`
-- `was_selected`
-- `vote_rank`
-- `covered_by_decision`
-- `covered_by_activity_type`
-
-Nach Finalisierung wird für jede relevante Stimme eine Historienzeile geschrieben.
+Nach Finalisierung wird pro relevanter Stimme eine Historienzeile geschrieben (Upsert auf `club_id,user_id,sport_id,week_start_date`).
 
 ## 4. Gesamtfluss
 
 ### 4.1 Voting
 
-Nutzerfluss:
-
-1. Teilnahme wählen:
-   - `going`
-   - `maybe`
-   - `not_going`
-
+1. Teilnahme wählen: `going` / `maybe` / `not_going`.
 2. Bis zu drei abstrakte Sportarten wählen.
-
 3. Optional No-Go je Sportart setzen.
 
 Voting-Regeln:
 
 - Maximal 3 Stimmen pro Event.
-- Ränge:
-  - Rang 1 = Gewicht `1.0`
-  - Rang 2 = Gewicht `0.6`
-  - Rang 3 = Gewicht `0.3`
-- Votes sind nur erlaubt, wenn Eventstatus `proposing` oder `voting` ist.
-- Votes sind nur erlaubt, wenn Attendance `going` oder `maybe` ist.
-- `not_going` darf nicht abstimmen.
-- Ein Rank kann nur einmal vergeben werden; wenn Rang 2 neu vergeben wird, wird der alte Rang-2-Vote entfernt.
+- Ränge: Rang 1 = `1.0`, Rang 2 = `0.6`, Rang 3 = `0.3`.
+- Votes nur bei Eventstatus `proposing` oder `voting`.
+- Votes nur bei Attendance `going` oder `maybe`. `not_going` darf nicht abstimmen.
+- Ein Rang kann nur einmal vergeben werden.
+
+Votes liegen in Tabelle `sport_votes` (`sport_id`, `user_id`, `vote_rank`, `weight`).
 
 ### 4.2 Decision Preview
 
-`getEventDecisionPreview` ruft:
+`preview`-Action → `getEventDecisionPreview` →
 
 1. `buildDecisionInput`
 2. `selectFairConstellation`
+3. `buildDecisionView` (sanitisiert, admin-abhängig)
 
-Preview finalisiert nichts. Sie berechnet nur eine aktuelle mögliche Entscheidung.
+Preview finalisiert nichts. Sie berechnet nur eine aktuelle mögliche Entscheidung. Im aktuellen produktiven Flow gibt es **keine Live-Preview-Auslieferung mehr** im normalen Event-Verlauf; die Entscheidung wird genau einmal beim 48h-Moment finalisiert (siehe 4.3). Die `preview`-Action existiert weiterhin und versorgt u. a. die Admin-Explainability.
 
 ### 4.3 Decision Finalize
+
+Es gibt zwei Wege:
+
+**a) `finalize`** für ein einzelnes Event (Admins / Verantwortliche).
+
+**b) `finalize-due`** als System-Sweep: finalisiert jedes Event mit Status `proposing`/`voting`, dessen Start innerhalb der nächsten 48h liegt (`starts_at <= now + 48h`). Der Entscheidungsmoment ist also `starts_at − 48h`. Der Sweep ist idempotent (siehe unten) und wird sowohl von der periodischen Push-Sweep-Routine (Service Key) als auch als Client-Fallback (jedes Mitglied) aufgerufen, ohne doppelt zu entscheiden.
 
 `finalizeEventDecision`:
 
 1. Lädt Event.
-2. Verhindert erneute Finalisierung, wenn Status schon `decided`, `completed` oder `cancelled`.
+2. Bricht ab, wenn Status bereits `decided`, `completed` oder `cancelled` (Idempotenz).
 3. Berechnet Preview.
-4. Bricht ab, wenn keine Gewinner-Sportart existiert.
-5. Wählt APs pro Aktivität.
+4. Bricht ab, wenn keine Gewinner-Sportart existiert (Event wird dann später von `cancel_underused_events()` archiviert).
+5. Wählt APs pro Aktivität (`withActivityContacts`).
 6. Ersetzt `event_activities`.
 7. Persistiert `member_preference_history`.
-8. Erstellt bei `twin` zusätzlich `event_subgroups`.
-9. Aktualisiert `weekly_events`.
+8. Erstellt bei `twin` zusätzlich `event_subgroups` und setzt `attendance.subgroup_id`.
+9. Aktualisiert `weekly_events` mit `.in("status", ["proposing","voting"])` als Guard.
 
-`weekly_events` bekommt:
+`weekly_events` bekommt: `selected_sport_id`, `secondary_sport_id`, `decision_type`, `decision_reason`, `decision_character`, `weather_snapshot`, `activity_contact_id`, `status = decided`.
 
-- `selected_sport_id`
-- `secondary_sport_id`
-- `decision_type`
-- `decision_reason`
-- `decision_scorecard`
-- `weather_snapshot`
-- `activity_contact_id`
-- `status = decided`
+**Sicherheit:** Die rohen Algorithmus-Internas werden **nicht** persistiert. `decision_scorecard`, `decision_explainability`, `losing_candidate_reasons`, `no_go_breakdown` werden bewusst auf `null` gesetzt. Sie waren früher hier gespeichert und über die REST-API von jedem Mitglied lesbar. Die Admin-Zusammenfassung wird stattdessen live aus einer Preview neu berechnet. Nicht wieder einführen (siehe Migration 044).
 
 ## 5. Input für `selectFairConstellation`
 
@@ -359,57 +217,25 @@ Typ: `FairConstellationInput`
   noGos?: SportNoGo[];
   attendance?: ParticipationEntry[];
   previousWeekSportId?: string;
+  previousWeekPrimarySportId?: string;
   preferenceHistory?: PreferenceHistoryEntry[];
   recentSelections?: RecentSelection[];
+  recentActivities?: RecentActivitySelection[];
   reliabilityHistory?: ReliabilityHistoryEntry[];
   weatherSnapshot?: ProfileWeatherSnapshot;
   options?: Partial<FairConstellationOptions>;
 }
 ```
 
-### `AbstractSport`
+`buildDecisionInput` (in `decisionService.ts`) baut diesen Input:
 
-```ts
-{
-  id: string;
-  name?: string;
-  category: string;
-  intensityLevel?: "low" | "medium" | "high";
-  combinableTags?: string[];
-}
-```
-
-### `SportProfile`
-
-```ts
-{
-  id: string;
-  sportId: string;
-  name: string;
-  locationName?: string | null;
-  venueGroupKey?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  locationType: "indoor" | "outdoor" | "water" | "field" | "flexible";
-  isIndoor?: boolean;
-  minimumGroupSize?: number;
-  maximumGroupSize?: number | null;
-  requiredEquipment?: string[];
-  availableEquipment?: string[];
-  costNote?: string | null;
-  openingNotes?: string | null;
-  lightingAvailable?: boolean | null;
-  transitNotes?: string | null;
-  amenityNotes?: string | null;
-  reservationRequired?: boolean | null;
-  safetyNotes?: string | null;
-  locationRules?: string | null;
-  apRequired?: boolean | null;
-  apContactId?: string | null;
-  weatherRules?: WeatherRules | null;
-  isActive?: boolean;
-}
-```
+- `sports`: aktive Sportarten der Proposals.
+- `sportProfiles`: aktive Profile, **nach Event-Stadt gefiltert** (`event.city`); Profile ohne `location_city` bleiben erhalten.
+- `votes`: aus `sport_votes`.
+- `previousWeekPrimarySportId` / `recentActivities`: aus `event_activities` der letzten 6 Events (Rolle + `activity_type`), Fallback `weekly_events.selected_sport_id`.
+- `preferenceHistory`: bis zu 500 Einträge vor der Eventwoche.
+- `reliabilityHistory`: Attendance der letzten 8 Events.
+- `weatherSnapshot`: Kontext-Override → `event.weather_snapshot` → Live-Fetch via Open-Meteo.
 
 ### `WeatherRules`
 
@@ -423,10 +249,14 @@ Typ: `FairConstellationInput`
   maxPrecipitationMm?: number;
   minTemperatureC?: number;
   maxTemperatureC?: number;
+  windSensitive?: boolean;
+  maxWindKmh?: number;
+  requiresDaylight?: boolean;
+  slipperyWhenWet?: boolean;
 }
 ```
 
-Hinweis: Wind-Regeln wurden entfernt. Open-Meteo lädt Winddaten noch, der Algorithmus bewertet Wind aber aktuell nicht.
+Hinweis: Wind wird wieder bewertet (`windSensitive` + `maxWindKmh`), siehe Abschnitt 13.
 
 ## 6. Default-Optionen
 
@@ -434,60 +264,82 @@ Aus `DEFAULT_OPTIONS`:
 
 | Option | Wert | Bedeutung |
 |---|---:|---|
-| `maxActivities` | `2` | Modelliert maximal zwei Aktivitäten; aktuell nicht für mehr als zwei genutzt. |
-| `maybeParticipationWeight` | `0.55` | Gewicht von `maybe`. |
+| `maxActivities` | `4` | Obergrenze für ein kombiniertes Event an einem Ort. |
+| `maybeParticipationWeight` | `0.55` | Teilnahme-Gewicht von `maybe` (Participation/Zuordnung). |
+| `maybePreferenceWeight` | `0.8` | `maybe`-Gewicht für Vote-/Preference-/Reliability-Scoring. |
 | `noAttendanceWeight` | `0` | Kein Attendance-Eintrag zählt nicht. |
+| `preferenceScoreMultiplier` | `1.25` | Multiplikator der Preference im FinalScore. |
+| `minimumWinnerVoteScore` | `1` | Mindest-Primary-VoteScore eines Gewinners (außer Low-Vote-Fallback). |
+| `minimumSingleVoteShare` | `0.25` | Mindest-VoteShare für Single. |
+| `minimumPrimaryVoteShare` | `0.25` | Mindest-VoteShare der Hauptsportart bei Multi/Twin. |
+| `lowVoteFallbackEnabled` | `true` | Aktiviert Fallback bei sehr wenigen Stimmen. |
+| `lowVoteTotalThreshold` | `2` | Gesamt-VoteScore ≤ Wert ⇒ Fallback. |
 | `neglectBoostPerWeek` | `0.35` | Fairness Debt pro direkt ignorierter Vorwoche. |
-| `maxFairnessDebt` | `2` | Maximaler Debt pro User. |
-| `noGoPenalty` | `2.5` | Strafwert für nicht abgedeckte No-Go-Konflikte. |
+| `maxFairnessDebt` | `2` | Maximaler Debt pro User (bzw. User×Sport). |
+| `noGoPenalty` | `2.5` | Strafwert No-Go bei Multi/Twin. |
+| `singleGoingNoGoPenalty` | `3.5` | No-Go-Strafe (`going`) bei Single. |
+| `singleMaybeNoGoPenalty` | `2` | No-Go-Strafe (`maybe`) bei Single. |
+| `singleGoingNoGoHardBlockThreshold` | `2` | Ab so vielen `going`-No-Gos möglicher Hard-Block. |
+| `singleGoingNoGoHardBlockShare` | `0.25` | Zusätzlicher Anteils-Schwellwert für den Hard-Block. |
 | `minSecondaryVoteScore` | `1.2` | Mindestscore für eine zweite echte Gruppe. |
-| `strongSecondaryVoteRatio` | `0.32` | Zweitgruppe braucht mindestens 32 Prozent der Erstgruppe. |
-| `twinScoreRatio` | `0.82` | Wird faktisch als absoluter Twin-Score-Vorteil verwendet. |
-| `fairnessFirstMargin` | `0.45` | Mindest-Fairnessvorteil für Fairness-Override. |
-| `fairnessOverrideWindow` | `2.2` | Score-Abstand, innerhalb dessen Fairness gewinnen darf. |
+| `strongSecondaryVoteRatio` | `0.32` | Zweitgruppe braucht ≥ 32 % der Erstgruppe. |
+| `minimumSecondaryUniqueVoters` | `2` | Mindestzahl eindeutiger Voter der Zweitgruppe. |
+| `smallGroupThreshold` | `4` | Bis hier gilt „kleine Gruppe". |
+| `allowSingleUserSecondaryInSmallGroups` | `true` | In kleinen Gruppen reicht 1 Voter für die Zweitgruppe. |
+| `twinScoreMargin` | `0.82` | Absoluter Score-Vorteil, ab dem Twin gegen gemeinsame Varianten gewinnen darf. |
+| `fairnessFirstMargin` | `0.55` | Mindest-Fairnessvorteil für Fairness-Override. |
+| `fairnessOverrideWindow` | `1.5` | Score-Abstand, innerhalb dessen Fairness gewinnen darf. |
+| `minimumFairnessOverrideVoteScore` | `1.2` | Mindest-Primary-VoteScore, damit Fairness überstimmen darf. |
+| `majorityProtectionVoteShare` | `0.6` | Ab diesem VoteShare gilt eine Option als Mehrheits-geschützt. |
+| `majorityOverrideRequiresFairnessGap` | `1.2` | Fairnessvorteil, der nötig ist, um Mehrheitsschutz zu kippen. |
+| `majorityProtectionMaxPracticalityProblem` | `0.6` | Max. Praktikabilitätsproblem, bis Mehrheitsschutz greift. |
 | `twinFairnessMargin` | `0.7` | Fairnessvorteil, damit Twin gegen gemeinsame Varianten gewinnen darf. |
-| `socialRadiusKm` | `0.75` | Radius für Multi-Sport als gemeinsames Event. |
-| `sameSpotRadiusKm` | `0.12` | Radius für gleicher Ort. |
+| `socialRadiusKm` | `0.75` | Radius für Multi-Sport als gemeinsames Event („Rufnähe"). |
+| `sameSpotRadiusKm` | `0.3` | Radius für „gleicher Ort". |
+| `previousPrimaryCannotRepeatAsPrimary` | `true` | Vorwochen-Hauptsport darf nicht erneut Primary sein (harter Filter). |
+| `previousPrimaryAllowedAsSecondary` | `true` | Darf aber Secondary sein. |
 | `previousPrimaryPenalty` | `0.85` | Rotation-Malus für letzte Hauptsportart. |
 | `recentCategoryPenalty` | `0.35` | Kategorie-Rotationsmalus. |
+| `recentSecondarySportPenalty` | `0.2` | Malus, wenn Sport zuletzt Secondary war. |
+| `recentSecondaryCategoryPenalty` | `0.15` | Malus für zuletzt sekundäre Kategorie. |
 | `reliabilityPenaltyPerNoShow` | `0.12` | No-Show-Penalty pro Fall. |
 | `maxReliabilityPenalty` | `0.45` | Maximaler Reliability-Penalty pro User. |
+| `requiredApMissingPenalty` | `0.8` | Malus, wenn ein erforderlicher AP fehlt. |
+| `criticalApMissingExcludesProfile` | `true` | Fehlt ein kritischer AP, wird das Profil ausgeschlossen. |
+| `apAvailableBonus` | `0.15` | Bonus, wenn ein Profil-AP hinterlegt ist. |
 
 ## 7. Vorfilter im Algorithmus
 
-Am Anfang von `selectFairConstellation`:
+In `selectFairConstellation` / `buildDecisionContext`:
 
-1. `sportsById` mappt Sport-ID zu Sport.
-2. `proposedSportIds` kommt aus `sport_proposals`.
-3. `activeProfiles`:
-   - Profil muss aktiv sein: `profile.isActive !== false`
-   - Profil muss zu vorgeschlagener Sportart gehören.
-4. `attendanceByUser`.
-5. No-Gos werden nach Sport gruppiert.
-6. `eligibleVotes`:
-   - Vote-Sport muss vorgeschlagen sein.
-   - User muss `going` oder `maybe` sein.
-   - User darf für diese Sportart kein No-Go gesetzt haben.
-7. Votes werden nach Sport gruppiert.
-8. `votedSportIds` enthält nur vorgeschlagene Sportarten mit mindestens einer gültigen Stimme.
+1. `proposedSportIds` aus `proposals`.
+2. `attendanceByUser`.
+3. No-Gos nach Sport gruppiert.
+4. `eligibleVotes`: Sport vorgeschlagen **und** User `going`/`maybe`. (Hinweis: No-Go schließt den Vote hier nicht aus; die No-Go-Wirkung greift später bei Zuordnung und Strafe.)
+5. `voteSummaryBySport` und `totalVoteScore`.
+6. `votedSportIds`: vorgeschlagene Sportarten mit `weightedVoteScore > 0`.
+7. Fairness Debt (pro User und pro User×Sport), Reliability-Penalties, eligible Participants.
+8. `lowVoteFallback = lowVoteFallbackEnabled && totalVoteScore <= lowVoteTotalThreshold`.
 
-Wenn keine gültigen Stimmen existieren:
-
-```text
-mode = "none"
-reason = "Keine Entscheidung: Es gibt keine gültigen Stimmen ..."
-```
+Wenn keine gültigen Stimmen existieren ⇒ `mode = "none"`.
 
 ## 8. Attendance-Gewichtung
 
+Es gibt **zwei** Gewichtungen:
+
 ```ts
+// participationWeight — Participation-Score, Zuordnung, Minderheitenschutz
 going = 1
 maybe = 0.55
-not_going = 0
-kein Attendance-Eintrag = 0
+not_going / kein Eintrag = 0
+
+// preferenceAttendanceWeight — Vote-/Preference-/Reliability-Scoring
+going = 1
+maybe = 0.8
+not_going / kein Eintrag = 0
 ```
 
-`not_going` wird im Algorithmus also nicht nur schwach gewichtet, sondern komplett ignoriert.
+`not_going` wird im Algorithmus komplett ignoriert.
 
 ## 9. Vote-Gewichtung
 
@@ -495,1283 +347,381 @@ kein Attendance-Eintrag = 0
 rank 1 = 1
 rank 2 = 0.6
 rank 3 = 0.3
+explizites vote.weight überschreibt (>= 0)
 fallback ohne rank/weight = 1
 ```
 
-Wenn `vote.weight` gesetzt ist, nutzt der Algorithmus das direkte Gewicht. Sonst wird aus `rank` abgeleitet.
-
-VoteScore:
+VoteScore pro Stimme (`sumVoteScore`):
 
 ```text
 normalizeVoteWeight(vote)
 * (1 - reliabilityPenaltyByUser[user])
-* participationWeight(userAttendance)
+* preferenceAttendanceWeight(userAttendance)
 ```
 
 ## 10. Fairness Debt
 
-Funktion: `calculateFairnessDebt`
+Funktion: `calculateFairnessDebt` (pro User) und `calculateFairnessDebtByUserSport` (pro User×Sport).
 
-Input: `member_preference_history`
+Pro Gruppierung:
 
-Algorithmus pro User:
-
-1. Historie nach User gruppieren.
-2. Wochen gruppieren.
-3. Wochen rückwärts sortieren.
-4. Für jede Woche:
+1. Historie nach Woche gruppieren, rückwärts sortieren.
+2. Für jede Woche:
    - Wenn User in dieser Woche nichts gewählt hat: stop.
-   - Wenn mindestens eine seiner Stimmen durch Entscheidung abgedeckt wurde: stop.
+   - Wenn mindestens eine seiner Stimmen abgedeckt wurde: stop.
    - Sonst `ignoredWeeks += 1`.
-5. Debt:
+3. Debt: `min(ignoredWeeks * 0.35, 2.0)`.
 
-```text
-min(ignoredWeeks * 0.35, 2.0)
-```
+Abdeckung: `entry.coveredByDecision ?? entry.wasSelected` (neue Logik mit Fallback auf alte Daten).
 
-Abdeckung:
-
-```ts
-entry.coveredByDecision ?? entry.wasSelected
-```
-
-Das bedeutet: Neue Logik nutzt `covered_by_decision`; alte Daten fallen auf `was_selected` zurück.
+Der **User×Sport**-Debt wird im Scoring verwendet (Fairness, Minderheitenschutz, Gruppen-Support); der **User**-Debt nur in der Explainability-Ausgabe.
 
 ## 11. Reliability Penalty
 
 Funktion: `calculateReliabilityPenalties`
 
-Input:
+1. Historie nach User gruppieren, letzte 6 Einträge betrachten.
+2. Zählen: `plannedStatus === "going" && actualStatus === "absent"`.
+3. Penalty: `min(recentNoShows * 0.12, 0.45)`.
+4. Aktuelle Attendance mit `status === "going" && actualStatus === "absent"` addiert nochmals (gleicher Cap).
 
-- `reliabilityHistory`
-- aktuelle `attendance`
+Wirkung: reduziert VoteScore über `1 - penalty` und erzeugt zusätzlichen negativen `reliability`-Score. User werden nicht ausgeschlossen.
 
-Logik:
+## 12. Rotation-Historie
 
-1. Historie nach User gruppieren.
-2. Pro User die letzten 6 Einträge betrachten.
-3. Zählen:
-
-```text
-plannedStatus === "going" && actualStatus === "absent"
-```
-
-4. Penalty:
-
-```text
-min(recentNoShows * 0.12, 0.45)
-```
-
-5. Aktuelle Attendance kann zusätzlich einen Penalty erzeugen, wenn:
-
-```text
-status === "going" && actualStatus === "absent"
-```
-
-Wirkung:
-
-- reduziert VoteScore über `1 - penalty`
-- erzeugt zusätzlichen negativen `reliability` Score
-
-Wichtig: User werden nicht ausgeschlossen. Ihr Einfluss wird nur reduziert.
-
-## 12. Profilbewertung
-
-Jedes aktive Profil wird vor Kandidatengenerierung bewertet:
-
-```ts
-evaluateProfiles(profile, weatherSnapshot)
-```
-
-Ergebnis:
-
-- `weatherScore`
-- `practicalityScore`
-- optional `excluded`
-- `weatherReasons`
-- `practicalityReasons`
-
-Ausgeschlossene Profile werden nicht für Kandidaten genutzt und erscheinen in `excludedProfiles`.
+`fetchRecentActivities` lädt jetzt `event_activities` der letzten 6 Events inklusive `role` und `activity_type` (Fallback auf `selected_sport_id`/`decision_type`). Damit sind auch sekundäre Sportarten früherer Multi/Twin-Events für die Kategorie- und Secondary-Rotation sichtbar (Abschnitt 18.8).
 
 ## 13. Wetterbewertung
 
-Funktion: `scoreWeather`
+Funktion: `scoreWeather`.
 
-### Indoor
+- **Indoor** (`isIndoor` oder `locationType === "indoor"`): `+0.8`, wetterstabil.
+- **Outdoor ohne Koordinaten und ohne PLZ**: `-5`, **ausgeschlossen** („nicht wetterfähig").
+- **Outdoor mit Standort, aber ohne Wetterdaten**: `-0.35` („konnte noch nicht sicher bewertet werden").
+- **Gewitter** (`(rules.thunderstormUnsafe ?? true) && weatherCode >= 95`): `-5`, **harter Ausschluss**.
 
-Wenn:
+Sonst Startwert `+0.4` und:
 
-```ts
-profile.isIndoor || profile.locationType === "indoor"
-```
+| Bedingung | Score | Grund |
+|---|---:|---|
+| `requiresDry`/`rainSensitive` und Niederschlag > `maxPrecipitationMm` (Default 1.5) | `-0.85` | Regen passt schlecht. |
+| sonst Niederschlag > 0.5 mm oder Regenwahrscheinlichkeit > 65 % | `-0.35` | ungemütlich, nicht gefährlich. |
+| sonst | `+0.35` | Wetter passt. |
+| `windSensitive` und Wind > `maxWindKmh` (Default 35) | `-0.45` | Wind eingeschränkt. |
+| `heatSensitive` und Temp > `maxTemperatureC` (Default 30) | `-0.35` | Hitze. |
+| `coldSensitive` und Temp < `minTemperatureC` (Default 6) | `-0.35` | Kälte. |
 
-dann:
-
-```text
-score = +0.8
-reason = "Indoor-Profil ist wetterstabil."
-```
-
-### Fehlende Wetterdaten oder Koordinaten
-
-Wenn Outdoor und keine Koordinaten oder kein Wetter:
-
-```text
-score = -0.35
-reason = "Wetter konnte mangels Koordinaten oder Wetterdaten nicht sicher bewertet werden."
-```
-
-### Gewitter
-
-Wenn:
-
-```ts
-(rules.thunderstormUnsafe ?? true) && weatherCode >= 95
-```
-
-dann:
-
-```text
-score = -5
-excluded = "Gefährliches Gewitterwetter schließt dieses Outdoor-Profil aus."
-```
-
-Das ist ein harter Ausschluss.
-
-### Regen
-
-Startwert Outdoor:
-
-```text
-score = +0.4
-```
-
-Wenn Profil trocken nötig oder regensensibel ist und Niederschlag über Grenzwert liegt:
-
-```text
-score -= 0.85
-reason = "Regen passt nur schlecht zu diesem Profil."
-```
-
-Grenzwert:
-
-```ts
-rules.maxPrecipitationMm ?? 1.5
-```
-
-Wenn leichter Regen oder hohe Wahrscheinlichkeit:
-
-```ts
-precipitation > 0.5 || precipitationProbability > 65
-```
-
-dann:
-
-```text
-score -= 0.35
-reason = "Das Wetter ist etwas ungemütlich, aber nicht gefährlich."
-```
-
-Sonst:
-
-```text
-score += 0.35
-reason = "Das Wetter passt zum Outdoor-Profil."
-```
-
-### Temperatur
-
-Hitze:
-
-```ts
-rules.heatSensitive && temperature > (rules.maxTemperatureC ?? 30)
-```
-
-```text
-score -= 0.35
-```
-
-Kälte:
-
-```ts
-rules.coldSensitive && temperature < (rules.minTemperatureC ?? 6)
-```
-
-```text
-score -= 0.35
-```
-
-### Open-Meteo
-
-`fetchEventWeatherSnapshot`:
-
-- nutzt `startsAt`
-- holt für jedes Profil mit Koordinaten Forecastdaten
-- nimmt die stündliche Wetterzeile, deren Zeit am nächsten am Eventstart liegt
-- gibt `ProfileWeatherSnapshot` zurück
-
-Wenn `weekly_events.weather_snapshot` bereits vorhanden ist, wird dieser bevorzugt. Sonst wird live geholt. Bei Finalisierung wird der Snapshot im Event gespeichert.
+`fetchEventWeatherSnapshot` nutzt `starts_at`, holt für jedes Profil mit Koordinaten Forecastdaten und nimmt die stündliche Zeile am nächsten zum Eventstart. Gespeicherter `weekly_events.weather_snapshot` wird bevorzugt; bei Finalisierung wird der Snapshot im Event gespeichert.
 
 ## 14. Praktikabilität
 
-Funktion: `scoreBasePracticality`
+Funktion: `scoreBasePracticality`. Startwert `+0.35`.
 
-Startwert:
+Harter Ausschluss: `apRequirementLevel === "critical"` und kein `apContactId` und `criticalApMissingExcludesProfile` ⇒ `-5`, ausgeschlossen.
 
-```text
-score = +0.35
-```
-
-Bonusse:
-
-| Bedingung | Score |
+| Bonus | Score |
 |---|---:|
-| Licht vorhanden | `+0.12` |
+| Beleuchtung | `+0.12` |
 | Öffnungszeiten dokumentiert | `+0.08` |
 | Anreise/ÖPNV/Parken dokumentiert | `+0.08` |
 | Infrastruktur dokumentiert | `+0.08` |
 | Standortregeln hinterlegt | `+0.05` |
 | Sicherheitsinfos hinterlegt | `+0.03` |
-| AP nötig und AP hinterlegt | `+0.12` |
-| AP nicht nötig, aber AP hinterlegt | `+0.06` |
-| alle benötigten Equipment-Items auch verfügbar | `+0.14` |
+| AP hinterlegt (`apContactId`) | `+0.15` (`apAvailableBonus`) |
+| alle benötigten Equipment-Items verfügbar | `+0.14` |
 
-Mali:
-
-| Bedingung | Score |
+| Malus | Score |
 |---|---:|
-| Kostenhinweis vorhanden | `-0.04` |
 | Reservierung nötig | `-0.12` |
-| AP nötig, aber kein AP hinterlegt | `-0.18` |
+| AP `required`, aber kein AP | `-0.8` (`requiredApMissingPenalty`) |
 | fehlendes Equipment | `-0.12` pro Item, max `-0.4` |
-| Outdoor ohne Koordinaten | `-0.12` |
 
-Equipment wird normalisiert:
+`apRequirementLevel` wird normalisiert: explizites `none`/`required`/`critical`, sonst aus `apRequired` abgeleitet. Kosten sind **nicht** mehr Teil der Praktikabilität (eigener Score, Abschnitt 14a).
 
-- trim
-- lowercase
-- leere Werte raus
+### 14a. Kostenbewertung
+
+Funktion: `scoreCost`. `costRequired = costRequired ?? Boolean(costNote)`.
+
+| Bedingung | Score | Grund |
+|---|---:|---|
+| keine Pflichtkosten oder `costPerPerson === 0` | `+0.1` | keine strukturierten Kosten. |
+| Kostenhinweis, aber kein numerischer Wert | `-0.04` | Hinweis ohne Struktur. |
+| `costPerPerson <= 3` | `-0.05` | niedrig. |
+| `costPerPerson <= 8` | `-0.15` | moderat. |
+| `costPerPerson <= 15` | `-0.35` | spürbar. |
+| sonst | `-0.65` | hoch. |
 
 ## 15. Kandidatengenerierung
 
-### Single-Kandidaten
+### 15.1 Single-Kandidaten
 
-Für jede Sportart mit gültigen Stimmen:
+Für jede Sportart mit gültigen Stimmen: bestes Profil suchen, `single`-Kandidat bauen. Bestes Einzelprofil: höchste Summe `weatherScore + practicalityScore + costScore`, Tie alphabetisch.
 
-1. Bestes Profil für diese Sportart suchen.
-2. Wenn vorhanden: `single`-Kandidat bauen.
+### 15.2 Paar-Kandidaten
 
-Bestes Einzelprofil:
+Sportarten werden nach Gruppensupport sortiert (`groupSupportScore = voteScore + Σ FairnessDebt(User×Sport) * preferenceAttendanceWeight * 0.35`).
 
-```text
-höchster weatherScore + practicalityScore
-Tie: Profilname alphabetisch
-```
-
-### Paar-Kandidaten
-
-Sportarten werden zuerst nach Gruppensupport sortiert.
-
-Gruppensupport:
-
-```text
-sumVoteScore
-+ Summe FairnessDebt der Unique Voters * AttendanceWeight * 0.35
-```
-
-Für jedes Sportartenpaar:
-
-1. Bestes Profilpaar suchen.
-2. Nähe bestimmen.
-3. Zweitgruppenstärke prüfen.
-4. Falls nahe genug: Multi-Sport-Kandidat bauen.
-5. Twin-Kandidat bauen, wenn Participation hoch genug ist.
-
-### Zweitgruppenprüfung
-
-Eine zweite Gruppe ist nur sinnvoll, wenn:
+Für jedes Paar: Paar wird so geordnet, dass der Vorwochen-Primary nicht Primary wird. Bestes Profilpaar wählen (Summe der Profilscores + Proximity-Score). Zweitgruppen-Prüfung:
 
 ```text
 secondScore >= 1.2
 secondScore >= firstScore * 0.32
+uniqueVoters(second) >= requiredSecondaryVoters
 ```
 
-Ohne diese Prüfung wird kein Multi/Twin für das Paar gebaut.
+`requiredSecondaryVoters` ist `1` in kleinen Gruppen (≤ 4 Teilnehmende, `allowSingleUserSecondaryInSmallGroups`), sonst `2`. Ohne sinnvolle Zweitgruppe und ohne Low-Vote-Fallback wird das Paar übersprungen.
 
-### Profilpaar-Auswahl
+- Bei `same_spot`/`social_radius` ⇒ Multi-Sport-Kandidat.
+- Twin-Kandidat, wenn `participation >= minSecondaryVoteScore * 2` oder Low-Vote-Fallback.
 
-Für jedes Profil A der ersten Sportart und Profil B der zweiten Sportart:
+### 15.3 Kombinierte Kandidaten (3+ Sportarten)
 
-```text
-pairScore =
-  weatherA + practicalityA
-  + weatherB + practicalityB
-  + proximityScore
-```
+`generateCombinedCandidates` baut Events mit 3 bis `maxActivities` (4) Sportarten an einem Ort: Anker an jeder gerankten Sportart, dann greedy weitere ko-lokalisierte Sportarten (`same_spot`/`social_radius`) aufnehmen, die jeweils die „meaningful support"-Schwelle erfüllen. Ergebnis sind Multi-Sport-Kandidaten. Die paarweise Schleife deckt Single und 2-Sport ab; dieser Schritt ergänzt nur die größeren Kombinationen.
 
-Bestes Paar gewinnt.
+### 15.4 Harte Kandidatenfilter
+
+`applyHardCandidateFilters`:
+
+- Vorwochen-Primary darf nicht erneut Primary sein ⇒ Kandidat verworfen.
+- Außerhalb Low-Vote-Fallback: `primaryVoteScore >= minimumWinnerVoteScore`; Single `primaryVoteShare >= 0.25`; Multi/Twin `primaryVoteShare >= 0.25`.
+- Single-Hard-Block bei No-Gos: `goingNoGos >= 2 && goingNoGos / goingParticipants >= 0.25` ⇒ verworfen.
+
+Danach `dedupeCandidates` über die Kandidaten-ID.
 
 ## 16. Nähe und Standortlogik
 
-Funktion: `getProfileProximity`
+Funktion: `getProfileProximity`. **Distanz ist das maßgebliche Signal:**
 
-Ergebnis:
+1. Gleiches Profil ⇒ `same_spot`.
+2. Distanz berechenbar:
+   - `<= sameSpotRadiusKm (0.3)` ⇒ `same_spot`
+   - `<= socialRadiusKm (0.75)` ⇒ `social_radius`
+   - sonst ⇒ `split_location`
+3. Nur wenn mindestens ein Profil keine Koordinaten hat: Fallback auf gleichen `venueGroupKey` ⇒ `same_spot`, sonst `unknown`.
 
-- `same_spot`
-- `social_radius`
-- `split_location`
-- `unknown`
+ProximityScore: `same_spot +0.75`, `social_radius +0.45`, `split_location -0.2`, `unknown -0.1`.
 
-Logik:
-
-1. Gleiches Profil:
-
-```text
-same_spot
-```
-
-2. Gleicher `venueGroupKey`:
-
-```text
-same_spot
-```
-
-3. Distanz nicht berechenbar:
-
-```text
-unknown
-```
-
-4. Distanz <= `sameSpotRadiusKm = 0.12`:
-
-```text
-same_spot
-```
-
-5. Distanz <= `socialRadiusKm = 0.75`:
-
-```text
-social_radius
-```
-
-6. Sonst:
-
-```text
-split_location
-```
-
-ProximityScore:
-
-| Nähe | Score |
-|---|---:|
-| `same_spot` | `+0.75` |
-| `social_radius` | `+0.45` |
-| `split_location` | `-0.2` |
-| `unknown` | `-0.1` |
-
-Multi-Sport wird nur gebaut bei:
-
-- `same_spot`
-- `social_radius`
-
-Twin darf auch bei `split_location` oder `unknown` entstehen. `unknown` wird im Twin-Kandidaten als `split_location` behandelt.
+Multi-Sport entsteht nur bei `same_spot`/`social_radius`. Twin darf auch bei `split_location`/`unknown` entstehen (`unknown` wird als `split_location` behandelt).
 
 ## 17. User-Zuordnung zu Aktivitäten
 
-Funktion: `assignUsersToSports`
+Funktion: `assignUsersToSports`.
 
-### Single
-
-Bei Single werden alle entscheidungsberechtigten User gesammelt:
-
-- User mit gültigem Vote
-- User mit No-Go, sofern Attendance `going` oder `maybe`
-
-Dann werden alle zugeordnet, die kein No-Go gegen die Single-Sportart haben.
-
-### Multi-Sport und Twin
-
-Jeder User wird genau einer der gewählten Sportarten zugeordnet:
-
-1. Für jede gewählte Sportart werden Votes betrachtet.
-2. Hat User für mehrere der gewählten Sportarten gestimmt, gewinnt seine stärkste Stimme.
-3. No-Go-Sportarten werden für diesen User übersprungen.
-4. Zuordnung geht in `assignedUserIds`.
-
-Wichtig: Bei Gleichstand gewinnt implizit die Sportart, die in der Kandidatenreihenfolge früher verarbeitet wird.
+- **Single**: alle entscheidungsberechtigten User ohne No-Go gegen die Single-Sportart.
+- **Multi/Twin**: jeder User wird genau der gewählten Sportart mit seiner stärksten Stimme zugeordnet; No-Go-Sportarten werden für ihn übersprungen. Bei Gleichstand gewinnt implizit die zuerst verarbeitete Sportart.
 
 ## 18. ScoreBreakdown
 
-Jeder Kandidat bekommt:
+Jeder Kandidat bekommt 13 gerundete Komponenten:
 
 ```ts
 {
-  participation,
-  preference,
-  fairness,
-  minorityProtection,
-  togetherness,
-  weather,
-  practicality,
-  rotation,
-  reliability
+  participation, preference, fairness, minorityProtection,
+  togetherness, weather, practicality, locationCapacity,
+  cost, rotation, reliability, noGoPressure, modeBonus
 }
 ```
 
-Alle Werte werden auf zwei Nachkommastellen gerundet.
-
 ### 18.1 Participation
-
-Funktion: `scoreParticipation`
-
-Für jede Aktivität:
-
-- Summe `participationWeight` aller zugeordneten User.
-- Wenn unter Mindestgruppe:
-
-```text
-score -= max(1, minGroup - participantCount)
-```
-
-- Wenn über Maximalgruppe:
-
-```text
-score -= max(1, participantCount - maxGroup)
-```
-
-Danach Skalierung:
-
-```text
-single: score * 0.55
-multi_sport/twin: score * 0.75
-```
+Summe `participationWeight` aller zugeordneten User, skaliert: Single `* 0.55`, Multi/Twin `* 0.75`. (Gruppengrößen-Strafen liegen jetzt in `locationCapacity`, nicht hier.)
 
 ### 18.2 Preference
-
-Summe der VoteScores aller gewählten Sportarten:
-
-```text
-normalizeVoteWeight
-* reliabilityMultiplier
-* attendanceWeight
-```
-
-ReliabilityMultiplier:
-
-```text
-1 - reliabilityPenalty
-```
+Summe der VoteScores aller gewählten Sportarten (`normalizeVoteWeight * (1 - reliabilityPenalty) * preferenceAttendanceWeight`).
 
 ### 18.3 Fairness
-
-Summe FairnessDebt der abgedeckten User:
-
-- Single: Unique Voters der Sportart.
-- Multi/Twin: zugewiesene User je Sportart.
+Summe FairnessDebt (User×Sport) der eindeutigen Voter je gewählter Sportart.
 
 ### 18.4 Minority Protection
-
-Nur bei zwei Sportarten relevant.
-
-1. Kleinere Gruppe bestimmen.
-2. Fairness Debt dieser Gruppe summieren.
-3. VoteScore der Minderheit berechnen.
-
-Formel:
+Nur bei ≥ 2 Sportarten. Kleinste Gruppe bestimmen, deren Debt × Participation summieren, plus VoteScore:
 
 ```text
-0.45 + min(1.4, minorityDebt * 0.45 + voteScore * 0.18)
+(mode === "single" ? 0 : 0.45) + min(1.4, minorityDebt * 0.45 + voteScore * 0.18)
 ```
 
-Bei Single:
-
-```text
-0
-```
-
-Im Code steht zwar `mode === "single" ? 0 : 0.45`, aber die Funktion gibt vorher bei weniger als zwei Sportarten `0` zurück.
+Bei < 2 Sportarten: `0`.
 
 ### 18.5 Togetherness
-
-| Mode / Nähe | Score |
-|---|---:|
-| Single | `+1.4` |
-| Multi-Sport same spot | `+1.25` |
-| Multi-Sport social radius | `+0.9` |
-| Twin | `-0.55` |
-| sonst | `0` |
-
-Das bevorzugt gemeinsame Club-Events, solange Fairness/Praktikabilität nicht klar dagegen sprechen.
+Single `+1.4`, Multi same_spot `+1.25`, Multi social_radius `+0.9`, Twin `-0.55`, sonst `0`.
 
 ### 18.6 Weather
-
 Summe der `weatherScore` aller Profile.
 
 ### 18.7 Practicality
+Summe der `practicalityScore` (Basis-Praktikabilität) aller Profile.
 
-Summe:
+### 18.8 Location Capacity
+Funktion: `scoreLocationCapacity`. Aktivitäten werden nach **physischem Ort** gruppiert (Distanz-basiert via `getProfileProximity`). Pro Standortgruppe:
 
-```text
-basePracticality jedes Profils
-+ scoreActivityGroupSizes
-```
+- zugeordnete Personen zwischen Standort-Min und -Max ⇒ `+0.35`,
+- unter Minimum ⇒ `-max(1, minimum - assigned)`,
+- über Maximum ⇒ `-max(1, assigned - maximum)`.
 
-Gruppengrößen:
+Min/Max kommen aus `minimumParticipants ?? minimumGroupSize ?? 1` bzw. `maximumParticipants ?? maximumGroupSize`.
 
-- Wenn `participantCount` zwischen min und max:
+### 18.9 Cost
+Summe der `costScore` aller Profile (Abschnitt 14a).
 
-```text
-+0.35
-```
+### 18.10 Rotation
+Funktion: `scoreRotation`. Pro Sport im Kandidaten:
 
-- sonst:
+- Sport ist Vorwochen-Primary und Index 0 ⇒ `-0.85` (hart als Primary blockiert).
+- Sport war zuletzt Secondary ⇒ `-0.2`.
+- Kategorie kam kürzlich vor ⇒ `-0.35` (bzw. `-0.15`, wenn nur als sekundäre Kategorie).
 
-```text
--1
-```
+Rotation ist kein harter Ausschluss (der Primary-Block läuft über die harten Filter, Abschnitt 15.4).
 
-### 18.8 Rotation
+### 18.11 Reliability
+`-Σ (reliabilityPenalty[user] * voteWeight * preferenceAttendanceWeight)` über alle Stimmen der gewählten Sportarten.
 
-Funktion: `scoreRotation`
+### 18.12 No-Go-Druck
+Funktion: `scoreNoGoPressure`. Pro ungelöstem No-Go (Person ohne Alternative):
 
-Inputs:
+- Single: `going` ⇒ `3.5`, `maybe` ⇒ `2`.
+- Multi/Twin: `noGoPenalty (2.5)` × (`going` 1 / `maybe` `maybeParticipationWeight` 0.55).
 
-- `previousWeekSportId`
-- `recentSelections`
-- Sportkategorien
-- Mode
+Wird im FinalScore **abgezogen**.
 
-Logik je Sport in Kandidat:
-
-Wenn Sport genau Vorwochensport:
-
-```text
-primary: -0.85
-secondary: -0.85 * 0.35 = -0.2975
-```
-
-Wenn gleiche Kategorie wie Vorwoche und Single:
-
-```text
--0.35
-```
-
-Wenn Kategorie in letzten 4 Events:
-
-```text
--0.35 * 0.5 = -0.175
-```
-
-Wichtig: Rotation ist kein harter Ausschluss. Eine Vorwochensportart kann wieder gewinnen, wenn die Gesamtlage stark genug ist.
-
-### 18.9 Reliability
-
-Funktion: `scoreReliability`
-
-Für jede Stimme der gewählten Sportarten:
-
-```text
-score -= reliabilityPenalty[user]
-       * voteWeight
-       * participationWeight
-```
-
-Danach wird No-Go-Druck abgezogen:
-
-```text
-reliability = scoreReliability - scoreNoGoPressure
-```
-
-No-Go-Druck:
-
-Für jeden No-Go-User einer Aktivität:
-
-- wenn User nicht teilnahmeberechtigt: ignorieren.
-- wenn User eine alternative Aktivität bekommt: kein Penalty.
-- wenn keine Alternative:
-
-```text
-penalty += noGoPenalty * attendanceWeight
-```
-
-Mit Default:
-
-```text
-going: 2.5
-maybe: 1.375
-```
+### 18.13 Mode Bonus
+Single `+0.3`, Multi-Sport `+0.15`, Twin `0`.
 
 ## 19. FinalScore
 
-Ein Kandidatenscore:
-
 ```text
 finalScore =
-  participation
-  + preference
+  preference * 1.25 (preferenceScoreMultiplier)
+  + participation
   + fairness
   + minorityProtection
   + togetherness
   + weather
   + practicality
+  + locationCapacity
+  + cost
   + rotation
   + reliability
+  - noGoPressure
   + modeBonus
 ```
 
-ModeBonus:
-
-```text
-single: +0.3
-multi_sport: +0.15
-twin: +0
-```
-
-Das bevorzugt Single und Multi-Sport leicht, wenn alles andere ähnlich ist.
+Beispiel (Single, aus der Test-Scorecard): `3.6*1.25 + 2.26 + 1.4 + 0.75 + 0.62 + 0.35 + 0.1 + 0.3 = 10.28`.
 
 ## 20. Kandidatenranking
 
-Funktion: `compareCandidates`
+Funktion: `compareCandidates`, in dieser Reihenfolge:
 
-Sortierung in dieser Reihenfolge:
+### 20.1 Majority Protection
+Eine Option ist geschützt, wenn `primaryVoteShare >= 0.6`, kein ungelöster `going`-No-Go, kein harter Wetter-Risiko und `practicalityProblemScore <= 0.6`. Ein geschützter Kandidat gewinnt gegen einen ungeschützten, **außer** der Herausforderer hat `fairnessGap >= 1.2` **und** `primaryVoteScore >= 1.2`.
 
-### 20.1 Fairness-First Override
+### 20.2 Fairness-First Override
+`fairnessPriorityScore = fairness + minorityProtection`. Wenn `|fairnessGap| >= 0.55` und `|scoreGap| <= 1.5`, gewinnt der fairere Kandidat (sofern dessen `primaryVoteScore >= 1.2` oder Low-Vote-Fallback).
 
-Verglichen wird:
+### 20.3 Twin-Restriktion
+Bei Twin gegen Nicht-Twin gewinnt Twin nur, wenn `twinFairnessGap >= 0.7` oder `twinScoreGap >= 0.82`. Sonst verliert Twin.
 
-```text
-fairnessPriorityScore = fairness + minorityProtection
-```
+### 20.4 FinalScore
+Höherer `finalScore` gewinnt.
 
-Wenn:
+### 20.5 Tie-Breaks
+`voteScore` → `uniqueVoters` → weniger ungelöste No-Gos → `practicality` → `weather` → Typpriorität (`single > multi_sport > twin > none`) → alphabetische `candidate.id`.
 
-```text
-abs(fairnessGap) >= 0.45
-abs(finalScoreGap) <= 2.2
-```
+## 21. Decision Output und sanitisierte View
 
-dann gewinnt der fairere Kandidat.
+Der Algorithmus liefert intern `FairConstellationDecision` mit `mode`, gewählten Sport-/Profil-IDs, `activities`, `scores`, `scoreBreakdown`, `decisionCharacter`, `explainability`, `noGoBreakdown`, `losingCandidateReasons`, `excludedProfiles`, `weatherSnapshot`, `reason`.
 
-Das ist der Kern von "Fairness First": Fairness darf gewinnen, wenn der Score-Abstand nicht zu groß ist.
+`decisionCharacter` ist eines von: `clear_majority`, `fairness_adjusted`, `majority_protected`, `practicality_adjusted`, `weather_adjusted`, `combined_event`, `split_groups`, `fallback`, `no_valid_decision`.
 
-### 20.2 Togetherness/Twin-Präferenz
+`buildDecisionView` (`sanitize.ts`) erzeugt daraus die **einzige** Client-Payload `DecisionView`:
 
-Wenn einer der Kandidaten Twin ist und der andere nicht:
+- Mitglieder sehen: `mode`, gewählte Sportarten/Profile, `decisionCharacterLabel`, `resultLabels`, `simpleExplanation`, optional `multiSportExplanation`, `noGoSummary`, `losingCandidateSummaries`, `activities` (mit `participantCount`, `weatherNotes`, `practicalityNotes` — **keine** User-IDs/Scores), `scoreComparison` (nur relativer Prozentwert vs. stärkste Option) und `viewerFairness` (nur Booleans `active`/`covered`).
+- Admins bekommen zusätzlich `admin`: `voteSummaries` (Sportname + Voterzahl), `fairnessCovered`/`fairnessTotal`, `noGosResolved`/`Unresolved`/`Ignored`, `weatherNotes`, `practicalNotes` und `scoreRows` (vollständige `AdminScoreRow`-Scorecard pro Kandidat).
 
-Twin darf nur gewinnen, wenn:
+Die UI im Screenshot bildet genau das ab: „Bewertung der Optionen" = `scoreComparison.relativePercent`, „Admin-Explainability" = `admin`-Zusammenfassung, „Scorecard (Testphase)" = `admin.scoreRows`.
 
-```text
-twinFairnessGap >= 0.7
-oder
-twinScoreGap >= 0.82
-```
+Niemals in der View: rohe Scores einzelner Dimensionen für Mitglieder, absolute FinalScores, Ranking-Margins, Kandidaten-IDs, Fairness-Debt-Rohwerte, gewichtete Vote-Scores, Option-Gewichte.
 
-Sonst verliert Twin gegen Single/Multi.
+## 22. Finalisierung und AP-Auswahl
 
-Wenn Kandidaten sehr ähnlich sind:
+`withActivityContacts` setzt pro Aktivität in dieser Reihenfolge:
 
-```text
-abs(finalScoreGap) <= 0.35
-abs(fairnessPriorityGap) <= 0.35
-```
-
-dann gewinnt Typpriorität:
-
-```text
-single > multi_sport > twin > none
-```
-
-### 20.3 FinalScore
-
-Wenn bisher kein Ranking entschieden wurde:
-
-```text
-höherer finalScore gewinnt
-```
-
-### 20.4 Typpriorität
-
-Bei gleichem FinalScore:
-
-```text
-single > multi_sport > twin > none
-```
-
-### 20.5 ID
-
-Als letzter Tie-Break:
-
-```text
-alphabetische candidate.id
-```
-
-## 21. Decision Output
-
-Typ: `FairConstellationDecision`
-
-```ts
-{
-  mode;
-  selectedSportId?;
-  secondarySportId?;
-  selectedProfileId?;
-  secondaryProfileId?;
-  activities;
-  scores;
-  scoreBreakdown?;
-  excludedProfiles;
-  weatherSnapshot?;
-  reason;
-}
-```
-
-### `CandidateActivity`
-
-```ts
-{
-  sportId;
-  sportName;
-  profileId;
-  profileName;
-  locationName?;
-  role; // primary oder secondary
-  assignedUserIds;
-  participantCount;
-  activityContactId?;
-  weatherNotes?;
-  practicalityNotes?;
-}
-```
-
-### `excludedProfiles`
-
-Enthält Profile, die hart ausgeschlossen wurden, z. B. Outdoor bei Gewitter.
-
-## 22. Entscheidungsgründe
-
-`buildDecisionReason` erzeugt grobe Standardgründe:
-
-Single:
-
-```text
-Sport (Profil) wurde gewählt, weil diese Konstellation Zustimmung, Fairness, Wetter und Machbarkeit am besten verbindet.
-```
-
-Multi-Sport:
-
-```text
-Sport A und Sport B wurden als Multi-Sport Event gewählt, weil beide Gruppen starken Rückhalt haben und die Profile räumlich nah genug für ein gemeinsames Club-Event sind.
-```
-
-Twin:
-
-```text
-Sport A und Sport B wurden als Twin Event gewählt, weil zwei echte Gruppen entstanden sind und diese Lösung fairer ist als eine Gruppe zu ignorieren.
-```
-
-UI-Präsentation nutzt zusätzlich `decisionPresentation.ts` für:
-
-- `resultLabels`
-- `simpleExplanation`
-- `activityRows`
-- `scoreRows`
-
-## 23. Finalisierung und AP-Auswahl
-
-`withActivityContacts` setzt pro Aktivität:
-
-1. vorhandener `activity.activityContactId`
-2. Profil-AP aus `sport_profiles.ap_contact_id`
-3. erster zugewiesener User
-4. `selectActivityContact`
-
-`selectActivityContact`:
-
-1. lädt Votes und Attendance
-2. betrachtet nur `going` oder `maybe`
-3. wählt besten Voter der Sportart:
-   - niedriger `vote_rank` gewinnt
-   - früherer `created_at` als Tie-Break
-4. fallback: erster `going`
+1. vorhandener `activity.activityContactId`,
+2. Profil-AP aus `sport_profiles.ap_contact_id` (`selectProfileContact`),
+3. erster zugewiesener User,
+4. `selectActivityContact` (bester Voter der Sportart: niedriger `vote_rank`, Tie früherer `created_at`; Fallback erster `going`).
 
 Der erste Aktivitätskontakt wird zusätzlich in `weekly_events.activity_contact_id` gespiegelt.
 
-## 24. Twin und Subgroups
+## 23. Twin und Subgroups
 
-Bei `decision.mode === "twin"`:
+Bei `mode === "twin"`: alte `event_subgroups` löschen, pro Aktivität eine neue Subgroup anlegen (`event_id`, `sport_id`, `title`, `location`, `activity_contact_id`), danach `attendance.subgroup_id` für zugewiesene User setzen. `event_activities` bleibt die finalere Struktur; `event_subgroups` dient Kompatibilität/Chat/UI.
 
-- alte `event_subgroups` werden gelöscht
-- pro Aktivität wird eine neue Subgroup angelegt:
-  - `event_id`
-  - `sport_id`
-  - `title`
-  - `location`
-  - `activity_contact_id`
-- Danach wird `attendance.subgroup_id` für zugewiesene User gesetzt.
+## 24. Datenbankmigrationen (Auswahl)
 
-Wichtig: `event_activities` ist trotzdem die modernere/finalere Struktur. `event_subgroups` bleibt Kompatibilität/Chat-/UI-Hilfe.
+- `024_fairness_first_constellation.sql` — Kernschema (`sport_profiles`, `sport_no_gos`, `event_activities`, `weekly_events.decision_*`, `weather_snapshot`, `attendance.actual_status`/`checked_*`, Erweiterung `member_preference_history`).
+- `025_sport_profile_site_ap_details.sql` — `location_rules`, `ap_contact_id`.
+- `026_idea_profile_flow_admin_tools.sql` — Standort-/Karten-/Wetter-/Draft-/Review-Felder.
+- `027_event_results_and_member_stats.sql` — Event-Ergebnisse und Statistik.
+- `028_remove_wind_weather_rules.sql` — entfernte damals Wind-Regeln (Wind wird inzwischen wieder über `windSensitive`/`maxWindKmh` bewertet).
+- `031_sport_profile_sports_and_sport_active.sql` — `sports.is_active`, M:N-Tabelle `sport_profile_sports`.
+- `042_city_bound_events.sql` — `location_city` / Stadt-Scoping der Profile.
+- `044` — verlagert die Schreibrechte der `weekly_events`-Entscheidungsspalten auf die Service Role; die rohen Internas werden nicht mehr persistiert.
 
-## 25. UI-Einflüsse auf den Algorithmus
+Strukturierte Felder wie `cost_required`, `cost_per_person`, `cost_currency`, `ap_requirement_level`, `minimum_participants`, `maximum_participants`, `postal_code` werden vom aktuellen Algorithmus genutzt. Migrationsstand insgesamt bis `067_*`.
 
-### Voting UI
+> Memory-Regel: Migrationen werden nie editiert; jede Änderung ist eine neue Datei (`068`, `069`, …).
 
-Im Home/Voting-Flow:
+## 25. Tests
 
-- Teilnahme Schritt 1.
-- Sportarten Schritt 2.
-- bis zu 3 Ränge.
-- No-Go je Sportart.
+- `tests/fairConstellationSelection.test.ts` — Single, Multi-Sport, Twin, No-Go, Maybe, Wetter, Fairness Debt, Profilwahl, Reliability, kombinierte Events.
+- `tests/algorithmIsolation.test.ts` — verhindert, dass Client-Code den Algorithmus importiert.
+- `tests/decisionPresentation.test.ts` — Präsentationslogik.
+- `tests/votingRules.test.ts`, `tests/votingEligibility.test.ts`, `tests/locationSelection.test.ts`, `tests/sportCompatibility.test.ts`.
 
-Nur Sportarten aus `listSports` erscheinen:
-
-- `sports.is_active = true`
-- mindestens ein aktives Profil über `sport_profiles` oder `sport_profile_sports`.
-
-Dadurch kommen Sportarten ohne Standortprofil praktisch nicht in `sport_proposals` und damit nicht in den Algorithmus.
-
-### Aktive Sportarten und Profile
-
-`listSports` nutzt lokalen Cache:
-
-```text
-mcc.cache.activeSportsWithProfiles.v2
-TTL 60 Sekunden
-```
-
-`listSportProfiles` und `listSportProfileSportLinks` haben ebenfalls 60 Sekunden Cache.
-
-Bei Profiländerungen werden Profil-Caches gelöscht.
-
-### App-State
-
-`getMccEventState`:
-
-- bootstrapt die aktuelle MCC-Woche
-- lädt Event, Sports, Proposals, Votes, Attendance, No-Gos, DecisionPreview, Activities
-- filtert sichtbare Votes/No-Gos von Nicht-Teilnehmenden
-- baut `decisionText`
-
-Home-Screen nutzt zusätzlich AsyncStorage für Event-State Cache.
+Checks: `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run pwa:build` (enthält `scripts/check-web-bundle.mjs`).
 
 ## 26. Wetter-Cache und Snapshot-Verhalten
 
-Aktueller Ablauf:
-
-1. `buildDecisionInput` schaut zuerst:
-   - wurde ein `weatherSnapshot` explizit im Kontext übergeben?
-   - sonst: steht `event.weather_snapshot` schon in der Datenbank?
-   - sonst: live via Open-Meteo holen.
-
-2. Bei Finalisierung wird `decision.weatherSnapshot` in `weekly_events.weather_snapshot` gespeichert.
-
-Konsequenz:
-
-- Previews vor Finalisierung können live variieren.
-- Finalisierte Events bleiben über gespeicherten Snapshot erklärbar/reproduzierbarer.
-
-## 27. Testabdeckung
-
-Zentrale Fälle in `tests/fairConstellationSelection.test.ts`:
-
-- Single gewinnt bei breitem Support.
-- Multi-Sport gewinnt bei nahen Profilen.
-- Innerhalb derselben Sportart gewinnt besser passendes/nahes Profil.
-- Twin gewinnt bei echten Gruppen an getrennten Orten.
-- No-Go-User werden bei Single nicht als akzeptiert zugeordnet.
-- `not_going` wird ignoriert.
-- `maybe` zählt reduziert.
-- Votes ohne Attendance zählen nicht.
-- Outdoor-Gewitter schließt aus, Indoor bleibt möglich.
-- Fairness Debt hebt wiederholt ignorierte Nutzer.
-- Fairness Debt kann Minderheit in Multi-Sport sichtbar machen.
-- Praktikabilität bevorzugt gut dokumentiertes Profil mit AP/Ausstattung.
-- Regen malusiert Outdoor, Indoor stabil.
-- Reliability reduziert No-Show-Einfluss, entfernt ihn aber nicht.
-
-Aktueller Check zuletzt grün:
-
-```bash
-npm.cmd run typecheck
-npm.cmd test
-npm.cmd run export:web
-```
-
-## 28. Relevante Randinfos und Grenzen
-
-### 28.1 `selectFairSport` ist Legacy
-
-Es gibt noch Tests und Code für `selectFairSport`.
-
-Nicht verwechseln:
-
-- Alt: abstrakte Sportart auswählen.
-- Neu: konkrete Fairness-Constellation aus Profilen auswählen.
-
-Der aktuelle Service `decisions.ts` nutzt `selectFairConstellation`.
-
-### 28.2 No-Go ist persönlich, nicht global
-
-Ein No-Go bedeutet:
-
-- diese Person wird nicht dieser Sportart zugeordnet,
-- Kandidat bekommt Strafe, wenn die Person ohne Alternative bleibt.
-
-Ein No-Go blockiert nicht automatisch die Sportart für alle.
-
-Wenn künftig "ein No-Go darf Sportart nie gewinnen, wenn betroffene Person teilnimmt" gewünscht ist, muss `scoreNoGoPressure` oder die Kandidatengenerierung angepasst werden.
-
-### 28.3 Mehr als zwei Aktivitäten noch nicht wirklich implementiert
-
-`maxActivities` existiert, aber Kandidatengenerierung baut nur:
-
-- Singles
-- Paare
-
-Für drei parallele Aktivitäten braucht es neue Kombinatorik und neue Assignment-Logik.
-
-### 28.4 Winddaten werden geladen, aber nicht bewertet
-
-Open-Meteo liefert:
-
-- `wind_speed_10m`
-- `wind_gusts_10m`
-
-Aber `scoreWeather` nutzt Wind aktuell nicht.
-
-Migration `028_remove_wind_weather_rules.sql` entfernt gespeicherte Wind-Regeln.
-
-### 28.5 `twinScoreRatio` ist missverständlich benannt
-
-Option heißt `twinScoreRatio`, wird aber nicht als Ratio, sondern als absoluter Score-Vorteil verwendet:
-
-```ts
-twinScoreGap >= options.twinScoreRatio
-```
-
-Das sollte bei Weiterentwicklung umbenannt oder geändert werden.
-
-### 28.6 M:N-Profile können gleiche Profil-ID in zwei Aktivitäten erzeugen
-
-Wenn dasselbe Standortprofil mit zwei Sportarten verknüpft ist, kann der Algorithmus zwei virtuelle Profile mit derselben physischen Profil-ID betrachten.
-
-Das ist für "gleicher Standort, mehrere Sportarten" gewollt.
-
-Aber es gibt noch keine harte Ressourcen-/Flächen-Kollisionslogik. Beispiel:
-
-- Basketball und Fußball am exakt gleichen kleinen Platz könnten beide gewählt werden, obwohl sie sich real ausschließen.
-
-Für später wäre ein Feld wie `resource_group_key`, `exclusive_resource`, `parallel_capacity` sinnvoll.
-
-### 28.7 Kapazität ist pro Aktivität, nicht für gemeinsamen Ort
-
-`minimum_group_size` und `maximum_group_size` werden je Aktivität geprüft.
-
-Es gibt keine Gesamtstandortkapazität über mehrere Aktivitäten hinweg.
-
-### 28.8 Kosten sind nur leichter Malus
-
-`costNote` erzeugt aktuell nur `-0.04`.
-
-Es gibt keine echte Kostenskala:
-
-- kostenlos
-- 2 EUR
-- 30 EUR
-
-wird algorithmisch gleich behandelt, sofern nur Text in `cost_note` steht.
-
-Wenn Kosten wichtig werden, braucht es strukturierte Felder:
-
-- `cost_required boolean`
-- `cost_per_person numeric`
-- eventuell `cost_currency`
-- Kostengewicht in Practicality.
-
-### 28.9 AP-Pflicht ist weich
-
-Wenn `apRequired` true und AP fehlt:
-
-```text
--0.18
-```
-
-Das ist kein harter Ausschluss.
-
-Wenn für bestimmte Profile AP zwingend sein soll, muss das in `scoreBasePracticality` oder Profilfilterung geändert werden.
-
-### 28.10 Wetter-Gewitter ist harter Ausschluss nur bei Outdoor/Non-Indoor
-
-Indoor wird vor Gewitterprüfung direkt als wetterstabil bewertet.
-
-Outdoor mit `thunderstormUnsafe !== false` und `weatherCode >= 95` wird ausgeschlossen.
-
-### 28.11 Fehlende Koordinaten
-
-Outdoor ohne Koordinaten:
-
-- Wetterbewertung `-0.35`
-- Practicality zusätzlich `-0.12`
-
-Aber kein harter Ausschluss.
-
-### 28.12 Fairness kann innerhalb Score-Fenster überstimmen
-
-Fairness gewinnt nicht immer.
-
-Sie gewinnt nur, wenn:
-
-- Fairnessvorteil groß genug,
-- Score-Abstand nicht zu groß.
-
-Damit bleibt der Algorithmus ein Kompromiss aus Mehrheit, Minderheitenschutz und Praktikabilität.
-
-### 28.13 Single hat starken Togetherness-Vorteil
-
-Single bekommt:
-
-- Togetherness `+1.4`
-- ModeBonus `+0.3`
-
-Das heißt Single ist klar bevorzugt, solange keine faire/praktische Zweigruppenlösung deutlich besser ist.
-
-### 28.14 Multi-Sport ist bevorzugt gegenüber Twin
-
-Multi-Sport bekommt:
-
-- Togetherness bis `+1.25`
-- ModeBonus `+0.15`
-
-Twin bekommt:
-
-- Togetherness `-0.55`
-- kein ModeBonus
-
-Twin gewinnt nur bei echter Fairness- oder Score-Notwendigkeit.
-
-### 28.15 Recent Selection nutzt primär `weekly_events.selected_sport_id`
-
-Rotation schaut auf vergangene Events mit `selected_sport_id`.
-
-Bei Multi/Twin wird zwar `secondary_sport_id` gespeichert, aber `fetchRecentSelections` lädt aktuell nur `selected_sport_id` plus Kategorie.
-
-Das bedeutet:
-
-- Rotation berücksichtigt zuverlässig die Hauptsportart.
-- Sekundäre Sportarten früherer Multi/Twin-Events sind für Kategorie-Rotation weniger sichtbar.
-
-Mögliche Weiterentwicklung:
-
-- `event_activities` der letzten Events für Rotation laden.
-- `role` in `RecentSelection` wirklich nutzen.
-
-### 28.16 Preference History betrachtet alle Votes, nicht nur Gewinner
-
-Nach Finalisierung werden alle relevanten Votes geschrieben.
-
-Covered ist true, wenn die Sportart in irgendeiner Aktivität vorkommt.
-
-Bei Multi/Twin wird also auch eine Nebenaktivität als abgedeckt gezählt.
-
-### 28.17 Reliability hängt von AP-Nachbereitung ab
-
-Ohne gepflegte `actual_status` bleibt Reliability weitgehend wirkungslos.
-
-Die AP-Nachbereitung ist daher fachlich wichtig, wenn No-Shows langfristig Einfluss haben sollen.
-
-## 29. Wichtige Stellen für Weiterentwicklung
-
-### 29.1 Mehr als zwei Aktivitäten
-
-Betroffene Funktionen:
-
-- `selectFairConstellation`
-- `rankSportIds`
-- `chooseBestProfilePair`
-- `assignUsersToSports`
-- `scoreMinorityProtection`
-- `compareTogethernessPreference`
-- `replaceEventActivitiesFromDecision`
-- UI für Chat/Subchats/Decision
-
-### 29.2 Ressourcen-/Standortkonflikte
-
-Neue Profilfelder denkbar:
-
-- `resource_group_key`
-- `parallel_capacity`
-- `exclusive_when_selected`
-- `surface_type`
-- `requires_reservation_slot`
-
-Dann Kandidaten filtern oder Praktikabilität bestrafen.
-
-### 29.3 Strukturierte Kosten
-
-Neue Felder:
-
-- `cost_required`
-- `cost_per_person`
-- `cost_currency`
-- `cost_note`
-
-Dann Practicality differenzieren.
-
-### 29.4 Bessere AP-Logik
-
-Aktuell:
-
-- Profil-AP bevorzugt.
-- Sonst zugewiesener User.
-- Sonst bester Voter.
-- Sonst erster `going`.
-
-Mögliche Erweiterung:
-
-- AP-Rollen
-- Bereitschaft als AP
-- AP-Rotation
-- AP-Zuverlässigkeit
-- maximal eine AP-Rolle pro Event
-
-### 29.5 Wetter verbessern
-
-Mögliche Felder:
-
-- `prefersWarm`
-- `prefersCold`
-- `maxWindKmh`
-- `windSensitive`
-- `requiresSunlight`
-- `heatIndexSensitive`
-
-Aktuell sind `prefersWarm`/`prefersCold` in UI-Ideen teils als Rules angedeutet, werden aber im Algorithmus nicht direkt genutzt. Algorithmus nutzt nur `heatSensitive` und `coldSensitive`.
-
-### 29.6 Fairness transparenter machen
-
-Aktuell ScoreBreakdown enthält nur Summen.
-
-Für bessere Erklärung könnten ergänzt werden:
-
-- Fairness Debt pro User
-- welche User dadurch abgedeckt wurden
-- welche Wochen ignoriert waren
-- warum Twin/Multi Single geschlagen hat
-
-### 29.7 No-Go-Erklärung
-
-Aktuell `excludedProfiles` enthält nur Profil-/Wetter-Ausschlüsse.
-
-No-Go-Konflikte erscheinen nicht als eigene Explainability-Struktur.
-
-Mögliche Erweiterung:
-
-- `noGoConflicts`
-- `usersProtectedByAlternative`
-- `noGoPenaltyBreakdown`
-
-### 29.8 Deterministische Wettertests/Preview
-
-Tests mocken Weather Snapshot direkt im Input.
-
-Für Service-Tests kann `fetchEventWeatherSnapshot` mit Fetch-Mock getestet werden.
-
-Produktiv sollte finalisierter Snapshot immer gespeichert werden, damit Entscheidungen später erklärbar bleiben.
-
-## 30. Minimaler Pseudocode
-
-```text
-function selectFairConstellation(input):
-  options = defaults + overrides
-  proposedSportIds = proposals.sportId
-  activeProfiles = profiles where active and sportId proposed
-  attendanceByUser = map attendance
-  noGoUsersBySport = group noGos
-
-  eligibleVotes = votes where:
-    sport proposed
-    user going/maybe
-    user has no No-Go for sport
-
-  if no eligible votes:
-    return none
-
-  fairnessDebtByUser = calculateFairnessDebt(history)
-  reliabilityPenaltyByUser = calculateReliabilityPenalties(history, attendance)
-  profileEvaluations = evaluateProfiles(activeProfiles, weather)
-  profilesBySport = nonExcluded profileEvaluations grouped by sportId
-
-  candidates = []
-
-  for sport in votedSports:
-    profile = best profile for sport
-    if profile:
-      candidates.add(single candidate)
-
-  rankedSports = rank by supportScore
-
-  for each pair of rankedSports:
-    profilePair = best profile pair
-    if no profilePair: continue
-
-    proximity = same_spot/social_radius/split_location/unknown
-    if second group not meaningful: continue
-
-    if proximity same_spot or social_radius:
-      candidates.add(multi_sport candidate)
-
-    twin = build twin candidate
-    if twin participation high enough:
-      candidates.add(twin)
-
-  sort candidates by:
-    fairness override
-    twin/togetherness preference
-    finalScore
-    type priority
-    id
-
-  return first candidate as decision
-```
-
-## 31. Copy-Paste-Kern für Weiterentwicklung
-
-Wenn ein anderer Chat den Algorithmus weiterentwickeln soll, sollte er mindestens diese Dateien lesen:
-
-1. `src/lib/fairConstellationSelection.ts`
-2. `src/services/decisions.ts`
-3. `src/services/sportProfiles.ts`
-4. `src/services/weather.ts`
-5. `src/services/eventActivities.ts`
-6. `src/lib/decisionPresentation.ts`
-7. `tests/fairConstellationSelection.test.ts`
-8. `supabase/migrations/024_fairness_first_constellation.sql`
-9. `supabase/migrations/031_sport_profile_sports_and_sport_active.sql`
-
-Und diese fachlichen Regeln nicht brechen:
-
-- Nutzer stimmen auf abstrakte Sportarten, nicht Profile.
-- Profile sind konkrete Varianten.
-- Sportprofil-M:N wird im Service-Layer auf einzelne `sportId`-Profile expandiert.
-- `not_going` zählt nicht.
-- `maybe` zählt mit `0.55`.
-- No-Go ist persönliche Akzeptanz, kein normales Downvote.
+`buildDecisionInput`: Kontext-`weatherSnapshot` → `event.weather_snapshot` → Live via Open-Meteo. Bei Finalisierung wird `decision.weatherSnapshot` in `weekly_events.weather_snapshot` gespeichert. Previews können live variieren; finalisierte Events bleiben über den gespeicherten Snapshot reproduzierbar.
+
+## 27. Grenzen und Weiterentwicklung
+
+### 27.1 Erledigt gegenüber früheren Ständen
+- Mehr als zwei Aktivitäten: kombinierte Events mit 3–4 Sportarten an einem Ort sind implementiert (`generateCombinedCandidates`, `maxActivities = 4`).
+- Strukturierte Kosten: `scoreCost` mit Stufen statt nur Textmalus.
+- Wind wird wieder bewertet (`windSensitive`/`maxWindKmh`).
+- Kritischer AP kann ein Profil hart ausschließen (`criticalApMissingExcludesProfile`).
+- Rotation sieht über `event_activities` auch sekundäre Sportarten früherer Events.
+- Standortkapazität wird pro physischem Ort über mehrere Aktivitäten zusammengefasst (`scoreLocationCapacity`).
+
+### 27.2 Weiterhin offen
+- **Ressourcen-/Flächenkonflikte**: Zwei Sportarten am exakt gleichen kleinen Platz können beide gewählt werden, obwohl sie sich real ausschließen. Felder wie `resource_group_key`, `parallel_capacity`, `exclusive_when_selected`, `surface_type` wären sinnvoll.
+- **No-Go-Explainability**: No-Go-Konflikte erscheinen in `noGoBreakdown`/`admin`, aber nicht als eigenständige tiefe Erklärungsstruktur.
+- **Reliability hängt an AP-Nachbereitung**: ohne gepflegte `actual_status` bleibt Reliability weitgehend wirkungslos.
+- **`twinScoreMargin`**: wird als absoluter Score-Vorteil (kein Ratio) verwendet; Name könnte klarer sein.
+- **AP-Logik**: könnte um AP-Rollen, Bereitschaft, Rotation, Zuverlässigkeit und „max. eine AP-Rolle pro Event" erweitert werden.
+
+## 28. Fachliche Regeln (nicht brechen)
+
+- Nutzer stimmen auf abstrakte Sportarten, nicht auf Profile.
+- Profile sind konkrete Varianten; M:N wird im Service-Layer auf einzelne `sportId`-Profile expandiert.
+- `not_going` zählt nicht. `maybe` zählt mit `0.55` (Teilnahme) bzw. `0.8` (Preference).
+- No-Go ist persönliche Nicht-Akzeptanz, kein Downvote.
 - Single und Multi-Sport werden gegenüber Twin bevorzugt, solange Fairness nicht klar dagegen spricht.
-- Wetter kann Outdoor-Profile hart ausschließen.
-- Rotation ist ein Malus, kein Ausschluss.
+- Wetter und kritischer AP können Profile hart ausschließen; Rotation ist nur ein Malus.
 - Reliability reduziert Einfluss, entfernt User aber nicht.
-- Finale Entscheidung muss in `event_activities` und `weekly_events` persistiert werden.
+- Finale Entscheidung wird in `event_activities` und `weekly_events` persistiert; rohe Algorithmus-Internas **nicht**.
+- Der Algorithmus bleibt server-seitig. Niemals in den Client importieren.
 
-## 32. Glossar
+## 29. Glossar
 
-- **Sportart**: abstrakte Sportart, z. B. Beachvolleyball.
+- **Sportart**: abstrakt, z. B. Beachvolleyball.
 - **Sportprofil**: konkrete Ausprägung, z. B. Beachvolleyball am Hörnle.
-- **Single**: eine Aktivität.
-- **Multi-Sport**: zwei Aktivitäten nah genug für ein gemeinsames Event.
-- **Twin**: zwei getrennte Aktivitäten/Gruppen.
+- **Single / Multi-Sport / Twin**: eine Aktivität / mehrere nah genug für ein gemeinsames Event / zwei getrennte Gruppen.
 - **Fairness Debt**: Ausgleich für wiederholt ignorierte Wünsche.
-- **Reliability Penalty**: leichte Reduktion des Einflusses bei wiederholten No-Shows.
+- **Reliability Penalty**: Reduktion des Einflusses bei wiederholten No-Shows.
 - **No-Go**: persönliche Nicht-Akzeptanz einer Sportart.
-- **Togetherness**: Score-Komponente, die gemeinsame Club-Erlebnisse bevorzugt.
-- **Practicality**: Machbarkeit durch AP, Ausstattung, Anreise, Öffnungszeiten, Kosten, Reservierung.
+- **Togetherness**: Score-Komponente für gemeinsame Club-Erlebnisse.
+- **Practicality**: Machbarkeit durch AP, Ausstattung, Anreise, Öffnungszeiten, Reservierung.
+- **DecisionView**: sanitisiertes, frontend-sicheres Ergebnis; einzige Client-Payload.
 - **Weather Snapshot**: pro Profil gespeicherte Wetterdaten zur Eventzeit.
-
+</content>
+</invoke>

@@ -1,0 +1,14 @@
+[
+  { "name": "Konstanz",  "lat": 47.6779, "lng": 9.1732, "intensity": 1.00, "origin": true },
+  { "name": "Freiburg",  "lat": 47.999,  "lng": 7.842,  "intensity": 0.34 },
+  { "name": "Stuttgart", "lat": 48.776,  "lng": 9.182,  "intensity": 0.42 },
+  { "name": "München",   "lat": 48.137,  "lng": 11.575, "intensity": 0.46 },
+  { "name": "Frankfurt", "lat": 50.110,  "lng": 8.682,  "intensity": 0.40 },
+  { "name": "Köln",      "lat": 50.938,  "lng": 6.960,  "intensity": 0.38 },
+  { "name": "Berlin",    "lat": 52.520,  "lng": 13.405, "intensity": 0.50 },
+  { "name": "Hamburg",   "lat": 53.551,  "lng": 9.993,  "intensity": 0.38 },
+  { "name": "Leipzig",   "lat": 51.340,  "lng": 12.374, "intensity": 0.30 },
+  { "name": "Nürnberg",  "lat": 49.452,  "lng": 11.077, "intensity": 0.30 },
+  { "name": "Hannover",  "lat": 52.375,  "lng": 9.732,  "intensity": 0.28 },
+  { "name": "Münster",   "lat": 51.961,  "lng": 7.626,  "intensity": 0.26 }
+]

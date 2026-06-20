@@ -1,0 +1,142 @@
+---
+import Base from '../layouts/Base.astro';
+
+const appUrl = 'https://app.messers-cardio-club.com';
+type L = { de: string; en: string };
+interface Cat { title: L; items: { q: L; a: L }[] }
+
+const categories: Cat[] = [
+  {
+    title: { de: 'Allgemein', en: 'General' },
+    items: [
+      { q: { de: 'Was ist der Messers Cardio Club?', en: 'What is Messers Cardio Club?' }, a: { de: 'Ein privater Cardio-Club in Konstanz am Bodensee. An jedem Cardiotag trifft sich der Club zum gemeinsamen Sport. Welche Sportart läuft, entscheidet der Club jede Woche neu — gemeinsam und fair.', en: 'A private cardio club in Konstanz on Lake Constance. On every cardio day the club meets up for sport together. Which sport runs is decided anew each week — together and fairly.' } },
+      { q: { de: 'Wo ist der Club aktiv?', en: 'Where is the club active?' }, a: { de: 'In Konstanz und Umgebung (inkl. Kreuzlingen), an verschiedenen Standorten rund um den Bodensee. Die Karte auf der Startseite zeigt alle aktiven Standorte, gruppiert nach Stadtteil.', en: 'In Konstanz and the surrounding area (incl. Kreuzlingen), at various locations around Lake Constance. The map on the homepage shows all active locations, grouped by district.' } },
+      { q: { de: 'Was kostet die Mitgliedschaft?', en: 'What does membership cost?' }, a: { de: 'Der Club ist ein privates, nicht-kommerzielles Freizeitprojekt. Mitgliedschaft und App sind kostenlos. Kosten entstehen höchstens vor Ort (z. B. Eintritt ins Strandbad) und werden transparent kommuniziert.', en: 'The club is a private, non-commercial leisure project. Membership and the app are free. Any costs arise only on site (e.g. lido admission) and are communicated transparently.' } },
+      { q: { de: 'Ist das ein eingetragener Verein?', en: 'Is this a registered association?' }, a: { de: 'Nein. Der Messers Cardio Club ist (noch) kein eingetragener Verein, sondern ein privater Kreis von Sportbegeisterten. Es werden keine Waren oder Dienstleistungen verkauft.', en: 'No. Messers Cardio Club is not (yet) a registered association, but a private circle of sports enthusiasts. No goods or services are sold.' } },
+      { q: { de: 'Wer steckt dahinter?', en: 'Who is behind it?' }, a: { de: 'Ein privat organisierter Kreis aus Konstanz. Die verantwortliche Person findest du im Impressum.', en: 'A privately organised circle from Konstanz. You’ll find the responsible person in the imprint.' } },
+    ],
+  },
+  {
+    title: { de: 'Mitgliedschaft & Warteliste', en: 'Membership & Waitlist' },
+    items: [
+      { q: { de: 'Wie werde ich Mitglied?', en: 'How do I become a member?' }, a: { de: 'Aktuell nur über einen persönlichen Einladungscode. Den löst du in der App ein und legst dabei dein Profil an. Der Club ist noch geschlossen.', en: 'Currently only via a personal invite code. You redeem it in the app and set up your profile. The club is still closed.' } },
+      { q: { de: 'Ich habe keinen Code — was kann ich tun?', en: 'I don’t have a code — what can I do?' }, a: { de: 'Setz dich auf der Startseite auf die Warteliste (Button „Einladungscode anfragen"). Du hinterlässt Name und Telefonnummer; wir melden uns, sobald ein Platz frei wird.', en: 'Join the waitlist on the homepage (the “Request an invite code” button). You leave your name and phone number; we’ll get in touch as soon as a spot opens up.' } },
+      { q: { de: 'Was passiert nach meiner Warteliste-Anmeldung?', en: 'What happens after I join the waitlist?' }, a: { de: 'Dein Eintrag landet bei uns. Sobald wieder Plätze frei sind, kontaktieren wir dich und schicken dir einen Einladungscode.', en: 'Your entry comes to us. As soon as spots free up, we contact you and send you an invite code.' } },
+      { q: { de: 'Welche Daten brauche ich zum Mitmachen?', en: 'What data do I need to take part?' }, a: { de: 'Für die Anmeldung in der App: deinen Namen, eine Telefonnummer (für den Login per SMS) und einen selbst gewählten PIN. Mehr nicht.', en: 'To sign up in the app: your name, a phone number (for SMS login) and a self-chosen PIN. Nothing more.' } },
+      { q: { de: 'Kann ich Freunde einladen?', en: 'Can I invite friends?' }, a: { de: 'Ja. Mitglieder erhalten eine begrenzte Anzahl eigener Einladungscodes zum Weitergeben. Admins können weitere ausstellen.', en: 'Yes. Members get a limited number of their own invite codes to pass on. Admins can issue more.' } },
+      { q: { de: 'Kann ich wieder austreten?', en: 'Can I leave again?' }, a: { de: 'Jederzeit. Du kannst dein Profil verlassen bzw. löschen lassen — eine kurze Nachricht genügt.', en: 'Any time. You can leave or have your profile deleted — a short message is enough.' } },
+      { q: { de: 'Gibt es Voraussetzungen oder eine Altersgrenze?', en: 'Are there requirements or an age limit?' }, a: { de: 'Du solltest gesundheitlich in der Lage sein, Freizeitsport zu treiben. Minderjährige nur mit Einverständnis der Erziehungsberechtigten. Die Teilnahme erfolgt auf eigene Verantwortung.', en: 'You should be physically able to do recreational sport. Minors only with the consent of a legal guardian. Participation is at your own responsibility.' } },
+    ],
+  },
+  {
+    title: { de: 'Ablauf & Cardiotag', en: 'How it works & the cardio day' },
+    items: [
+      { q: { de: 'Was ist ein „Cardiotag"?', en: 'What is a “cardio day”?' }, a: { de: 'Der gemeinsame Sporttermin des Clubs. Unter der Woche stimmst du ab, kurz vorher steht fest, welche Sportart an welchem Standort läuft.', en: 'The club’s shared sport session. You vote during the week; shortly beforehand it’s set which sport runs at which location.' } },
+      { q: { de: 'Wie oft finden Cardiotage statt?', en: 'How often do cardio days take place?' }, a: { de: 'Aktuell mehrmals pro Woche — die genaue Anzahl siehst du live als Kennzahl auf der Startseite. Welche Wochentage es sind, legt der Club fest.', en: 'Currently several times a week — you can see the exact number live as a stat on the homepage. The club sets which weekdays.' } },
+      { q: { de: 'Muss ich jede Woche dabei sein?', en: 'Do I have to join every week?' }, a: { de: 'Nein. Du sagst pro Cardiotag einfach zu oder ab. Nur wer zusagt, zählt für die Entscheidung mit — ehrliches Absagen wird nie „bestraft".', en: 'No. You simply opt in or out per cardio day. Only those who opt in count towards the decision — honest no-shows are never “punished”.' } },
+      { q: { de: 'Wie sage ich zu oder ab?', en: 'How do I opt in or out?' }, a: { de: 'In der App: ein Tipp auf „dabei", „vielleicht" oder „nicht dabei". Ein festes Ja wiegt bei der Entscheidung etwas mehr als ein Vielleicht.', en: 'In the app: a tap on “in”, “maybe” or “not in”. A firm yes weighs a little more than a maybe.' } },
+      { q: { de: 'Wann erfahre ich, welcher Sport an welchem Ort läuft?', en: 'When do I learn which sport runs where?' }, a: { de: 'Kurz vor dem Cardiotag (rund 48 Stunden vorher) entscheidet der Club automatisch. Danach siehst du Sportart, Standort und Details in der App.', en: 'Shortly before the cardio day (around 48 hours ahead) the club decides automatically. After that you see the sport, location and details in the app.' } },
+      { q: { de: 'Was passiert bei schlechtem Wetter?', en: 'What happens in bad weather?' }, a: { de: 'Wetter fließt in die Entscheidung ein: Gefährliches Wetter schließt ungeeignete Standorte/Sportarten aus, schlechtes Wetter macht sie unwahrscheinlicher. So bleibt der Cardiotag machbar.', en: 'Weather factors into the decision: dangerous weather rules out unsuitable locations/sports, poor weather makes them less likely. That keeps the cardio day doable.' } },
+      { q: { de: 'Was muss ich mitbringen?', en: 'What do I need to bring?' }, a: { de: 'Das hängt von Sportart und Standort ab. Die App zeigt zu jeder Entscheidung die nötige Ausrüstung und Hinweise zum Treffpunkt.', en: 'That depends on the sport and location. For each decision the app shows the equipment needed and notes about the meeting point.' } },
+    ],
+  },
+  {
+    title: { de: 'Fairness & Algorithmus', en: 'Fairness & algorithm' },
+    items: [
+      { q: { de: 'Wie wird entschieden, welcher Sport läuft?', en: 'How is the sport decided?' }, a: { de: 'Du gibst drei Dinge an: ob du dabei bist, deine Wunsch-Sportarten in deiner Reihenfolge und deine No-Gos. Daraus baut der Club die fairste Kombination aus Sportart(en) und Standort(en).', en: 'You provide three things: whether you’re in, your preferred sports in your order, and your no-gos. From that the club builds the fairest combination of sport(s) and location(s).' } },
+      { q: { de: 'Was ist Ranked Voting?', en: 'What is ranked voting?' }, a: { de: 'Statt nur einer Stimme pro Person ordnest du deine Favoriten. Deine 1. Wahl bringt mehr Gewicht als deine 3. — fairer als eine reine Mehrheitsabstimmung.', en: 'Instead of just one vote per person, you rank your favourites. Your 1st choice carries more weight than your 3rd — fairer than a plain majority vote.' } },
+      { q: { de: 'Was sind No-Gos?', en: 'What are no-gos?' }, a: { de: 'Sportarten, die für dich gar nicht gehen. Was viele als No-Go markieren, wird möglichst gar nicht gewählt — eine harte Grenze, kein „kann man ignorieren".', en: 'Sports that are a no-go for you. What many mark as a no-go is avoided where possible — a hard limit, not “can be ignored”.' } },
+      { q: { de: 'Was ist der Vernachlässigungs-Schutz?', en: 'What is neglect protection?' }, a: { de: 'Wer seine Lieblingssportart länger nicht bekommen hat, erhält etwas mehr Gewicht. So ist nicht immer dieselbe Gruppe dran.', en: 'Whoever hasn’t had their favourite sport for a while gets a bit more weight. That way it isn’t always the same group’s turn.' } },
+      { q: { de: 'Was ist der Mehrheits-Schutz?', en: 'What is majority protection?' }, a: { de: 'Eine klare Mehrheit wird nicht von einer kleinen Gruppe überstimmt. Fairness heißt nicht, Mehrheiten zu übergehen.', en: 'A clear majority isn’t overruled by a small group. Fairness doesn’t mean ignoring majorities.' } },
+      { q: { de: 'Warum entscheidet ein Algorithmus statt einfacher Mehrheit?', en: 'Why an algorithm instead of a simple majority?' }, a: { de: 'Damit nicht immer nur die größte oder lauteste Gruppe gewinnt. Klare, für alle gleiche Regeln schützen auch die, die mal in der Minderheit sind — und sorgen für Abwechslung.', en: 'So it isn’t always just the largest or loudest group that wins. Clear rules, equal for everyone, also protect those in the minority — and create variety.' } },
+      { q: { de: 'Können mehrere Sportarten gleichzeitig laufen?', en: 'Can several sports run at once?' }, a: { de: 'Ja. Wenn es passt, laufen parallele Sportarten an einem Standort (Multi-Sport) oder als geteilte Gruppen (Twin). So bekommen mehr Leute ihre Wahl, ohne dass ihr euch verliert.', en: 'Yes. When it fits, parallel sports run at one location (multi-sport) or as split groups (twin). More people get their choice without losing each other.' } },
+      { q: { de: 'Kann ich die Entscheidung beeinflussen?', en: 'Can I influence the decision?' }, a: { de: 'Indem du abstimmst — je mehr mitmachen, desto besser trifft der Club die Wahl. Sobald die Entscheidung steht, ist sie für alle gleich und wird nicht mehr live verändert.', en: 'By voting — the more people take part, the better the club’s choice. Once the decision is set, it’s the same for everyone and isn’t changed live.' } },
+      { q: { de: 'Was, wenn meine Lieblingssportart nie gewinnt?', en: 'What if my favourite sport never wins?' }, a: { de: 'Genau dafür gibt es Vernachlässigungs-Schutz und Ranked Voting. Über mehrere Wochen gleicht sich das aus — der Algorithmus achtet bewusst auf Minderheiten.', en: 'That’s exactly what neglect protection and ranked voting are for. Over several weeks it balances out — the algorithm deliberately watches out for minorities.' } },
+    ],
+  },
+  {
+    title: { de: 'Technik & App', en: 'Tech & app' },
+    items: [
+      { q: { de: 'Brauche ich eine App aus dem Store?', en: 'Do I need an app from the store?' }, a: { de: 'Nein. Der Club läuft als Web-App (PWA) direkt im Browser. Du kannst sie optional zum Homescreen hinzufügen — dann fühlt sie sich wie eine native App an.', en: 'No. The club runs as a web app (PWA) right in the browser. You can optionally add it to your home screen — then it feels like a native app.' } },
+      { q: { de: 'Auf welchen Geräten funktioniert das?', en: 'Which devices does it work on?' }, a: { de: 'Auf Smartphone, Tablet und Desktop, in modernen Browsern (iOS/Android/Windows/macOS). Eine Installation ist nicht nötig.', en: 'On smartphone, tablet and desktop, in modern browsers (iOS/Android/Windows/macOS). No installation required.' } },
+      { q: { de: 'Wie logge ich mich ein?', en: 'How do I log in?' }, a: { de: 'Mit deiner Telefonnummer und deinem persönlichen PIN. Beim ersten Mal legst du beides zusammen mit deinem Einladungscode an.', en: 'With your phone number and your personal PIN. The first time, you set both up together with your invite code.' } },
+      { q: { de: 'Bekomme ich Benachrichtigungen?', en: 'Do I get notifications?' }, a: { de: 'Auf Wunsch ja — per Web-Push, z. B. wenn die Abstimmung offen ist oder die Entscheidung feststeht. Push gibt es nur zu Tageszeiten, nicht nachts. Du kannst sie jederzeit abschalten.', en: 'If you want — via web push, e.g. when voting opens or the decision is set. Push is only sent during the day, not at night. You can turn it off any time.' } },
+      { q: { de: 'Funktioniert die App offline?', en: 'Does the app work offline?' }, a: { de: 'In Teilen ja — als PWA werden Grundbausteine zwischengespeichert. Für aktuelle Daten (Abstimmung, Entscheidung) brauchst du eine Verbindung.', en: 'Partly — as a PWA, core building blocks are cached. For current data (voting, decision) you need a connection.' } },
+      { q: { de: 'Ich habe einen Fehler gefunden — wohin damit?', en: 'I found a bug — where do I report it?' }, a: { de: 'Schick uns kurz eine Nachricht über die im Impressum genannte Adresse. Danke fürs Mitdenken!', en: 'Send us a short message via the address in the imprint. Thanks for thinking along!' } },
+    ],
+  },
+  {
+    title: { de: 'Datenschutz & Rechtliches', en: 'Privacy & legal' },
+    items: [
+      { q: { de: 'Welche Daten werden gespeichert?', en: 'What data is stored?' }, a: { de: 'In der App: Profil (Name, Telefonnummer, PIN) sowie deine Teilnahmen, Stimmen und No-Gos. Für die Warteliste auf dieser Website: nur Name und Telefonnummer. Details in der Datenschutzerklärung.', en: 'In the app: profile (name, phone number, PIN) plus your attendance, votes and no-gos. For the waitlist on this website: only name and phone number. Details in the privacy policy.' } },
+      { q: { de: 'Werden meine Daten weitergegeben oder verkauft?', en: 'Is my data shared or sold?' }, a: { de: 'Nein. Wir verkaufen keine Daten und geben nichts zu Werbezwecken weiter.', en: 'No. We don’t sell data and don’t share anything for advertising purposes.' } },
+      { q: { de: 'Nutzt diese Website Cookies oder Tracking?', en: 'Does this site use cookies or tracking?' }, a: { de: 'Nein — kein Tracking, keine Marketing-Cookies, kein Analyse-Werkzeug. Die Live-Zahlen werden anonym über eine datensparsame Schnittstelle geladen.', en: 'No — no tracking, no marketing cookies, no analytics tool. The live numbers are loaded anonymously via a data-minimal interface.' } },
+      { q: { de: 'Wie lange werden meine Warteliste-Daten gespeichert?', en: 'How long is my waitlist data kept?' }, a: { de: 'Bis zur Einladung bzw. bis zu deinem Widerruf. Wenn keine Aufnahme erfolgt, löschen wir den Eintrag nach einer angemessenen Frist.', en: 'Until invitation or until you withdraw. If no admission happens, we delete the entry after a reasonable period.' } },
+      { q: { de: 'Wie kann ich meine Daten löschen lassen?', en: 'How can I have my data deleted?' }, a: { de: 'Eine formlose Nachricht an die im Impressum genannte Adresse genügt — wir löschen deinen Eintrag dann umgehend. Du hast außerdem alle Rechte nach DSGVO.', en: 'An informal message to the address in the imprint is enough — we then delete your entry promptly. You also have all rights under the GDPR.' } },
+      { q: { de: 'Wo finde ich Impressum und Datenschutz?', en: 'Where are the imprint and privacy policy?' }, a: { de: 'Verlinkt im Footer jeder Seite: <a href="/impressum">Impressum</a> und <a href="/datenschutz">Datenschutz</a>.', en: 'Linked in the footer of every page: <a href="/impressum">Imprint</a> and <a href="/datenschutz">Privacy</a>.' } },
+    ],
+  },
+  {
+    title: { de: 'Sonstiges', en: 'Other' },
+    items: [
+      { q: { de: 'Kann ich neue Sportarten oder Standorte vorschlagen?', en: 'Can I suggest new sports or locations?' }, a: { de: 'Ja. In der App kannst du Ideen für Sportarten und Standorte einbringen — der Club entscheidet gemeinsam, was in den Pool aufgenommen wird.', en: 'Yes. In the app you can submit ideas for sports and locations — the club decides together what’s added to the pool.' } },
+      { q: { de: 'Was, wenn ich mich beim Sport verletze?', en: 'What if I get injured during sport?' }, a: { de: 'Die Teilnahme erfolgt auf eigene Verantwortung. Der Club ist ein privates Freizeitprojekt und kein Veranstalter mit Aufsichtspflicht; jede:r achtet auf die eigene Fitness und Sicherheit.', en: 'Participation is at your own responsibility. The club is a private leisure project, not an organiser with a duty of supervision; everyone looks after their own fitness and safety.' } },
+      { q: { de: 'Ist der Club kommerziell?', en: 'Is the club commercial?' }, a: { de: 'Nein. Es gibt kein Geschäftsmodell, keine Werbung und keinen Verkauf — nur gemeinsamen Sport.', en: 'No. There’s no business model, no advertising and no sales — just sport together.' } },
+      { q: { de: 'Wie viele Mitglieder hat der Club?', en: 'How many members does the club have?' }, a: { de: 'Die aktuelle Zahl siehst du live als Kennzahl auf der Startseite.', en: 'You can see the current number live as a stat on the homepage.' } },
+      { q: { de: 'Wie kann ich Feedback geben?', en: 'How can I give feedback?' }, a: { de: 'Direkt im Club oder über die im Impressum genannte Adresse. Der Club lebt davon, dass möglichst viele mitgestalten.', en: 'Directly in the club or via the address in the imprint. The club thrives on as many people as possible helping shape it.' } },
+    ],
+  },
+];
+const total = categories.reduce((n, c) => n + c.items.length, 0);
+const langs: ('de' | 'en')[] = ['de', 'en'];
+const head = {
+  de: { eyebrow: 'FAQ', h1: 'Häufige Fragen', lead: `${total} Antworten rund um Club, Cardiotag, Fairness, Technik und Datenschutz.`, closing: 'Noch eine Frage offen? Öffne die App, wenn du einen Code hast — oder setz dich auf der Startseite auf die Warteliste.' },
+  en: { eyebrow: 'FAQ', h1: 'Frequently asked questions', lead: `${total} answers about the club, cardio days, fairness, tech and privacy.`, closing: 'Still have a question? Open the app if you have a code — or join the waitlist on the homepage.' },
+};
+---
+
+<Base title="FAQ — Messers Cardio Club" description="Häufige Fragen zum Messers Cardio Club: Mitgliedschaft, Cardiotag, fairer Algorithmus, Technik, Datenschutz und mehr.">
+  {langs.map((l) => (
+    <article class="prose" data-lang-only={l}>
+      <span class="eyebrow"><span class="pip"></span>{head[l].eyebrow}</span>
+      <h1>{head[l].h1}</h1>
+      <p class="lead">{head[l].lead}</p>
+
+      {categories.map((cat) => (
+        <section class="faq-cat">
+          <h2 class="faq-cat-title">{cat.title[l]}</h2>
+          {cat.items.map((f) => (
+            <details class="faq-item">
+              <summary>{f.q[l]}</summary>
+              <p set:html={f.a[l]} />
+            </details>
+          ))}
+        </section>
+      ))}
+
+      <p style="margin-top:2.4rem">{head[l].closing}</p>
+    </article>
+  ))}
+</Base>
+
+<style>
+  .faq-cat { margin-top: 2.4rem; }
+  .faq-cat-title {
+    font-size: 0.82rem; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--blue-soft); font-weight: 800; margin: 0 0 0.4rem;
+  }
+  .faq-item { border-top: 1px solid var(--line); padding: 0; }
+  .faq-item summary {
+    list-style: none; cursor: pointer; padding: 1.05rem 2rem 1.05rem 0; position: relative;
+    font-size: 1.06rem; font-weight: 800; color: var(--text); line-height: 1.4;
+    transition: color 0.2s ease;
+  }
+  .faq-item summary::-webkit-details-marker { display: none; }
+  .faq-item summary:hover { color: var(--blue); }
+  .faq-item summary::after {
+    content: '+'; position: absolute; right: 2px; top: 1rem;
+    font-size: 1.3rem; font-weight: 400; color: var(--blue); transition: transform 0.25s ease;
+  }
+  .faq-item[open] summary::after { transform: rotate(45deg); }
+  .faq-item p { margin: 0 0 1.1rem; }
+</style>

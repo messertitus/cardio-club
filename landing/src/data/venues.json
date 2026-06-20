@@ -1,0 +1,16 @@
+[
+  { "name": "Strandbad Horn",        "area": "Konstanz",    "lat": 47.66646, "lng": 9.21559, "sports": ["Badminton", "Beachvolleyball", "Frisbee", "Outdoor-Boxen", "Schwimmen"], "sessions": 1 },
+  { "name": "Klein Venedig",         "area": "Konstanz",    "lat": 47.65607, "lng": 9.1782,  "sports": ["Badminton", "Frisbee", "Fußball", "Outdoor-Boxen", "Schwimmen"], "sessions": 0 },
+  { "name": "Schänzlepark",          "area": "Konstanz",    "lat": 47.66796, "lng": 9.16322, "sports": ["Badminton", "Beachvolleyball", "Frisbee", "Outdoor-Boxen", "Tischtennis"], "sessions": 0 },
+  { "name": "Pestalozzi Sporthalle", "area": "Konstanz",    "lat": 47.67361, "lng": 9.17635, "sports": ["Basketball", "Calisthenics", "Fußball", "Street-Soccer"], "sessions": 0 },
+  { "name": "Herosee",               "area": "Konstanz",    "lat": 47.66971, "lng": 9.17426, "sports": ["Badminton", "Frisbee", "Schwimmen"], "sessions": 0 },
+  { "name": "Bolzplatz Allmannsdorf","area": "Konstanz",    "lat": 47.67924, "lng": 9.19658, "sports": ["Frisbee", "Fußball"], "sessions": 0 },
+  { "name": "HTWG",                  "area": "Konstanz",    "lat": 47.66788, "lng": 9.17036, "sports": ["Frisbee", "Tischtennis"], "sessions": 0 },
+  { "name": "Humboldt Gymnasium",    "area": "Konstanz",    "lat": 47.66664, "lng": 9.17392, "sports": ["Basketball", "Frisbee"], "sessions": 0 },
+  { "name": "Waldorf Wollmatingen",  "area": "Wollmatingen","lat": 47.68472, "lng": 9.14424, "sports": ["Basketball", "Street-Soccer"], "sessions": 0 },
+  { "name": "Bolzplatz Sonnenbühl",  "area": "Konstanz",    "lat": 47.67918, "lng": 9.18844, "sports": ["Fußball"], "sessions": 0 },
+  { "name": "Bolzplatz Tannenhof",   "area": "Konstanz",    "lat": 47.67398, "lng": 9.19912, "sports": ["Fußball"], "sessions": 0 },
+  { "name": "Cherisy",               "area": "Konstanz",    "lat": 47.67857, "lng": 9.16244, "sports": ["Fußball"], "sessions": 0 },
+  { "name": "Wessenbergschule",      "area": "Konstanz",    "lat": 47.66909, "lng": 9.16595, "sports": ["Basketball"], "sessions": 0 },
+  { "name": "Workoutpark Kreuzlingen","area": "Kreuzlingen","lat": 47.65316, "lng": 9.17956, "sports": ["Calisthenics"], "sessions": 0 }
+]

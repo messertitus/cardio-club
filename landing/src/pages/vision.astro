@@ -1,0 +1,73 @@
+---
+import Base from '../layouts/Base.astro';
+import GermanyMap from '../components/GermanyMap.astro';
+
+const appUrl = 'https://app.messers-cardio-club.com';
+---
+
+<Base noindex title="Vision — Messers Cardio Club" description="Die Vision: ein fairer Cardio-Club, der Stadt für Stadt durch Deutschland wächst. Heute in Konstanz, morgen überall.">
+  <section class="vhero wrap">
+    <div class="vcopy">
+      <span class="eyebrow"><span class="pip"></span>Die Vision</span>
+      <h1>
+        Eine Stadt<br />
+        <span class="grad">nach der anderen.</span>
+      </h1>
+      <p class="lede">
+        Messers Cardio Club beginnt in Konstanz — als privater Kreis, der jede
+        Woche gemeinsam und fair entscheidet, welcher Sport läuft. Die Idee aber
+        ist größer: ein Netz fairer Cardio-Clubs, das Stadt für Stadt durch
+        Deutschland wächst. Heute ein Leuchtpunkt am Bodensee, morgen viele.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/">Zurück zum Club am Bodensee</a>
+        <a class="btn btn-ghost" href={appUrl}>App öffnen</a>
+      </div>
+      <dl class="vstats">
+        <div><dt>1</dt><dd>Stadt heute</dd></div>
+        <div><dt>∞</dt><dd>Städte morgen</dd></div>
+        <div><dt>1×</dt><dd>fair pro Woche</dd></div>
+      </dl>
+    </div>
+    <div class="vmap">
+      <GermanyMap />
+      <p class="vcaption"><span class="pip"></span>Hell leuchtet, wo der Club lebt — der Rest ist die Vision.</p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .vhero {
+    display: grid;
+    grid-template-columns: 1fr 0.9fr;
+    gap: clamp(32px, 6vw, 72px);
+    align-items: center;
+    padding-block: clamp(36px, 7vh, 88px);
+  }
+  h1 {
+    font-size: clamp(2.4rem, 5.2vw, 4.2rem);
+    line-height: 1.03; letter-spacing: -0.02em;
+    margin: 0.5em 0 0.4em; font-weight: 900;
+  }
+  .grad {
+    background: linear-gradient(120deg, var(--blue-soft), var(--blue) 45%, var(--blue-deep));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { color: var(--text-dim); font-size: clamp(1.02rem, 1.4vw, 1.2rem); max-width: 50ch; }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; margin: 2rem 0 2.2rem; }
+
+  .vstats { display: flex; gap: clamp(22px, 5vw, 52px); margin: 0; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .vstats div { display: flex; flex-direction: column; }
+  .vstats dt { font-size: clamp(1.7rem, 3vw, 2.3rem); font-weight: 900; line-height: 1; color: #fff; }
+  .vstats dd { margin: 0.4em 0 0; font-size: 0.8rem; letter-spacing: 0.04em; color: var(--text-dim); text-transform: uppercase; font-weight: 700; }
+
+  .vmap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .vcaption { display: inline-flex; align-items: center; gap: 0.6em; font-size: 0.82rem; color: var(--text-dim); margin: 0; }
+  .vcaption .pip { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 10px 2px var(--blue); flex: none; }
+
+  @media (max-width: 900px) {
+    .vhero { grid-template-columns: 1fr; }
+    .vmap { order: -1; }
+    .vstats { justify-content: space-between; }
+  }
+</style>

@@ -9,6 +9,144 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-20 — Landing: Karte/Liste/Footer überarbeitet + mehr Kreativ-Details
+
+### Geändert
+- **Standortliste vereinfacht:** statt Akkordeon nun klare **Stadtteil-Pills**; Hover/Tap auf eine Pill hebt die zugehörigen Kartenpunkte hervor (`.st-hi`). Karte bleibt interaktiv (Klick auf Punkt → Tooltip).
+- **Karte größer + mehr Umrisse:** Ausschnitt nach Westen erweitert (Reichenau, Allensbach, Untersee sichtbar), 6 Gemeinde-Umrisse (Konstanz, Kreuzlingen, Reichenau, Allensbach, Bottighofen, Gottlieben; 4 beschriftet), breitere Karten-Spalte.
+- **Beispiel als eigenes Element:** Flow-Diagramm (3 Sport-Icons → Standort „Strandbad Horn") statt einer zweiten Karte wie der Join-Block.
+- **Abstände:** Puls (EKG) enger an die Sektionen gezogen, Header→Inhalt etwas kompakter.
+- **Footer:** großes weißes Logo **mittig zentriert**, Navigation und Copyright darunter zentriert.
+- **Stadtteil-Korrektur:** Humboldt→Altstadt, Schänzlepark→Paradies, Herosee→Petershausen (alle 14 geprüft).
+
+### Hinzugefügt
+- Mehr Kreativ-Details: **Scroll-Fortschrittsleiste**, animierter Flow-Pfeil; dazu die bestehenden Orbs/EKG/Reveals/Count-up/Spotlight/Shimmer.
+
+### Behoben
+- Mobile-Overflow im Hero (4 Kennzahlen erzwangen Überbreite) — Stats brechen jetzt um, `hero-copy: min-width 0`. Kein horizontaler Overflow bei 375 px.
+
+---
+
+## 2026-06-20 — Landing: vollständige EN-Version + Server-Rollout vorbereitet
+
+### Hinzugefügt
+- **Englische Versionen** für FAQ, Impressum und Datenschutz. Prosa-Seiten nutzen ganze DE/EN-Blöcke (`data-lang-only`), die `lang.ts` umschaltet; die Startseite war bereits über `data-i18n` zweisprachig. Damit schaltet der Header-Switch die **gesamte Seite** DE↔EN.
+- **Server-Rollout vorbereitet** (`deploy/`): versionierte nginx-Configs `landing.conf` (Apex + www → `/var/www/landing`) und `app.conf` (`app.`-Subdomain → bestehendes `/var/www/messers-cardio-club`), ein `_project-template.conf` für weitere Projekte sowie `deploy-landing.sh` / `deploy-app.sh`.
+- `docs/deployment-ubuntu.md` zum vollständigen **Multi-Site-Runbook** umgeschrieben (DNS, .env, Build/Publish, nginx-Umstellung von Apex→App-Subdomain, certbot je Domain, Supabase-Redirect-URL, Verify-Checkliste, Update-Flow, neues Projekt).
+
+### Behoben
+- `data-lang-only`-Umschaltung: gewählter Block muss explizit `display:block` setzen (nicht `''`), sonst greift die Default-`en→none`-Regel und es bleibt leer.
+
+---
+
+## 2026-06-20 — Landing: großes FAQ, größere Karte, mehr Kreativ-Details
+
+### Hinzugefügt
+- **FAQ stark ausgebaut:** 45 Fragen in 7 Kategorien (Allgemein, Mitgliedschaft & Warteliste, Ablauf & Cardiotag, Fairness & Algorithmus, Technik & App, Datenschutz & Rechtliches, Sonstiges) als aufklappbares Akkordeon.
+- **Mehr Kreativ-Details:** Cursor-Spotlight-Glow auf allen Karten (Event-Delegation, übersteht Live-Re-Render) + sanfter **Gradient-Shimmer** auf der Hero-Überschrift.
+
+### Geändert
+- Invite-Pill-Text → „**Start steht bevor — sichere dir deinen Platz**".
+- **Karte vergrößert** (Hero-Grid: Karten-Spalte breiter).
+- **Puls-Padding reduziert** (EKG-Linie sitzt enger).
+- 4. Keyzahl-Label „Cardiotage/Wo." → „**Tage/Woche**".
+- Footer-Tagline: „auf Einladung" entfernt → „Konstanz · Bodensee".
+
+---
+
+## 2026-06-20 — Landing: DE/EN-Switch, „Wow"-Redesign, Feinschliff
+
+### Hinzugefügt
+- **DE/EN-Sprachumschalter** (Header-Pill). Client-seitig über ein Wörterbuch (`src/i18n/strings.ts`) + `src/scripts/lang.ts`: tauscht alle `data-i18n`-Texte und Platzhalter, persistiert die Wahl, setzt `<html lang>`; dynamische Strings (Tooltip, Warteliste-Meldungen) in `live.ts` sind sprach-bewusst. Deutsch ist Default/SSR.
+- **Signatur-„Wow"-Elemente:** driftende Aurora-Orbs im Hintergrund, eine animierte **EKG-/Puls-Linie** als Sektions-Signatur, **Scroll-Reveals** (IntersectionObserver) und **Count-up-Zahlen** (`src/scripts/reveal.ts`), Button-Shimmer, neue premium **Sport-Kacheln** (Icon-Badge + Glow).
+
+### Geändert
+- **Stadtteil-Zuordnung korrigiert:** Humboldt→Altstadt, Schänzlepark→Paradies, Herosee→Petershausen (alle 14 geprüft).
+- **Hero:** Invite-Pill neu („Exklusiv auf Einladung — der öffentliche Start folgt"); die **aktiven Cardiotage/Woche** sind jetzt die **4. Keyzahl** (eigene Events-Zeile entfernt).
+- **Karten-Tooltip:** nur noch Name + Sportarten (kein „Konstanz · Bodensee" mehr).
+- **Footer:** volles **weißes Logo mit Wortmarke** als Bild.
+- **Datenschutz** deutlich ausgebaut (u. a. Warteliste-Verarbeitung Name/Telefon, Auftragsverarbeiter, Speicherdauer, Rechte, Aufsichtsbehörde LfDI BW).
+
+### Behoben
+- **Live-gerenderte Elemente waren ungestylt:** Astro-*scoped* CSS greift nicht auf von `live.ts` neu erzeugte Knoten (Sport-Kacheln, Kartenpunkte, Stadtteil-Chips). Die betroffenen Regeln liegen jetzt in `global.css`.
+
+---
+
+## 2026-06-20 — Landing: Warteliste, Stadtteil-Liste, Header/Footer-Feinschliff
+
+### Hinzugefügt
+- **Warteliste / „Einladungscode anfragen":** Hero-CTA öffnet einen Dialog (Name + Telefonnummer). Einträge landen über die abgesicherte RPC `request_invite` in einer neuen `waitlist`-Tabelle (Migration `071`); ein Admin sichtet und verschickt Codes. Anonyme haben keinen direkten Tabellenzugriff.
+- **Standortliste nach Stadtteilen gruppiert** (`src/lib/stadtteile.ts`): jeder Standort wird einem Konstanzer/Kreuzlinger Stadtteil zugeordnet (Namens-Override + nächstgelegenes Zentrum aus OSM-Daten); die ausklappbare Liste zeigt jetzt „N Standorte in M Stadtteilen". Kartenpunkte per **Klick/Tap** → Tooltip.
+- Footer trägt jetzt **Logo + Wortmarke**.
+
+### Geändert
+- **Header-Buttons:** oben rechts wieder „**Zur App**", links daneben dezenter „**FAQ**"-Link.
+- **Hero:** „Standorte ansehen" entfernt; primärer CTA ist „**Einladungscode anfragen**" (Warteliste). Unter dem „bald geöffnet"-Hinweis platziert.
+- **Sportarten wieder vollständig:** die Liste zeigt wieder **alle aktiven** Sportarten des Pools (Laufen/Radfahren etc. sind zurück) statt nur der standort-gebundenen.
+- **Cardiotag-Anzeige:** „Aktuell N Cardiotage die Woche" — aus `mcc_event_days` (wöchentlicher Rhythmus) statt offener Event-Zählung (Migration `072`, ersetzt `events_upcoming`).
+- **Mobile-Reihenfolge der Startseite:** zuerst Überschrift + Keyzahlen, dann die Karte (vorher Karte zuerst).
+
+### Entfernt
+- **Alle Verlinkungen/Erwähnungen von `/vision`** (Footer, FAQ). Die Seite bleibt erreichbar, ist aber **geheim**: `noindex` + nirgends verlinkt.
+
+### Migration
+- **`071_waitlist.sql`** — `waitlist`-Tabelle (RLS, nur Admin-Lesen) + `request_invite(name, phone, note)` (SECURITY DEFINER, `anon` execute).
+- **`072_landing_stats_weekly_cardiotage.sql`** — RPC liefert `weekly_cardiotage` (aus `mcc_event_days`) statt `events_upcoming`.
+
+---
+
+## 2026-06-20 — Landing: Echtzeit-Daten, Stadt-Karte, Vision & Rechtsseiten
+
+### Hinzugefügt
+- **`/vision`** — die ursprüngliche „Eine Stadt nach der anderen"-Idee als eigene Seite: Deutschland-Karte (`GermanyMap.astro`) mit leuchtenden Stadt-Punkten, Konstanz als hellem Ursprung. Bewusst von der Startseite getrennt (kein interner Plan auf der Hauptseite).
+- **Rechts-/Infoseiten:** `/faq` (echte Q&A zu Club, Cardiotag, Fairness, Standorten), `/impressum`, `/datenschutz`. Im Footer verlinkt. **Impressum + Datenschutz enthalten Platzhalter `[…]`, die der Betreiber vor Live-Gang ausfüllen muss** (Pflichtangaben nach DDG/DSGVO); Datenschutz weist auf Self-Hosting der Schriftart hin (Google-Fonts-Übermittlung vermeiden).
+- **Stadt-Umrisse Konstanz + Kreuzlingen** auf der Bodensee-Karte (OSM-Grenzen, gestrichelt) zur Orientierung. `cities.geo.json`.
+
+### Geändert
+- **Daten sind jetzt echtzeit:** `src/scripts/live.ts` holt die RPC bei **jedem Seitenaufruf** clientseitig und rendert Stats, Sportarten, Kartenpunkte und Standortliste neu. Der statische Build dient nur noch als Sofort-Anzeige/Fallback. (Projektion-Parameter werden mitgegeben, `lib/geo.ts` exportiert `proj`.)
+- **Nur tatsächlich angebotene Sportarten:** Die Liste wird aus den Standorten abgeleitet (`offeredSports`) — Sportarten ohne Standort (z. B. Hiking) erscheinen nicht mehr.
+- **Cardiotag-Anzahl live:** Hero-Copy ohne feste „ein Termin pro Woche"-Behauptung; stattdessen Live-Zeile „Gerade N Cardiotage in Planung" (mint Live-Punkt).
+- **Standortliste als ausklappbares Detail** statt langer Liste unter der Karte (`<details>`, „N Standorte … Liste anzeigen"); Kartenpunkte sind jetzt auch per Tap (mobil) bedienbar.
+- **Mobile-Responsiveness** geprüft/gefixt (u. a. Header-CTA „Code einlösen" statt Langform, Brand-Text ab < 430 px ausgeblendet); kein horizontaler Overflow auf allen Seiten bei 375 px.
+
+### Migration
+- **`070_landing_stats_events.sql`** — RPC um `events_upcoming` (aktive `weekly_events` in `proposing`/`voting`/`decided`) erweitert.
+
+---
+
+## 2026-06-19 — Öffentliche Landingpage (`landing/`, Astro)
+
+### Hinzugefügt
+- **Neues Sub-Projekt `landing/`** (Astro, statischer Export) für die öffentliche Marketing-Seite. Getrennt von der App: Die Landingpage kommt auf die Root-Domain `messers-cardio-club.com`, die App zieht auf `app.messers-cardio-club.com` um (Subdomain-Split, je eigener nginx-`server`-Block + Cert). Architektur-Entscheidung im Memory `multi-site-architecture`.
+- **Interaktive Bodensee-Karte** (`src/components/RegionMap.astro`): echte Bodensee-Wassergeometrie aus OpenStreetMap (Inseln wie Mainau/Reichenau als Polygon-Löcher), auf den Konstanzer Trichter gecroppt. Leuchtende Standort-Punkte nur an erfassten Sport-Standorten; Größe/Helligkeit datengetrieben nach Anzahl der Sessions. Hover/Fokus-Tooltips + Legenden-Chips mit Cross-Highlight, tastaturbedienbar, respektiert `prefers-reduced-motion`.
+- **Datengetriebene Inhalte** aus eigenen JSON-Dateien: `data/venues.json` (Standorte), `data/sports.json` (10 Sportarten aus dem Katalog), `data/club.json` (aggregierte, PII-freie Kennzahlen; `members` vorerst manuell). Spiegeln die App-Daten; spätere Anbindung an eine öffentliche Supabase-View vorgesehen.
+- Projektions-Helfer `src/lib/geo.ts` (eigene Mercator-Projektion, optionaler fixer Viewport-Crop) — Karte und Punkte teilen dieselbe Transformation.
+- Messaging bewusst „invite-only": „Bald für alle geöffnet — aktuell nur mit Einladungscode". Keine internen Pläne öffentlich (Tagline „Eine Stadt nach der anderen" bewusst weggelassen).
+- **„So funktioniert's"-Sektion** (4 Schritte) und echtes MCC-Logo im Header (`public/brand/`, weiße Symbol-Variante).
+- **Live-Daten beim Build:** `src/lib/clubData.ts` zieht die öffentliche RPC `landing_public_stats` anonym und füllt Mitgliederzahl, aktive Sportarten und Standorte (Punkte) live. Best-effort mit Fallback auf die committeten JSONs, wenn Env fehlt, Netz/RPC nicht erreichbar oder noch keine Venues existieren → Build bleibt offline-fest. Konfiguration über `landing/.env` (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`; nur Publishable-Key, Build-Zeit).
+
+### Geändert
+- **Landing an die App angeglichen** (Stil, Inhalt, Technik), nachdem die App-Quelle ausgewertet wurde:
+  - **Palette = App-Dark-Theme-Tokens** (`theme.mcc.*`): Akzent `#4DA3FF`, Primär `#1677FF`, Mint `#5EEAD4`, Text `#F7FBFF/#A7B4C7`, Linien `rgba(255,255,255,.12)`. Buttons auf 16 px Radius + fett (800/900) wie `MccButton`.
+  - **Echte Icons statt Emojis:** `@mdi/js` rendert dieselben MaterialCommunityIcons wie die App (`SportIcon`/`SPORT_ICON_OPTIONS`) — z. B. `run`, `swim`, `boxing-glove`, `volleyball`, `soccer`, `hiking`, `rowing`, `basketball`, `bike`. Neue `Icon.astro` + `src/lib/icons.ts`.
+  - **App-Terminologie & -Stimme:** „Cardiotag", „Dein Teil" (Dabei? · Wunsch-Sportarten · No-Gos), „Fair statt laut" mit den echten Fairness-Faktoren (Ranked Voting, harte No-Gos, Vernachlässigungs-/Mehrheits-Schutz, Standort-Passung, parallele Gruppen) und dem Strandbad-Horn-Beispiel — übernommen aus `app/how-it-works.tsx`.
+  - Kartenpunkte/See in App-Blautönen.
+
+### Live geschaltet
+- **Landing zieht jetzt echte Daten** aus der RPC: 18 Mitglieder, 13 Sportarten (inkl. Badminton, Frisbee, Tischtennis, Street-Soccer) und 14 reale Standorte (Strandbad Horn, Bolzplätze, HTWG, Klein Venedig, Schänzlepark, Workoutpark Kreuzlingen …) mit echten Koordinaten. `landing/.env` mit `PUBLIC_SUPABASE_URL`/`PUBLIC_SUPABASE_ANON_KEY` angelegt (Publishable-Key, gitignored).
+- **Sportarten-Liste live:** Migration `069` erweitert die RPC um die aktiven Sportarten (Name + `icon_name`); `src/lib/icons.ts` portiert den vollständigen App-Icon-Resolver (`SPORT_ICON_OPTIONS`) → jede Sportart bekommt das exakte App-Icon.
+- **Karten-Intensität = Anzahl Sportarten pro Standort** (statt Sessions, da der junge Club fast überall 0 Cardiotage hat → wäre uninformativ gewesen). Sessions stehen weiter im Tooltip.
+- Fallback-JSONs (`data/venues.json`, `sports.json`, `club.json`) auf den echten Stand aktualisiert — auch ein Build ohne `.env` zeigt die Wahrheit.
+
+### Migration
+- **`069_landing_stats_sports.sql`** — erweitert die RPC um `sports` (aktive Sportarten mit `icon_name`). Mitgliederzahl als `count(*)-1` (Test-/Admin-Account ausgenommen).
+- **`068_public_landing_stats.sql`** — neue `SECURITY DEFINER`-Funktion `public.landing_public_stats()`, `execute` an `anon`/`authenticated`. Liefert ausschließlich **PII-freie Aggregate**: Mitglieder-Headcount, Anzahl aktiver Sportarten und aktive Venues mit Koordinaten (nach `venue_group_key` gruppiert) inkl. Sportarten und Session-Anzahl. Keine Profil-, Vote-, Chat-, Attendance- oder Einladungsdaten.
+
+### Doku
+- nginx-Configs + aktualisierte `deployment-ubuntu.md` folgen mit dem Server-Rollout (noch offen).
+
+---
+
 ## 2026-06-18 — Keine Vorschau mehr: Entscheidung läuft einmal 48 h vorher
 
 ### Geändert
