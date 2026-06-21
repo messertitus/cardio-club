@@ -1,0 +1,82 @@
+---
+import germany from '../data/germany-states.geo.json';
+import cities from '../data/vision-cities.json';
+import { buildMap, type GeoJSON } from '../lib/geo';
+
+const map = buildMap(germany as unknown as GeoJSON, { maxWidth: 760, maxHeight: 1000, padding: 44 });
+
+type City = { name: string; lat: number; lng: number; intensity: number; origin?: boolean };
+const dots = (cities as City[]).map((c, i) => {
+  const { x, y } = map.toXY(c.lng, c.lat);
+  const t = Math.max(0, Math.min(1, c.intensity));
+  return {
+    ...c, i,
+    x: Math.round(x * 10) / 10,
+    y: Math.round(y * 10) / 10,
+    core: 1.8 + t * 3.2,
+    halo: 8 + t * 20,
+    glow: 0.18 + t * 0.55,
+    delay: ((i * 0.37) % 2.4).toFixed(2),
+    dur: (2.6 + (i % 4) * 0.45).toFixed(2),
+  };
+});
+---
+
+<figure class="gmap">
+  <svg viewBox={map.viewBox} role="img" aria-label="Vision: Standorte in Deutschland" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <radialGradient id="gGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#8fc7ff" stop-opacity="0.95" />
+        <stop offset="35%" stop-color="#4da3ff" stop-opacity="0.5" />
+        <stop offset="100%" stop-color="#1677ff" stop-opacity="0" />
+      </radialGradient>
+      <filter id="gSoft" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="2" />
+      </filter>
+    </defs>
+
+    <g class="states">
+      {map.states.map((s) => <path d={s.d}><title>{s.name}</title></path>)}
+    </g>
+
+    <g class="gdots">
+      {dots.map((d) => (
+        <g class={`gdot${d.origin ? ' origin' : ''}`} transform={`translate(${d.x} ${d.y})`} style={`--delay:${d.delay}s; --dur:${d.dur}s;`}>
+          <circle class="halo" r={d.halo} fill="url(#gGlow)" style={`opacity:${d.glow}`} />
+          <circle class="core" r={d.core} fill="#cfe6ff" filter="url(#gSoft)" />
+          {d.origin && <text class="origin-label" y={-d.halo - 6}>{d.name}</text>}
+        </g>
+      ))}
+    </g>
+  </svg>
+</figure>
+
+<style>
+  .gmap { margin: 0; width: 100%; max-width: 560px; filter: drop-shadow(0 0 60px rgba(22, 119, 255, 0.18)); }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+  .states path {
+    fill: #10151e;
+    stroke: rgba(120, 140, 170, 0.2);
+    stroke-width: 0.6;
+    transition: fill 0.4s ease;
+  }
+  .states path:hover { fill: #161d2a; }
+
+  .gdot .halo {
+    transform-box: fill-box; transform-origin: center;
+    animation: gpulse var(--dur, 3s) ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+  }
+  .gdot.origin .core { fill: #ffffff; }
+  .origin-label {
+    fill: var(--blue-soft); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.08em; text-anchor: middle; text-transform: uppercase;
+  }
+
+  @keyframes gpulse {
+    0%, 100% { transform: scale(0.82); }
+    50%      { transform: scale(1.22); }
+  }
+  @media (prefers-reduced-motion: reduce) { .gdot .halo { animation: none; } }
+</style>

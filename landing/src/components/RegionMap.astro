@@ -1,0 +1,189 @@
+---
+import lake from '../data/bodensee.geo.json';
+import cities from '../data/cities.geo.json';
+import { buildMap, type GeoJSON, type Bounds } from '../lib/geo';
+import { getClubData } from '../lib/clubData';
+import { groupByStadtteil } from '../lib/stadtteile';
+
+// Fixed viewport cropped to Konstanz & surroundings — wide enough to show
+// Reichenau, Allensbach and the Untersee. Geometry outside is clipped by the SVG.
+const bounds: Bounds = { minLng: 9.04, maxLng: 9.27, minLat: 47.63, maxLat: 47.74 };
+const map = buildMap(lake as unknown as GeoJSON, { maxWidth: 1000, bounds });
+const LABELLED = new Set(['Konstanz', 'Kreuzlingen', 'Reichenau', 'Allensbach']);
+
+// Project the city outlines with the SAME transform as the lake.
+type Ring = [number, number][];
+const round = (n: number) => Math.round(n * 10) / 10;
+function pathOf(rings: Ring[]): string {
+  return rings
+    .map((r) => r.map(([lng, lat], i) => {
+      const { x, y } = map.toXY(lng, lat);
+      return `${i ? 'L' : 'M'}${round(x)} ${round(y)}`;
+    }).join(' ') + ' Z')
+    .join(' ');
+}
+const cityShapes = (cities as unknown as { features: { properties: { name: string }; geometry: { coordinates: Ring[] } }[] }).features.map((f) => {
+  const rings = f.geometry.coordinates;
+  const c = rings[0].reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]);
+  const cen = map.toXY(c[0] / rings[0].length, c[1] / rings[0].length);
+  return { name: f.properties.name, d: pathOf(rings), lx: round(cen.x), ly: round(cen.y), label: LABELLED.has(f.properties.name) };
+});
+
+const { venues: data } = await getClubData();
+const maxSports = Math.max(1, ...data.map((v) => v.sports.length));
+const dot = (n: number) => {
+  const t = n / maxSports;
+  return { core: 3 + t * 4, halo: 12 + t * 24, glow: 0.3 + t * 0.5 };
+};
+const dots = data.map((v, i) => {
+  const { x, y } = map.toXY(v.lng, v.lat);
+  const d = dot(v.sports.length);
+  return {
+    ...v, i, ...d,
+    x: round(x), y: round(y),
+    delay: ((i * 0.41) % 2.2).toFixed(2),
+    dur: (2.8 + (i % 3) * 0.5).toFixed(2),
+  };
+});
+
+const groups = groupByStadtteil(data);
+const glowOf = (n: number) => 0.35 + (0.3 + (n / maxSports) * 0.5);
+
+const label = map.toXY(9.218, 47.676); // "BODENSEE" over the Obersee water
+
+// Config the client uses to re-fetch + re-render live, without shipping geojson.
+const env = import.meta.env as Record<string, string | undefined>;
+const liveConfig = {
+  url: env.PUBLIC_SUPABASE_URL ?? env.SUPABASE_URL ?? env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+  key: env.PUBLIC_SUPABASE_ANON_KEY ?? env.SUPABASE_ANON_KEY ?? env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '',
+  proj: map.proj,
+};
+---
+
+<div class="region" data-region>
+  <div class="stage">
+    <svg viewBox={map.viewBox} role="img" aria-label="Sport-Standorte in Konstanz am Bodensee" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0c1e34" />
+          <stop offset="100%" stop-color="#08182b" />
+        </linearGradient>
+        <radialGradient id="vGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#8fc7ff" stop-opacity="0.95" />
+          <stop offset="35%" stop-color="#4da3ff" stop-opacity="0.5" />
+          <stop offset="100%" stop-color="#1677ff" stop-opacity="0" />
+        </radialGradient>
+        <filter id="vSoft" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="1.8" />
+        </filter>
+        <filter id="shore" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+
+      <!-- Bodensee water body (islands render as land via polygon holes) -->
+      {map.states.map((s) => (
+        <path d={s.d} class="lake" fill="url(#water)" filter="url(#shore)" />
+      ))}
+
+      <!-- Municipality outlines for orientation -->
+      {cityShapes.map((c) => <path d={c.d} class="city" />)}
+      {cityShapes.filter((c) => c.label).map((c) => <text class="city-label" x={c.lx} y={c.ly}>{c.name}</text>)}
+
+      <text class="lake-label" x={label.x} y={label.y}>BODENSEE</text>
+
+      <!-- venue dots (re-rendered live by the client) -->
+      <g class="dots" id="venue-dots">
+        {dots.map((d) => (
+          <g
+            class="venue-dot" data-i={d.i} tabindex="0" role="button"
+            aria-label={`${d.name}: ${d.sports.join(', ')}`}
+            transform={`translate(${d.x} ${d.y})`}
+            style={`--delay:${d.delay}s; --dur:${d.dur}s;`}
+          >
+            <circle class="halo" r={d.halo} fill="url(#vGlow)" style={`opacity:${d.glow}`} />
+            <circle class="ring" r={d.core + 3} fill="none" stroke="#8fc7ff" stroke-opacity="0" />
+            <circle class="core" r={d.core} fill="#cfe6ff" filter="url(#vSoft)" />
+          </g>
+        ))}
+      </g>
+    </svg>
+
+    <div class="tip" data-tip hidden role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="st-bar">
+    <span class="st-bar-label">
+      <span class="vsum-dot"></span>
+      <b id="venue-count">{data.length}</b> <span data-i18n="map.locsIn">Standorte in</span>
+      <b id="venue-st-count">{groups.length}</b> <span data-i18n="map.districts">Stadtteilen</span>
+    </span>
+    <div class="st-pills" id="st-pills" aria-label="Stadtteile">
+      {groups.map((g) => (
+        <button class="st-pill" type="button" data-indices={g.items.map((it) => it.i).join(',')}>
+          {g.stadtteil}<span class="st-pill-n">{g.items.length}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="venues-data" set:html={JSON.stringify(data)} is:inline />
+<script type="application/json" id="live-config" set:html={JSON.stringify(liveConfig)} is:inline />
+
+<style>
+  .region { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+
+  .stage { position: relative; width: 100%; }
+  svg {
+    width: 100%; height: auto; display: block;
+    border-radius: 18px;
+    overflow: hidden; /* crop lake to the viewport */
+    border: 1px solid rgba(77, 163, 255, 0.16);
+    background: radial-gradient(120% 90% at 30% 10%, #0c1119, #070a10 70%);
+  }
+
+  .lake { stroke: rgba(143, 199, 255, 0.55); stroke-width: 1.1; }
+  .city {
+    fill: none; stroke: rgba(167, 180, 199, 0.4);
+    stroke-width: 0.9; stroke-dasharray: 3 3;
+  }
+  .city-label {
+    fill: rgba(167, 180, 199, 0.55);
+    font-size: 11px; letter-spacing: 0.14em; font-weight: 700;
+    text-anchor: middle; text-transform: uppercase; pointer-events: none;
+  }
+  .lake-label {
+    fill: rgba(143, 199, 255, 0.28);
+    font-size: 15px; letter-spacing: 0.4em; font-weight: 600;
+    text-anchor: middle; pointer-events: none;
+  }
+
+  /* .venue-dot + .chip + .st-* + .tip inner styles are in global.css
+     (live.ts re-creates these nodes, so scoped CSS would not match them). */
+
+  .tip {
+    position: absolute;
+    transform: translate(-50%, calc(-100% - 14px));
+    width: max-content; min-width: 180px; max-width: 240px;
+    padding: 12px 15px; border-radius: 12px;
+    background: rgba(8, 12, 20, 0.94);
+    border: 1px solid rgba(77, 163, 255, 0.35);
+    box-shadow: 0 18px 50px -16px rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    pointer-events: none; z-index: 5; font-size: 0.86rem;
+  }
+
+  /* Stadtteil bar (.st-pills are re-rendered live -> styled in global.css) */
+  .st-bar { display: flex; flex-direction: column; gap: 10px; }
+  .st-bar-label {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 0.82rem; color: var(--text-dim);
+  }
+  .st-bar-label b { color: var(--text); }
+  .vsum-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--blue);
+    box-shadow: 0 0 10px 2px var(--blue);
+  }
+</style>

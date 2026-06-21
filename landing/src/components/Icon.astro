@@ -1,0 +1,19 @@
+---
+// Renders a Material Design Icon path (from @mdi/js) as inline SVG — the same
+// icon set the app uses via @expo/vector-icons MaterialCommunityIcons.
+interface Props {
+  path: string;
+  size?: number | string;
+  class?: string;
+}
+const { path, size = 24, class: cls } = Astro.props;
+---
+<svg
+  class={cls}
+  viewBox="0 0 24 24"
+  width={size}
+  height={size}
+  fill="currentColor"
+  aria-hidden="true"
+  focusable="false"
+><path d={path} /></svg>

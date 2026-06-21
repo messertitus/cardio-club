@@ -1,0 +1,8 @@
+{
+  "_comment": "Aggregate, public-safe club numbers shown on the landing page. No personal data. Update `members` by hand for now; `sports` and `venues` are derived from the data files at build time. Later this can be replaced by a public Supabase view/RPC.",
+  "city": "Konstanz",
+  "region": "Bodensee",
+  "members": 18,
+  "membersIsEstimate": false,
+  "weeklyCardiotage": 2
+}

@@ -1,0 +1,323 @@
+:root {
+  /* Palette mirrors the app's dark theme tokens (theme.mcc.* in
+     src/context/ThemeContext.tsx) so the landing and app feel like one product. */
+  --bg: #05070b;
+  --canvas: #07111f;
+  --surface: rgba(10, 18, 31, 0.94);
+  --surface-raised: rgba(17, 28, 45, 0.96);
+  --surface-soft: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 255, 255, 0.12);
+  --strong-line: rgba(77, 163, 255, 0.42);
+  --text: #f7fbff;
+  --text-dim: #a7b4c7;
+  --text-muted: #718198;
+  --blue: #4da3ff;        /* accent */
+  --blue-deep: #1677ff;   /* accentDeep — primary buttons */
+  --blue-soft: #8fc7ff;
+  --accent-soft: rgba(77, 163, 255, 0.16);
+  --accent-faint: rgba(77, 163, 255, 0.08);
+  --mint: #5eead4;        /* success */
+  --coral: #ff8d7a;       /* danger */
+  --maxw: 1180px;
+  --font: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Ambient futuristic backdrop: faint grid + blue glow blooms */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(900px 600px at 78% 18%, rgba(22, 119, 255, 0.18), transparent 60%),
+    radial-gradient(700px 500px at 12% 85%, rgba(77, 163, 255, 0.10), transparent 60%),
+    var(--bg);
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(circle at 50% 35%, #000 0%, transparent 75%);
+  opacity: 0.5;
+}
+
+/* Drifting aurora orbs — the signature living backdrop (echoes the app's
+   MotionBackground). */
+.bg-orbs { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+.bg-orbs span {
+  position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%;
+  filter: blur(90px); opacity: 0.5; will-change: transform;
+}
+.bg-orbs span:nth-child(1) {
+  top: -22vmax; right: -14vmax;
+  background: radial-gradient(circle, rgba(22, 119, 255, 0.5), transparent 62%);
+  animation: orb-a 26s ease-in-out infinite;
+}
+.bg-orbs span:nth-child(2) {
+  bottom: -26vmax; left: -18vmax;
+  background: radial-gradient(circle, rgba(77, 163, 255, 0.32), transparent 62%);
+  animation: orb-b 34s ease-in-out infinite;
+}
+.bg-orbs span:nth-child(3) {
+  top: 30%; left: 40%;
+  width: 38vmax; height: 38vmax;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.16), transparent 62%);
+  animation: orb-c 30s ease-in-out infinite;
+}
+@keyframes orb-a { 50% { transform: translate(-8vmax, 10vmax) scale(1.12); } }
+@keyframes orb-b { 50% { transform: translate(10vmax, -8vmax) scale(1.08); } }
+@keyframes orb-c { 50% { transform: translate(-12vmax, -6vmax) scale(0.9); } }
+@media (prefers-reduced-motion: reduce) { .bg-orbs span { animation: none; } }
+
+/* Scroll reveal */
+[data-reveal] {
+  opacity: 0; transform: translateY(22px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0s);
+}
+[data-reveal].in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { opacity: 1; transform: none; transition: none; }
+}
+
+/* Whole-block language variants — German shown by default (no flash);
+   lang.ts switches visibility on toggle. */
+[data-lang-only='en'] { display: none; }
+
+/* Scroll progress bar */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0; z-index: 60;
+  background: linear-gradient(90deg, var(--blue-soft), var(--blue), var(--blue-deep));
+  box-shadow: 0 0 10px rgba(77, 163, 255, 0.6); will-change: width;
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-inline: clamp(20px, 5vw, 48px);
+}
+
+a { color: inherit; text-decoration: none; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0.9em 1.5em;
+  border-radius: 16px; /* matches app MccButton */
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+.btn svg { width: 1.15em; height: 1.15em; }
+.btn-primary {
+  position: relative; overflow: hidden;
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(143, 199, 255, 0.25), 0 14px 40px -12px rgba(22, 119, 255, 0.7);
+}
+.btn-primary > * { position: relative; z-index: 1; }
+.btn-primary::after {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(120deg, transparent 32%, rgba(255, 255, 255, 0.28) 50%, transparent 68%);
+  transform: translateX(-130%);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(143, 199, 255, 0.45), 0 20px 52px -12px rgba(22, 119, 255, 0.9); }
+.btn-primary:hover::after { animation: btn-shine 0.85s ease; }
+@keyframes btn-shine { to { transform: translateX(130%); } }
+@media (prefers-reduced-motion: reduce) { .btn-primary:hover::after { animation: none; } }
+.btn-ghost {
+  border-color: var(--line);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.02);
+}
+.btn-ghost:hover { border-color: var(--strong-line); color: #fff; }
+
+/* Cursor spotlight on cards (script sets --mx/--my; delegation survives
+   live re-renders). */
+.sport, .part-card, .fair-card, .join-card, .flow { position: relative; }
+.sport::after, .part-card::after, .fair-card::after,
+.join-card::after, .flow::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  pointer-events: none; opacity: 0; transition: opacity 0.35s ease; z-index: 0;
+  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgba(77, 163, 255, 0.16), transparent 62%);
+}
+.sport:hover::after, .part-card:hover::after, .fair-card:hover::after,
+.join-card:hover::after, .flow:hover::after { opacity: 1; }
+.part-card > *, .fair-card > *, .join-card > *, .flow > *,
+.sport > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .sport::after, .part-card::after, .fair-card::after,
+  .join-card::after, .flow::after { display: none; }
+}
+
+/* ── Live-rendered components ──────────────────────────────────────────────
+   These elements are re-created at runtime by live.ts, so their styles live
+   here (global) — component-scoped CSS would not match the new nodes. */
+
+/* Sport tiles */
+.sport-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+}
+.sport {
+  display: flex; flex-direction: column; align-items: center; gap: 11px; text-align: center;
+  padding: 20px 12px; border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+  border: 1px solid var(--line);
+  transition: border-color 0.25s ease, transform 0.18s ease, box-shadow 0.25s ease;
+}
+.sport:hover {
+  border-color: var(--strong-line);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 44px -22px rgba(22, 119, 255, 0.9);
+}
+.s-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px; border-radius: 16px; flex: none; color: var(--blue);
+  background: radial-gradient(circle at 50% 30%, rgba(77, 163, 255, 0.2), rgba(77, 163, 255, 0.04));
+  border: 1px solid var(--strong-line);
+  box-shadow: inset 0 0 18px rgba(77, 163, 255, 0.12);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.sport:hover .s-icon {
+  box-shadow: inset 0 0 22px rgba(77, 163, 255, 0.22), 0 0 24px rgba(77, 163, 255, 0.4);
+  transform: scale(1.05);
+}
+.s-name { font-weight: 700; font-size: 0.92rem; }
+
+/* Venue dots + legend (re-rendered by live.ts) */
+.venue-dot { cursor: pointer; outline: none; }
+.venue-dot .halo {
+  transform-box: fill-box; transform-origin: center;
+  animation: dot-pulse var(--dur, 3s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.venue-dot .core { transition: r 0.2s ease; }
+.venue-dot .ring { transition: stroke-opacity 0.2s ease; }
+.venue-dot.active .ring,
+.venue-dot:hover .ring,
+.venue-dot:focus-visible .ring { stroke-opacity: 0.9; }
+.venue-dot.active .halo,
+.venue-dot:hover .halo,
+.venue-dot:focus-visible .halo { animation-play-state: paused; opacity: 0.95 !important; }
+@keyframes dot-pulse {
+  0%, 100% { transform: scale(0.8); }
+  50%      { transform: scale(1.2); }
+}
+@media (prefers-reduced-motion: reduce) { .venue-dot .halo { animation: none; } }
+/* Stadtteil pills — hover/focus highlights that district's dots on the map */
+.st-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 9px 7px 13px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  color: var(--text); font: inherit; font-size: 0.84rem; font-weight: 600;
+  cursor: pointer; transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+.st-pill:hover, .st-pill.active {
+  border-color: rgba(77, 163, 255, 0.6);
+  background: rgba(77, 163, 255, 0.1);
+  transform: translateY(-1px);
+}
+.st-pill-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 800; color: var(--blue);
+  background: var(--accent-faint); border: 1px solid var(--strong-line);
+}
+/* Dot highlight driven by the pills */
+.venue-dot.st-hi .halo { animation-play-state: paused; opacity: 1 !important; transform: scale(1.35); }
+.venue-dot.st-hi .ring { stroke-opacity: 0.95; }
+.venue-dot.st-hi .core { r: 7; }
+/* Tooltip inner (innerHTML set by live.ts) */
+.tip h4 { margin: 0 0 2px; font-size: 0.96rem; }
+.tip .t-sports { margin: 6px 0 0; color: var(--text-dim); line-height: 1.4; }
+.tip .t-sessions { margin-top: 6px; font-size: 0.78rem; color: var(--text-dim); }
+.tip .t-sessions b { color: #fff; }
+
+/* Prose pages (FAQ, Impressum, Datenschutz) */
+.prose {
+  max-width: 760px;
+  margin-inline: auto;
+  padding-block: clamp(28px, 6vh, 72px);
+}
+.prose h1 {
+  font-size: clamp(2rem, 4.5vw, 3rem);
+  font-weight: 900; letter-spacing: -0.02em; line-height: 1.05;
+  margin: 0.3em 0 0.4em;
+}
+.prose h2 {
+  font-size: clamp(1.2rem, 2.4vw, 1.5rem); font-weight: 800;
+  margin: 2rem 0 0.6rem; letter-spacing: -0.01em;
+}
+.prose h3 { font-size: 1.05rem; font-weight: 800; margin: 1.3rem 0 0.4rem; }
+.prose p, .prose li { color: var(--text-dim); line-height: 1.65; }
+.prose p { margin: 0 0 1rem; }
+.prose ul { padding-left: 1.2em; margin: 0 0 1rem; }
+.prose li { margin: 0.3em 0; }
+.prose a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.prose strong { color: var(--text); }
+.prose .lead { font-size: 1.1rem; color: var(--text); }
+.prose .todo {
+  display: block; margin: 0.4rem 0 1.2rem; padding: 12px 14px;
+  border-radius: 12px; border: 1px dashed var(--strong-line);
+  background: var(--accent-faint); color: var(--blue-soft); font-size: 0.86rem;
+}
+.faq-item {
+  border-top: 1px solid var(--line); padding: 1.2rem 0;
+}
+.faq-item h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
+.faq-item p { margin: 0; }
+
+/* Responsive header CTA / brand (kept global so it isn't affected by
+   component-scoped specificity). */
+.cta-short { display: none; }
+@media (max-width: 560px) {
+  .cta-long { display: none; }
+  .cta-short { display: inline; }
+  .site-header .btn { padding: 0.7em 1.05em; }
+}
+@media (max-width: 430px) {
+  .brand-name { display: none; }
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  font-size: 0.78rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--blue-soft);
+}
+.eyebrow .pip {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 10px 2px var(--blue);
+}
