@@ -9,6 +9,16 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-24 — Kontaktformular schickt Mail (Edge Function)
+
+### Hinzugefügt
+- **Edge Function `contact-email`** (`supabase/functions/contact-email/`): nimmt das Landing-Kontaktformular entgegen, **speichert** in `contact_messages` (kein Datenverlust) **und** verschickt eine **E-Mail an `kontakt@messers-cardio-club.com`** über SMTP (denomailer), mit der Besucher-Adresse als `Reply-To`. Honeypot + Validierung serverseitig. Deploy: `supabase functions deploy contact-email --no-verify-jwt`; Secrets: `SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/CONTACT_TO`.
+
+### Geändert
+- **`landing/src/scripts/contact.ts`**: postet jetzt an `/functions/v1/contact-email` statt der RPC `submit_contact` und sendet das Honeypot-Feld mit. (Tabelle `contact_messages` bleibt; RPC `submit_contact` aus 073 ungenutzt, aber harmlos.)
+
+---
+
 ## 2026-06-24 — Kurzdomain messerscc.com als Redirect-Alias
 
 ### Hinzugefügt
