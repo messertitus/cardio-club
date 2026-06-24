@@ -172,6 +172,34 @@ sudo htpasswd -c /etc/nginx/.htpasswd-eam demo   # legt User "demo" an, fragt PW
 Dann in der jeweiligen `*.conf` die beiden `auth_basic`-Zeilen einkommentieren
 und Nginx neu laden.
 
+## messerscc.com — Redirect-Alias (Kurzdomain)
+
+Die Kurzdomain `messerscc.com` ist **kein eigener Inhalt**, sondern leitet per
+**301** auf `messers-cardio-club.com` um — pro Host gespiegelt (Landing, App,
+EAM). So bleibt **eine** kanonische Domain (kein Duplicate-Content, Indexierung
+der Hauptdomain unangetastet). Config: `deploy/nginx/messerscc.conf` (eine `map`
+`$host → Ziel-Host` + ein 301-`server`-Block).
+
+| Alias | → Ziel |
+| --- | --- |
+| `messerscc.com`, `www.messerscc.com` | `messers-cardio-club.com` |
+| `app.messerscc.com` | `app.messers-cardio-club.com` |
+| `eam.messerscc.com` | `eam.messers-cardio-club.com` |
+| `eam-test.messerscc.com` | `eam-test.messers-cardio-club.com` |
+
+1. **DNS** beim Registrar von `messerscc.com`: A-Records `@`, `www`, `app`,
+   `eam`, `eam-test` → `93.90.201.126`.
+2. **Aktivieren:** `sudo ln -s /etc/nginx/sites-available/messerscc
+   /etc/nginx/sites-enabled/messerscc` → `sudo nginx -t && sudo systemctl reload nginx`.
+3. **Zertifikat** (ein SAN-Cert für alle Alias-Hosts):
+   ```bash
+   sudo certbot --nginx -d messerscc.com -d www.messerscc.com \
+     -d app.messerscc.com -d eam.messerscc.com -d eam-test.messerscc.com
+   ```
+   certbot ergänzt den `listen 443 ssl`-Block; der 301 bleibt erhalten.
+4. **Check:** `curl -sI https://messerscc.com` → `301` mit
+   `Location: https://messers-cardio-club.com/`.
+
 ## 9. Adding another project
 
 1. Publish its files to `/var/www/<project>` (static) or run it on a local port.

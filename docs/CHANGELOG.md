@@ -9,6 +9,16 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-24 — Kurzdomain messerscc.com als Redirect-Alias
+
+### Hinzugefügt
+- **`deploy/nginx/messerscc.conf`** — Kurzdomain `messerscc.com` (+ `www`, `app`, `eam`, `eam-test`) leitet per **301** auf die jeweiligen `messers-cardio-club.com`-Hosts um (`map $host → Ziel-Host`, Pfaderhalt). Redirect-Alias statt eigenem Inhalt → eine kanonische Domain, kein Duplicate-Content. Deploy-Schritte (DNS, symlink, certbot SAN-Cert) in `docs/deployment-ubuntu.md`.
+
+### Geändert
+- **`deploy/nginx/landing.conf`**: www → Apex per `if ($host = www…)` 301 (behebt den Google-„Duplikat: andere kanonische Seite"-Fehler, weil www vorher 200 statt Redirect lieferte). Live-Config auf dem Server entsprechend angepasst.
+
+---
+
 ## 2026-06-23 — Apex: alten PWA-Service-Worker abschalten
 
 ### Hinzugefügt
