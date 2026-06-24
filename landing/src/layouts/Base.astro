@@ -1,5 +1,7 @@
 ---
 import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import { mdiInstagram } from '@mdi/js';
 
 interface Props {
   title?: string;
@@ -12,6 +14,32 @@ const {
   noindex = false,
 } = Astro.props;
 const appUrl = 'https://app.messers-cardio-club.com';
+
+const site = Astro.site ?? new URL('https://messers-cardio-club.com');
+const canonical = new URL(Astro.url.pathname, site).href;
+const ogImage = new URL('/brand/mcc-logo.png', site).href;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SportsClub',
+  name: 'Messers Cardio Club',
+  url: site.href,
+  logo: ogImage,
+  image: ogImage,
+  description:
+    'Privater Cardio-Club in Konstanz am Bodensee: jede Woche ein gemeinsamer Cardiotag — verschiedene Sportarten an verschiedenen Standorten, fair per Algorithmus gewählt.',
+  email: 'kontakt@messers-cardio-club.com',
+  telephone: '+491590796571',
+  areaServed: 'Konstanz, Bodensee',
+  address: {
+    '@type': 'PostalAddress',
+    streetAddress: 'Brauneggerstraße 41',
+    postalCode: '78462',
+    addressLocality: 'Konstanz',
+    addressCountry: 'DE',
+  },
+  sameAs: ['https://instagram.com/messers.cardio'],
+};
 ---
 
 <!doctype html>
@@ -21,11 +49,26 @@ const appUrl = 'https://app.messers-cardio-club.com';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    {noindex
+      ? <meta name="robots" content="noindex, nofollow" />
+      : <meta name="robots" content="index, follow, max-image-preview:large" />}
+    <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#05070b" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Messers Cardio Club" />
+    <meta property="og:locale" content="de_DE" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    {!noindex && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />}
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -57,9 +100,14 @@ const appUrl = 'https://app.messers-cardio-club.com';
       <a class="foot-brand" href="/" aria-label="Messers Cardio Club">
         <img class="foot-logo" src="/brand/mcc-logo.png" alt="Messers Cardio Club" width="150" height="150" />
       </a>
+      <a class="ig-link" href="https://instagram.com/messers.cardio" target="_blank" rel="noopener" aria-label="Instagram @messers.cardio">
+        <Icon path={mdiInstagram} size={20} />
+        <span>@messers.cardio</span>
+      </a>
       <nav class="foot-nav">
         <a href="/" data-i18n="nav.start">Start</a>
         <a href="/faq" data-i18n="nav.faq">FAQ</a>
+        <a href="/kontakt" data-i18n="nav.kontakt">Kontakt</a>
         <a href="/impressum" data-i18n="nav.impressum">Impressum</a>
         <a href="/datenschutz" data-i18n="nav.datenschutz">Datenschutz</a>
         <a href={appUrl} data-i18n="nav.app">Zur App</a>
@@ -124,8 +172,21 @@ const appUrl = 'https://app.messers-cardio-club.com';
         font-size: 0.9rem;
       }
       .foot-brand { display: inline-flex; }
+      .ig-link {
+        display: inline-flex; align-items: center; gap: 9px;
+        padding: 9px 16px 9px 14px; border-radius: 999px; font-weight: 700;
+        color: var(--text); background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--strong-line);
+        transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      }
+      .ig-link svg { color: var(--blue); }
+      .ig-link:hover {
+        transform: translateY(-2px);
+        border-color: rgba(77, 163, 255, 0.7);
+        box-shadow: 0 12px 32px -12px rgba(22, 119, 255, 0.85);
+      }
       .foot-logo {
-        width: auto; height: clamp(104px, 16vw, 140px); object-fit: contain;
+        width: auto; height: clamp(132px, 22vw, 180px); object-fit: contain;
         filter: drop-shadow(0 0 22px rgba(77, 163, 255, 0.28));
       }
       .foot-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 24px; }

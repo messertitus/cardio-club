@@ -134,6 +134,44 @@ Live numbers on the landing are fetched **client-side on every visit**, so they
 stay current without a rebuild; a rebuild is only needed for code/content
 changes (and refreshes the build-time fallback snapshot).
 
+## EAM (Uniprojekt) — eam. / eam-test.
+
+Eigene Subdomains für ein weiteres Projekt, isoliert von Landing & App:
+`eam.messers-cardio-club.com` (Produktion) und `eam-test.messers-cardio-club.com`
+(Test/Staging). Das EAM-Projekt läuft per **Docker Compose** (3 Services:
+`frontend` React/Vite hinter Nginx im Container, `backend` Node/Express + Prisma,
+`postgres`). Der **Host-Nginx ist Reverse-Proxy und terminiert HTTPS**; die
+Container lauschen ausschließlich auf `127.0.0.1`, PostgreSQL bekommt **keinen**
+öffentlichen Host-Port. Von außen ist nur Nginx (80/443) erreichbar. Die
+Hauptdomain bleibt unverändert.
+
+Ports (Host-Bind): **Produktion `127.0.0.1:4000`**, **Test `127.0.0.1:4001`**.
+Configs: `deploy/nginx/eam.conf`, `deploy/nginx/eam-test.conf`.
+
+1. **DNS** bei Checkdomain: A-Records `eam` und `eam-test` → `93.90.201.126`.
+2. **Configs** nach `/etc/nginx/sites-available/{eam,eam-test}` (per pscp oder
+   heredoc), in `sites-enabled` verlinken, `nginx -t && systemctl reload nginx`.
+3. **Certbot:** `sudo certbot --nginx -d eam.messers-cardio-club.com` und
+   `-d eam-test.messers-cardio-club.com` (funktioniert auch, bevor der Container
+   läuft — bis dahin liefert nginx 502, das ist normal).
+4. **Docker:** in `docker-compose.yml` das Frontend an `127.0.0.1:4000:<port>`
+   (prod) bzw. `127.0.0.1:4001:<port>` (test) binden.
+5. **`/api/`-Routing prüfen:** entweder proxyt der Frontend-Container `/api`
+   intern ans Backend (dann genügt der `location /`-Block), oder der Host-Nginx
+   braucht einen zusätzlichen `location /api/`-Block auf den Backend-Port (in den
+   Configs als auskommentierte Option vorbereitet). **Das ist anhand der finalen
+   `docker-compose.yml` zu verifizieren.**
+
+**Optionaler Basic-Auth-Schutz** (sinnvoll, solange EAM keine eigene Auth hat):
+
+```bash
+sudo apt install -y apache2-utils
+sudo htpasswd -c /etc/nginx/.htpasswd-eam demo   # legt User "demo" an, fragt PW
+```
+
+Dann in der jeweiligen `*.conf` die beiden `auth_basic`-Zeilen einkommentieren
+und Nginx neu laden.
+
 ## 9. Adding another project
 
 1. Publish its files to `/var/www/<project>` (static) or run it on a local port.

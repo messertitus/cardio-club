@@ -1,6 +1,6 @@
 // Cursor-following spotlight glow on cards. Uses event delegation so it keeps
 // working after live.ts re-renders the sport tiles.
-const SEL = '.sport, .part-card, .fair-card, .join-card, .flow';
+const SEL = '.sport, .part-card, .fair-card, .join-card, .flow, .usp-card';
 
 function init() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;

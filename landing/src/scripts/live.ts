@@ -27,6 +27,17 @@ let venues: Venue[] = [];
 
 const S = (de: string, en: string) => (document.documentElement.lang === 'en' ? en : de);
 
+// Compose an international phone number from a dial code + local number,
+// mirroring the app's composePhone (drop a leading 0, keep +/00).
+function composePhone(dial: string, raw: string): string {
+  let num = raw.trim().replace(/[^\d+]/g, '');
+  if (num.startsWith('+')) return num;
+  if (num.startsWith('00')) return '+' + num.slice(2);
+  if (num.startsWith('0')) num = num.slice(1);
+  const code = '+' + dial.replace(/\D/g, '');
+  return num ? code + num : '';
+}
+
 const toRad = (d: number) => (d * Math.PI) / 180;
 const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + toRad(lat) / 2));
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -186,7 +197,8 @@ function wireWaitlist() {
     e.preventDefault();
     const fd = new FormData(form);
     const name = String(fd.get('name') || '').trim();
-    const phone = String(fd.get('phone') || '').trim();
+    const dial = String(fd.get('dial') || '+49');
+    const phone = composePhone(dial, String(fd.get('phone') || ''));
     const submit = form.querySelector<HTMLButtonElement>('[data-wl-submit]');
     const show = (text: string, ok: boolean) => {
       if (!msg) return;
@@ -194,7 +206,9 @@ function wireWaitlist() {
       msg.className = 'wl-msg ' + (ok ? 'ok' : 'err');
       msg.hidden = false;
     };
-    if (!name || phone.length < 4) { show(S('Bitte Name und Telefonnummer angeben.', 'Please enter your name and phone number.'), false); return; }
+    // Honeypot: if filled, a bot submitted — pretend success, do nothing.
+    if (String(fd.get('company') || '').trim()) { show(S('Danke! Du stehst auf der Warteliste — wir melden uns.', 'Thanks! You’re on the waitlist — we’ll be in touch.'), true); form.reset(); return; }
+    if (!name || phone.length < 5) { show(S('Bitte Name und Telefonnummer angeben.', 'Please enter your name and phone number.'), false); return; }
     if (!config || !config.url || !config.key) { show(S('Gerade nicht möglich — bitte später erneut.', 'Not possible right now — please try again later.'), false); return; }
     const submitLabel = submit ? submit.textContent : '';
     if (submit) { submit.disabled = true; submit.textContent = S('Wird gesendet …', 'Sending …'); }

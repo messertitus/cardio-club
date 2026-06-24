@@ -9,6 +9,59 @@ Format je Eintrag: `## YYYY-MM-DD — Titel` mit Abschnitten
 
 ---
 
+## 2026-06-23 — Apex: alten PWA-Service-Worker abschalten
+
+### Hinzugefügt
+- **Kill-Switch Service Worker** `landing/public/mcc-push-worker.js`. Die App lief früher auf dem Apex (`messers-cardio-club.com`) und registrierte einen SW unter `/mcc-push-worker.js` (Scope `/`). Nach dem Umzug auf `app.` lieferte der Apex unter diesem Pfad **404** — das entfernt einen aktiven SW **nicht**, daher sahen frühere App-Besucher weiter die gecachte App-Shell statt der Landing. Der neue No-Op-SW deregistriert sich selbst, löscht alle Caches und lädt offene Tabs neu; greift beim nächsten Update-Check des alten SW automatisch für alle Betroffenen.
+
+### Doku
+- Hinweis: Apex ist serverseitig korrekt indexierbar (`robots: index, follow`, robots.txt `Allow: /`, Sitemap). Fehlende Google-Indexierung ist reine Crawl-Reife → Google Search Console einrichten + Sitemap einreichen.
+
+---
+
+## 2026-06-21 — Landing: SEO, Responsive-Fixes, Texte
+
+### Hinzugefügt
+- **SEO / KI-Auffindbarkeit:** Sitemap (`@astrojs/sitemap`, ohne `/vision`), `robots.txt`, `llms.txt` (für KI-Crawler), Canonical-Links, vollständige Open-Graph-/Twitter-Tags, **JSON-LD `SportsClub`** (Name, Adresse, E-Mail, Telefon, `sameAs` Instagram) auf allen indexierbaren Seiten.
+
+### Geändert / Behoben
+- **Titel** „Der Cardio‑Club" bricht nicht mehr am Bindestrich um (`white-space:nowrap` + Grid/Font rebalanciert) — Umbruch nur nach „Club".
+- **Mobile:** 4 Keyzahlen jetzt in **einer Reihe**; **Karte stärker reingezoomt** (`aspect-ratio` + slice); **„Zusammen statt getrennt"-Diagramm zentriert**.
+- **Länder-Dropdown** im Warteliste-Dialog lesbar (dunkle Optionen statt weiß-auf-weiß).
+- **Stadtteil:** Wessenbergschule → Paradies (korrigiert).
+- **Texte:** Invite-Pill → „Launch steht bevor — wir testen gerade die App für euch"; „Sei einer der Ersten / sichere dir deinen Platz" jetzt im „Noch geschlossen"-Block.
+
+---
+
+## 2026-06-21 — Landing: Rechtstexte, Botschutz, Telefon-Länderformat, Instagram
+
+### Geändert
+- **Impressum + Datenschutz** mit echten Angaben gefüllt (Titus Messer, Brauneggerstraße 41, 78462 Konstanz, +49 1590 796571, kontakt@messers-cardio-club.com). Datenschutz erweitert: Kontaktformular-Verarbeitung, **Supabase EU-West (Irland)** → kein Drittlandtransfer, konkrete Speicherdauer (6 Monate). Beide zweisprachig.
+- **Telefon-Eingabe mit Länder-Vorwahl** (Select, DE +49 Default, 13 Länder) im Warteliste-Dialog — `composePhone` analog zur App.
+- **Hiking** aus dem Fallback `sports.json` entfernt (Live-RPC liefert es korrekt schon nicht mehr; die deployte Landing war nur veraltet).
+
+### Hinzugefügt
+- **Botschutz:** Honeypot-Feld in Warteliste- und Kontaktformular; Migration **`074_waitlist_dedupe_phone.sql`** verhindert doppelte Wartelisten-Anfragen pro Nummer (idempotentes `request_invite`).
+- **Instagram-Link** `@messers.cardio` im Footer (Pill mit Icon).
+
+### Hinweis
+- Vor Live: Migrationen **073** (Kontakt) + **074** (Warteliste-Dedupe) einspielen, Landing **neu bauen + hochladen** (behebt u. a. Hiking).
+
+---
+
+## 2026-06-21 — Landing: USP-Sektion, FAQ-Ausbau, Kontaktformular
+
+### Hinzugefügt
+- **„Was den Club besonders macht"-Sektion** (Hero-nah): 3 Pillars — viele Sportarten, viele Standorte, Fair-First-Algorithmus. Zweisprachig.
+- **FAQ erweitert** (+7 detaillierte Fragen): Unterschied zu normaler Sport-/WhatsApp-Gruppe, „zugesagt aber doch nicht", „zu spät", „(fast) niemand sagt zu", plus algorithmische Detailfragen (Berechnung, Gleichstand, Gewicht bei Abwesenheit).
+- **Kontaktformular** auf neuer Seite `/kontakt` (Footer-verlinkt, zweisprachig): Name/E-Mail/Nachricht → Supabase-RPC. Migration **`073_contact_messages.sql`** (Tabelle + `submit_contact`-RPC, anon-Insert, Admin-Lese-Policy).
+- **Design-Bericht** `docs/landing-design-system.md` — Stil + Signatur-Elemente der Landing als Übertrag-Vorlage für die App.
+
+### Hinweis
+- Nach diesen Änderungen Landing **neu bauen + `dist` hochladen**; Migration `073` einspielen, damit das Kontaktformular schreibt.
+
+---
+
 ## 2026-06-20 — Landing: Karte/Liste/Footer überarbeitet + mehr Kreativ-Details
 
 ### Geändert

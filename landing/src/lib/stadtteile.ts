@@ -27,7 +27,7 @@ const OVERRIDES: [string, string][] = [
   ['tannenhof', 'Allmannsdorf'],
   ['horn', 'Staad'],
   ['klein venedig', 'Altstadt'],
-  ['wessenberg', 'Altstadt'],
+  ['wessenberg', 'Paradies'],
   ['humboldt', 'Altstadt'],
   ['schänzle', 'Paradies'],
   ['htwg', 'Paradies'],

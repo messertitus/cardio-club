@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /vision
+
+Sitemap: https://messers-cardio-club.com/sitemap-index.xml

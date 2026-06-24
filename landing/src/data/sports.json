@@ -5,7 +5,6 @@
   { "name": "Calisthenics",    "icon": "gymnastics" },
   { "name": "Frisbee",         "icon": "disc" },
   { "name": "Fußball",         "icon": "soccer" },
-  { "name": "Hiking",          "icon": "hiking" },
   { "name": "Laufen",          "icon": "run" },
   { "name": "Outdoor-Boxen",   "icon": "boxing-glove" },
   { "name": "Radfahren",       "icon": "bike" },

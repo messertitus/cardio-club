@@ -104,6 +104,12 @@ body::after {
    lang.ts switches visibility on toggle. */
 [data-lang-only='en'] { display: none; }
 
+/* Honeypot field — hidden from humans, bots tend to fill it (bot protection) */
+.hp-field {
+  position: absolute !important; left: -9999px !important;
+  width: 1px; height: 1px; opacity: 0; pointer-events: none;
+}
+
 /* Scroll progress bar */
 .scroll-progress {
   position: fixed; top: 0; left: 0; height: 3px; width: 0; z-index: 60;
@@ -119,6 +125,9 @@ body::after {
 }
 
 a { color: inherit; text-decoration: none; }
+
+/* Graceful heading wrapping — avoids a single orphaned word on the last line. */
+h1, h2, h3 { text-wrap: balance; }
 
 .btn {
   display: inline-flex;
@@ -158,20 +167,20 @@ a { color: inherit; text-decoration: none; }
 
 /* Cursor spotlight on cards (script sets --mx/--my; delegation survives
    live re-renders). */
-.sport, .part-card, .fair-card, .join-card, .flow { position: relative; }
+.sport, .part-card, .fair-card, .join-card, .flow, .usp-card { position: relative; }
 .sport::after, .part-card::after, .fair-card::after,
-.join-card::after, .flow::after {
+.join-card::after, .flow::after, .usp-card::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit;
   pointer-events: none; opacity: 0; transition: opacity 0.35s ease; z-index: 0;
   background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgba(77, 163, 255, 0.16), transparent 62%);
 }
 .sport:hover::after, .part-card:hover::after, .fair-card:hover::after,
-.join-card:hover::after, .flow:hover::after { opacity: 1; }
-.part-card > *, .fair-card > *, .join-card > *, .flow > *,
+.join-card:hover::after, .flow:hover::after, .usp-card:hover::after { opacity: 1; }
+.part-card > *, .fair-card > *, .join-card > *, .flow > *, .usp-card > *,
 .sport > * { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
   .sport::after, .part-card::after, .fair-card::after,
-  .join-card::after, .flow::after { display: none; }
+  .join-card::after, .flow::after, .usp-card::after { display: none; }
 }
 
 /* ── Live-rendered components ──────────────────────────────────────────────
