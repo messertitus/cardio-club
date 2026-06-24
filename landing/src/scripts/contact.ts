@@ -37,10 +37,10 @@ if (form) {
     const label = submit ? submit.textContent : '';
     if (submit) { submit.disabled = true; submit.textContent = S('Wird gesendet …', 'Sending …'); }
     try {
-      const res = await fetch(`${config.url}/rest/v1/rpc/submit_contact`, {
+      const res = await fetch(`${config.url}/functions/v1/contact-email`, {
         method: 'POST',
         headers: { apikey: config.key, Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_name: name, p_email: email, p_message: message }),
+        body: JSON.stringify({ p_name: name, p_email: email, p_message: message, company: String(fd.get('company') || '') }),
       });
       if (!res.ok) throw new Error(String(res.status));
       form.reset();
