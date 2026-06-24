@@ -9,10 +9,27 @@ import {
   mdiSort, mdiShieldCheckOutline, mdiHistory, mdiScaleBalance,
   mdiMapMarkerRadiusOutline, mdiVectorCombine,
   mdiCalendarStar, mdiArrowRight, mdiMapMarker,
+  mdiShuffleVariant, mdiMapMarkerMultipleOutline,
 } from '@mdi/js';
+
+// "Was den Club besonders macht" — the differentiators.
+const usp = [
+  { icon: mdiShuffleVariant, t: 'Viele Sportarten', d: 'Kein Einheitsbrei: ein rotierender Pool, jede Woche neu gewählt — von Schwimmen bis Outdoor-Boxen.' },
+  { icon: mdiMapMarkerMultipleOutline, t: 'Viele Standorte', d: 'Quer durch Konstanz und an den Bodensee — verschiedene Orte statt immer derselben Halle.' },
+  { icon: mdiScaleBalance, t: 'Fair-First-Algorithmus', d: 'Nicht die größte oder lauteste Gruppe gewinnt — ein Algorithmus wählt fair die beste Kombination aus Sport und Ort.' },
+];
 
 const appUrl = 'https://app.messers-cardio-club.com';
 const club = await getClubData();
+
+// Country dial codes for the waitlist phone field (matches the app's format).
+const dialCodes = [
+  { code: '+49', flag: '🇩🇪' }, { code: '+43', flag: '🇦🇹' }, { code: '+41', flag: '🇨🇭' },
+  { code: '+33', flag: '🇫🇷' }, { code: '+39', flag: '🇮🇹' }, { code: '+31', flag: '🇳🇱' },
+  { code: '+32', flag: '🇧🇪' }, { code: '+352', flag: '🇱🇺' }, { code: '+34', flag: '🇪🇸' },
+  { code: '+44', flag: '🇬🇧' }, { code: '+48', flag: '🇵🇱' }, { code: '+420', flag: '🇨🇿' },
+  { code: '+1', flag: '🇺🇸' },
+];
 
 const stats = [
   { key: 'sports', value: String(club.sportsActive), label: 'Sportarten' },
@@ -46,7 +63,7 @@ const fairness = [
     <div class="hero-copy">
       <span class="eyebrow" data-reveal><span class="pip"></span>{club.city} · {club.region}</span>
       <h1 data-reveal>
-        <span data-i18n="hero.h1a">Der Cardio-Club</span><br />
+        <span class="h1-line" data-i18n="hero.h1a">Der Cardio-Club</span><br />
         <span class="grad" data-i18n="hero.h1b">am Bodensee.</span>
       </h1>
       <p class="lede" data-reveal data-i18n="hero.lede">
@@ -57,7 +74,7 @@ const fairness = [
 
       <div class="invite-pill" data-reveal>
         <span class="dotpulse"></span>
-        <span data-i18n="hero.invite"><strong>Start steht bevor</strong> — sichere dir deinen Platz</span>
+        <span data-i18n="hero.invite"><strong>Launch steht bevor</strong> —<br />wir testen gerade die App für euch</span>
       </div>
 
       <div class="cta" data-reveal>
@@ -91,6 +108,27 @@ const fairness = [
       <path class="ecg-pulse" d="M0 40 H440 l14 -28 l16 56 l14 -40 l12 24 H560 l18 -52 l20 64 l14 -24 H1200" />
     </svg>
   </div>
+
+  <!-- USP — what makes the club special -->
+  <section class="usp wrap">
+    <div class="sec-head" data-reveal>
+      <span class="eyebrow"><span class="pip"></span><span data-i18n="usp.eyebrow">Was den Club besonders macht</span></span>
+      <h2 data-i18n="usp.h2">Nicht noch eine Sportgruppe</h2>
+      <p class="sec-lede" data-i18n="usp.lede">
+        Verschiedene Sportarten an verschiedenen Standorten — und welche Kombination
+        läuft, entscheidet ein fairer Algorithmus, nicht die lauteste Stimme.
+      </p>
+    </div>
+    <div class="usp-grid">
+      {usp.map((u, i) => (
+        <div class="usp-card" data-reveal>
+          <span class="usp-icon"><Icon path={u.icon} size={26} /></span>
+          <h3 data-i18n={`usp.${i}.t`}>{u.t}</h3>
+          <p data-i18n={`usp.${i}.d`}>{u.d}</p>
+        </div>
+      ))}
+    </div>
+  </section>
 
   <!-- SPORTS -->
   <section class="sports wrap" id="sportarten">
@@ -188,9 +226,9 @@ const fairness = [
       <span class="badge"><Icon path={mdiCalendarStar} size={14} /> Cardiotag</span>
       <h2 data-i18n="join.h2">Noch geschlossen — aber nicht mehr lange.</h2>
       <p data-i18n="join.body">
-        Messers Cardio Club startet als privater Kreis in Konstanz. Der Beitritt
-        läuft aktuell nur über einen persönlichen Einladungscode. Die öffentliche
-        Öffnung kommt — bis dahin entscheidet die Einladung.
+        Messers Cardio Club startet als privater Kreis in Konstanz — wir testen
+        gerade die App für euch. <strong>Sei einer der Ersten</strong> und sichere
+        dir deinen Platz auf der Warteliste.
       </p>
       <div class="cta">
         <button class="btn btn-primary" type="button" data-open-waitlist><span data-i18n="join.cta">Auf die Warteliste</span> <Icon path={mdiArrowRight} /></button>
@@ -213,8 +251,14 @@ const fairness = [
         <input name="name" type="text" required maxlength="120" autocomplete="name" data-i18n-ph="wl.namePh" placeholder="Dein Name" />
       </label>
       <label><span data-i18n="wl.phone">Telefonnummer</span>
-        <input name="phone" type="tel" required maxlength="40" autocomplete="tel" data-i18n-ph="wl.phonePh" placeholder="z. B. 0151 23456789" />
+        <span class="phone-row">
+          <select name="dial" class="dial-select" aria-label="Ländervorwahl">
+            {dialCodes.map((d) => <option value={d.code}>{d.flag} {d.code}</option>)}
+          </select>
+          <input name="phone" type="tel" required maxlength="40" autocomplete="tel" data-i18n-ph="wl.phonePh" placeholder="151 23456789" />
+        </span>
       </label>
+      <input type="text" name="company" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
       <button class="btn btn-primary" type="submit" data-wl-submit data-i18n="wl.submit">Auf die Warteliste setzen</button>
       <p class="wl-msg" data-wl-msg hidden></p>
       <p class="wl-fineprint" data-i18n="wl.fine">Mit dem Absenden stimmst du der Speicherung deiner Angaben zur Kontaktaufnahme zu (siehe <a href="/datenschutz">Datenschutz</a>).</p>
@@ -230,16 +274,18 @@ const fairness = [
   /* HERO */
   .hero {
     display: grid;
-    grid-template-columns: 0.85fr 1.42fr;
-    gap: clamp(26px, 4vw, 60px);
+    grid-template-columns: 1fr 1.3fr;
+    gap: clamp(26px, 4vw, 56px);
     align-items: center;
     padding-block: clamp(16px, 3vh, 40px) clamp(28px, 5vh, 64px);
   }
   h1 {
-    font-size: clamp(2.4rem, 5vw, 4.1rem);
-    line-height: 1.03; letter-spacing: -0.02em;
+    font-size: clamp(2.3rem, 4.4vw, 3.4rem);
+    line-height: 1.05; letter-spacing: -0.02em;
     margin: 0.5em 0 0.35em; font-weight: 900;
   }
+  /* keep "Der Cardio-Club" on one line — never break at the hyphen */
+  .h1-line { white-space: nowrap; }
   .grad {
     background: linear-gradient(120deg, var(--blue-soft), var(--blue) 35%, var(--blue-deep) 55%, var(--blue) 75%, var(--blue-soft));
     background-size: 220% 100%;
@@ -312,16 +358,22 @@ const fairness = [
   }
 
   /* Section heads */
-  .sec-head { max-width: 52ch; margin-bottom: 2.2rem; }
+  .sec-head { margin-bottom: 2.2rem; }
   .sec-head h2 {
     font-size: clamp(1.7rem, 3.2vw, 2.5rem); letter-spacing: -0.01em;
-    margin: 0.5em 0 0.3em; font-weight: 900;
+    margin: 0.5em 0 0.3em; font-weight: 900; text-wrap: balance;
   }
-  .sec-lede { color: var(--text-dim); margin: 0; }
+  /* Only the body copy is width-limited for readability — not the heading. */
+  .sec-lede { color: var(--text-dim); margin: 0; max-width: 54ch; }
 
   /* ECG signature divider — pulled tight to the neighbouring sections */
   .ecg { padding-block: 0; margin-block: clamp(-30px, -2vh, -14px); }
-  .ecg svg { width: 100%; height: 48px; display: block; overflow: visible; }
+  .ecg svg {
+    width: 100%; height: 48px; display: block; overflow: visible;
+    /* fade both ends so the line / travelling pulse never looks hard-cut */
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
+  }
   .ecg-base { fill: none; stroke: rgba(77, 163, 255, 0.14); stroke-width: 2; }
   .ecg-pulse {
     fill: none; stroke: var(--blue); stroke-width: 2.5;
@@ -334,6 +386,24 @@ const fairness = [
   @media (prefers-reduced-motion: reduce) {
     .ecg-pulse { animation: none; stroke-dasharray: none; opacity: 0.5; }
   }
+
+  /* USP — what makes the club special */
+  .usp { padding-block: clamp(28px, 5vh, 64px); }
+  .usp-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .usp-card {
+    padding: 26px 24px; border-radius: 20px;
+    border: 1px solid var(--line); background: var(--surface);
+    transition: border-color 0.25s ease, transform 0.18s ease;
+  }
+  .usp-card:hover { border-color: var(--strong-line); transform: translateY(-3px); }
+  .usp-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 54px; height: 54px; border-radius: 15px; color: var(--blue);
+    background: radial-gradient(circle at 50% 30%, rgba(77, 163, 255, 0.2), rgba(77, 163, 255, 0.04));
+    border: 1px solid var(--strong-line); box-shadow: inset 0 0 16px rgba(77, 163, 255, 0.12);
+  }
+  .usp-card h3 { margin: 0.9em 0 0.35em; font-size: 1.18rem; font-weight: 900; }
+  .usp-card p { margin: 0; color: var(--text-dim); line-height: 1.55; }
 
   /* SPORTS (tile styles are global so they apply to live-rendered tiles too) */
   .sports { padding-block: clamp(24px, 4vh, 56px); }
@@ -419,8 +489,9 @@ const fairness = [
   .example-text strong { color: var(--text); font-weight: 700; }
   @media (prefers-reduced-motion: reduce) { .flow-arrow { animation: none; } }
   @media (max-width: 560px) {
-    .flow { flex-direction: column; align-items: flex-start; gap: 16px; }
-    .flow-arrow { animation: none; transform: rotate(90deg); margin-left: 18px; }
+    .flow { flex-direction: column; align-items: center; text-align: center; gap: 16px; }
+    .flow-arrow { animation: none; transform: rotate(90deg); margin-left: 0; }
+    .flow-venue { align-items: center; text-align: left; }
   }
 
   /* JOIN card */
@@ -453,8 +524,14 @@ const fairness = [
   @media (max-width: 900px) {
     .hero { grid-template-columns: 1fr; }
     .hero-copy { min-width: 0; }
-    /* Mobile order: headline + key numbers first, then the map. */
-    .stats { flex-wrap: wrap; gap: 18px 30px; }
+    /* Key numbers stay in a single row of four. */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  }
+  @media (max-width: 560px) {
+    /* 2×2 matrix on phones */
+    .stats { grid-template-columns: repeat(2, 1fr); gap: 18px 24px; }
+    .stats dt { font-size: clamp(1.8rem, 7vw, 2.2rem); }
+    .stats dd { font-size: 0.74rem; }
   }
 
   /* Waitlist dialog */
@@ -487,6 +564,15 @@ const fairness = [
     color: var(--text); font: inherit; font-weight: 500;
   }
   .wl-form input:focus { outline: none; border-color: var(--blue); background: rgba(77,163,255,0.06); }
+  .phone-row { display: flex; gap: 8px; }
+  .dial-select {
+    flex: none; width: auto; padding: 12px 10px; border-radius: 12px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+    color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .dial-select:focus { outline: none; border-color: var(--blue); }
+  .dial-select option { background: #0c1119; color: #fff; }
+  .phone-row input { flex: 1; min-width: 0; }
   .wl-form .btn { margin-top: 6px; justify-content: center; }
   .wl-msg { margin: 0; font-size: 0.88rem; font-weight: 700; }
   .wl-msg[hidden] { display: none; }

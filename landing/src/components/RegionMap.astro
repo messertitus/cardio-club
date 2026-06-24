@@ -144,6 +144,12 @@ const liveConfig = {
     background: radial-gradient(120% 90% at 30% 10%, #0c1119, #070a10 70%);
   }
 
+  /* On phones, make the map a taller box so preserveAspectRatio="slice" zooms
+     into the venue cluster (the svg already clips via overflow:hidden). */
+  @media (max-width: 560px) {
+    svg { aspect-ratio: 0.95 / 1; height: auto; }
+  }
+
   .lake { stroke: rgba(143, 199, 255, 0.55); stroke-width: 1.1; }
   .city {
     fill: none; stroke: rgba(167, 180, 199, 0.4);

@@ -10,6 +10,7 @@
     "check": "astro check"
   },
   "dependencies": {
+    "@astrojs/sitemap": "^3.7.3",
     "@mdi/js": "^7.4.47",
     "astro": "^5.6.1"
   }

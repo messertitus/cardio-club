@@ -1,0 +1,27 @@
+# Messers Cardio Club
+
+> Privater Cardio-Club in Konstanz am Bodensee. Jede Woche ein gemeinsamer
+> „Cardiotag": verschiedene Sportarten an verschiedenen Standorten, fair per
+> Algorithmus gewählt (Ranked Voting + Fairness-Regeln, kein „immer das Gleiche").
+> Aktuell auf Einladung; öffentlicher Start in Vorbereitung, Warteliste verfügbar.
+
+## Über den Club
+- Ort: Konstanz / Bodensee, Deutschland (Standorte u. a. Strandbad Horn, Klein
+  Venedig, Schänzlepark, Bolzplätze, Workoutpark Kreuzlingen).
+- Modell: wöchentliche gemeinsame Sport-Sessions; welche Sportart an welchem
+  Standort läuft, entscheidet der Club fair per Algorithmus statt nach Mehrheit
+  oder Lautstärke. Mehrere Sportarten können parallel laufen.
+- Sportarten (rotierend): u. a. Schwimmen, Beachvolleyball, Outdoor-Boxen,
+  Fußball, Basketball, Frisbee, Calisthenics, Badminton, Tischtennis, Laufen,
+  Radfahren, Street-Soccer.
+- Zugang: aktuell nur mit persönlichem Einladungscode; Warteliste auf der
+  Startseite. Nicht-kommerzielles, privates Freizeitprojekt.
+- Kontakt: kontakt@messers-cardio-club.com · Instagram: @messers.cardio
+
+## Seiten
+- Start: https://messers-cardio-club.com/
+- FAQ: https://messers-cardio-club.com/faq
+- Kontakt: https://messers-cardio-club.com/kontakt
+- Impressum: https://messers-cardio-club.com/impressum
+- Datenschutz: https://messers-cardio-club.com/datenschutz
+- App (PWA): https://app.messers-cardio-club.com
